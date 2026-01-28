@@ -30,7 +30,7 @@
         const { useState, useEffect } = React;
         
         const SUPABASE_URL = 'https://bepifbenblkqjuplvylh.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlcGlmYmVuYmxrcWp1cGx2eWxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc5OTkyNzUsImV4cCI6MjA1MzU3NTI3NX0.V7H0aHpYLdKOxI2KkEyhHWiH7eRqxb9uMPDZn0iPMtU';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlcGlmYmVuYmxrcWp1cGx2eWxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc5OTk3OTMsImV4cCI6MjA1MzU3NTc5M30.tXEqUnit-8k7aIzUlwcZfuqL_JKNLaEyGUOXUPnCUZY';
         const supabase = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const exportToCSV = (data, filename) => {
@@ -54,20 +54,27 @@
             const [tickets, setTickets] = useState([]);
             const [keyAccounts, setKeyAccounts] = useState([]);
             const [showModal, setShowModal] = useState(false);
+            const [showLoginModal, setShowLoginModal] = useState(false);
             const [modalType, setModalType] = useState('prospecto');
             const [editingItem, setEditingItem] = useState(null);
             const [searchTerm, setSearchTerm] = useState('');
             const [filterTipo, setFilterTipo] = useState('todos');
 
-            useEffect(() => { loadUser(); }, []);
+            useEffect(() => { checkAccess(); }, []);
             useEffect(() => { if (user) loadAllData(); }, [user]);
 
-            const loadUser = async () => {
-                try {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    setUser(session?.user ? { email: session.user.email, name: session.user.email } : { email: 'demo@tho.cl', name: 'Demo' });
-                } catch { setUser({ email: 'demo@tho.cl', name: 'Demo' }); }
+            const checkAccess = () => {
+                const savedEmail = localStorage.getItem('crm_tho_email');
+                if (savedEmail) {
+                    setUser({ email: savedEmail, name: savedEmail.split('@')[0] });
+                }
                 setLoading(false);
+            };
+
+            const handleLogin = (email) => {
+                localStorage.setItem('crm_tho_email', email);
+                setUser({ email, name: email.split('@')[0] });
+                setShowLoginModal(false);
             };
 
             const loadAllData = async () => {
@@ -139,7 +146,16 @@
 
             const prospectosPorEstado = (estadoKey) => prospectosFiltrados.filter(p => getEstadoKey(p.estado) === estadoKey);
 
+            const requireAuth = (callback) => {
+                if (!user) {
+                    setShowLoginModal(true);
+                    return false;
+                }
+                return true;
+            };
+
             const handleSaveProspecto = async (data) => {
+                if (!requireAuth()) return;
                 try {
                     if (editingItem) {
                         await supabase.from('prospectos').update(data).eq('id', editingItem.id);
@@ -148,16 +164,21 @@
                     }
                     await loadProspectos();
                     setShowModal(false);
-                } catch (error) { alert('Error: ' + error.message); }
+                } catch (error) { 
+                    console.error('Error:', error);
+                    alert('Error al guardar: ' + error.message); 
+                }
             };
 
             const handleDeleteProspecto = async (id) => {
+                if (!requireAuth()) return;
                 if (!confirm('¿Eliminar?')) return;
                 await supabase.from('prospectos').delete().eq('id', id);
                 await loadProspectos();
             };
 
             const handleMoveProspecto = async (prospectoId, nuevoEstado) => {
+                if (!requireAuth()) return;
                 let probabilidad = 10;
                 if (nuevoEstado === 'Reunión agendada') probabilidad = 25;
                 if (nuevoEstado === 'Propuesta enviada') probabilidad = 40;
@@ -167,6 +188,7 @@
             };
 
             const handleCerrarProspecto = async (prospecto, ganado) => {
+                if (!requireAuth()) return;
                 try {
                     const cerrado = {
                         organizacion: prospecto.organizacion,
@@ -187,6 +209,7 @@
             };
 
             const handleSaveOther = async (type, data) => {
+                if (!requireAuth()) return;
                 try {
                     const table = type === 'cerrado' ? 'cerrados' : type === 'ticket' ? 'tickets' : 'key_accounts';
                     if (editingItem) {
@@ -202,6 +225,7 @@
             };
 
             const handleDeleteOther = async (type, id) => {
+                if (!requireAuth()) return;
                 if (!confirm('¿Eliminar?')) return;
                 const table = type === 'cerrado' ? 'cerrados' : type === 'ticket' ? 'tickets' : 'key_accounts';
                 await supabase.from(table).delete().eq('id', id);
@@ -222,17 +246,30 @@
                                     <p className="text-sm text-gray-600">The Human Org</p>
                                 </div>
                                 <div className="flex items-center space-x-4">
-                                    <button onClick={() => { setEditingItem(null); setModalType('prospecto'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg font-medium">+ Nuevo Prospecto</button>
-                                    <button onClick={() => {
-                                        const data = { prospectos, cerrados, tickets, keyAccounts };
-                                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                                        const url = window.URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = `crm-tho-${new Date().toISOString().split('T')[0]}.json`;
-                                        a.click();
-                                    }} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium">📥 Exportar</button>
-                                    <div className="text-sm text-gray-600">{user.name}</div>
+                                    {user && (
+                                        <>
+                                            <button onClick={() => { setEditingItem(null); setModalType('prospecto'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg font-medium">+ Nuevo Prospecto</button>
+                                            <button onClick={() => {
+                                                const data = { prospectos, cerrados, tickets, keyAccounts };
+                                                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                                                const url = window.URL.createObjectURL(blob);
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                a.download = `crm-tho-${new Date().toISOString().split('T')[0]}.json`;
+                                                a.click();
+                                            }} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium">📥 Exportar</button>
+                                        </>
+                                    )}
+                                    <div className="text-sm text-gray-600">
+                                        {user ? (
+                                            <div className="flex items-center space-x-2">
+                                                <span>{user.email}</span>
+                                                <button onClick={() => { localStorage.removeItem('crm_tho_email'); setUser(null); }} className="text-xs text-gray-400 hover:text-gray-600">Salir</button>
+                                            </div>
+                                        ) : (
+                                            <button onClick={() => setShowLoginModal(true)} className="px-4 py-2 color-naranja text-white rounded-lg font-medium">Ingresar</button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -271,17 +308,66 @@
 
                     <main className="max-w-7xl mx-auto px-4 py-8">
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} />}
-                        {activeTab === 'pipeline' && <KanbanBoard estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
-                        {activeTab === 'cerrados' && <CerradosView cerrados={cerrados} onAdd={() => { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }} onEdit={(item) => { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
-                        {activeTab === 'tickets' && <TicketsView tickets={tickets} onAdd={() => { setEditingItem(null); setModalType('ticket'); setShowModal(true); }} onEdit={(item) => { setEditingItem(item); setModalType('ticket'); setShowModal(true); }} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
-                        {activeTab === 'keyaccounts' && <KeyAccountsView keyAccounts={keyAccounts} onAdd={() => { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }} onEdit={(item) => { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
+                        {activeTab === 'pipeline' && <KanbanBoard estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
+                        {activeTab === 'cerrados' && <CerradosView cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
+                        {activeTab === 'tickets' && <TicketsView tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
+                        {activeTab === 'keyaccounts' && <KeyAccountsView keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
                     </main>
 
                     {showModal && <UniversalModal type={modalType} item={editingItem} onSave={(data) => modalType === 'prospecto' ? handleSaveProspecto(data) : handleSaveOther(modalType, data)} onClose={() => setShowModal(false)} />}
+                    
+                    {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
                 </div>
             );
         }
 
+        function LoginModal({ onLogin, onClose }) {
+            const [email, setEmail] = useState('');
+            
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const validEmails = ['jeremias@tho.cl', 'max@tho.cl', 'francisco@tho.cl'];
+                if (validEmails.includes(email.toLowerCase())) {
+                    onLogin(email);
+                } else {
+                    alert('Email no autorizado. Contacta al administrador.');
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-8 max-w-md w-full">
+                        <div className="text-center mb-6">
+                            <h2 className="text-2xl font-bold text-naranja mb-2">CRM THO</h2>
+                            <p className="text-sm text-gray-600">Ingresa tu email para continuar</p>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <input
+                                    type="email"
+                                    required
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="tu-email@tho.cl"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                />
+                            </div>
+                            <button type="submit" className="w-full px-4 py-3 color-naranja text-white rounded-lg font-medium hover:bg-orange-600">
+                                Ingresar
+                            </button>
+                            <button type="button" onClick={onClose} className="w-full px-4 py-2 text-gray-600 text-sm hover:text-gray-800">
+                                Ver como invitado
+                            </button>
+                        </form>
+                        <p className="text-xs text-gray-500 text-center mt-4">
+                            Solo usuarios autorizados pueden editar datos
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
+        // [TODOS LOS COMPONENTES ANTERIORES SE MANTIENEN IGUAL]
         function Dashboard({ metrics, prospectos }) {
             return (
                 <div className="space-y-6">
