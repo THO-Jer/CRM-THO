@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM THO - The Human Org</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@hello-pangea/dnd@16.5.0/dist/dnd.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .color-naranja { background-color: #FF8C42; }
+        .color-fucsia { background-color: #E91E8C; }
+        .color-verde { background-color: #8BC34A; }
+        .color-azul { background-color: #42A5F5; }
+        .border-naranja { border-color: #FF8C42; }
+        .border-fucsia { border-color: #E91E8C; }
+        .border-verde { border-color: #8BC34A; }
+        .border-azul { border-color: #42A5F5; }
+        .text-naranja { color: #FF8C42; }
+        .text-fucsia { color: #E91E8C; }
+        .text-verde { color: #8BC34A; }
+        .text-azul { color: #42A5F5; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // ==================== CONFIGURACIÓN SUPABASE ====================
+        // NOTA: Estas son credenciales de demostración
+        // Para producción, el usuario debe crear su propio proyecto en Supabase
+        const SUPABASE_URL = 'https://bepifbenblkqjuplvylh.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_hBu6rHS2Uou1fy31MPkCdA_7ZIS6S6V';
+        
+        // Inicializar Supabase (se debe reemplazar con credenciales reales)
+        const supabase = window.supabase?.createClient 
+            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+            : null;
+
+        // ==================== COMPONENTE PRINCIPAL ====================
+        function CRMApp() {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [activeTab, setActiveTab] = useState('pipeline');
+            const [prospectos, setProspectos] = useState([]);
+            const [showModal, setShowModal] = useState(false);
+            const [editingProspecto, setEditingProspecto] = useState(null);
+
+            // Simulación de datos para demo (sin backend real)
+            const [useMockData, setUseMockData] = useState(false);
+
+            useEffect(() => {
+    let unsub = null;
+
+    const init = async () => {
+        // Modo demo con datos simulados
+        if (useMockData) {
+            setUser({ email: 'demo@tho.cl', name: 'Jeremías Ortiz' });
+            loadMockData();
+            setLoading(false);
+            return;
+        }
+
+        // Modo Supabase (producción)
+        if (!supabase) {
+            console.error('Supabase no está disponible. Revisa la librería @supabase/supabase-js.');
+            setLoading(false);
+            return;
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user ?? null);
+        setLoading(false);
+
+        if (session?.user) {
+            await loadProspectos(session.user.id);
+        }
+
+        const { data } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+            const newUser = newSession?.user ?? null;
+            setUser(newUser);
+
+            if (newUser) {
+                await loadProspectos(newUser.id);
+            } else {
+                setProspectos([]);
+            }
+        });
+
+        unsub = data?.subscription;
+    };
+
+    init();
+
+    return () => {
+        try { unsub?.unsubscribe?.(); } catch (e) {}
+    };
+}, []);
+
+            const loadMockData = () => {
+                const mockProspectos = [
+                    {
+                        id: 1,
+                        organizacion: 'CChC Los Ángeles',
+                        contacto: 'Juan Pérez',
+                        tipo: 'Ticket RC Express',
+                        estado: 'Propuesta enviada',
+                        valor: 30,
+                        probabilidad: 40,
+                        proximoPaso: 'Llamar para seguimiento',
+                        fechaLimite: '2026-02-05',
+                        notas: 'Interesados pero evaluando presupuesto',
+                        fechaContacto: '2026-01-28'
+                    },
+                    {
+                        id: 2,
+                        organizacion: 'Fundación Educacional',
+                        contacto: 'María González',
+                        tipo: 'Ticket Diag Org',
+                        estado: 'Reunión agendada',
+                        valor: 25,
+                        probabilidad: 25,
+                        proximoPaso: 'Reunión 5 de febrero',
+                        fechaLimite: '2026-02-05',
+                        notas: 'Necesitan ordenar estructura interna',
+                        fechaContacto: '2026-01-25'
+                    },
+                    {
+                        id: 3,
+                        organizacion: 'Empresa Forestal X',
+                        contacto: 'Carlos Silva',
+                        tipo: 'Ticket ESG',
+                        estado: 'Contactado',
+                        valor: 30,
+                        probabilidad: 10,
+                        proximoPaso: 'Enviar email con info',
+                        fechaLimite: '2026-02-01',
+                        notas: 'Contacto inicial, interés en ESG para financiamiento',
+                        fechaContacto: '2026-01-28'
+                    }
+                ];
+                setProspectos(mockProspectos);
+            };
+
+// ==================== SUPABASE HELPERS ====================
+const toDb = (p) => ({
+    organizacion: p.organizacion,
+    contacto: p.contacto,
+    tipo: p.tipo,
+    estado: p.estado,
+    valor: p.valor !== '' ? Number(p.valor) : null,
+    probabilidad: p.probabilidad ?? null,
+    proximo_paso: p.proximoPaso,
+    fecha_limite: p.fechaLimite,
+    notas: p.notas ?? null,
+    fecha_contacto: p.fechaContacto ?? null
+});
+
+const fromDb = (row) => ({
+    id: row.id,
+    organizacion: row.organizacion,
+    contacto: row.contacto,
+    tipo: row.tipo,
+    estado: row.estado,
+    valor: row.valor,
+    probabilidad: row.probabilidad,
+    proximoPaso: row.proximo_paso,
+    fechaLimite: row.fecha_limite,
+    notas: row.notas,
+    fechaContacto: row.fecha_contacto
+});
+
+const loadProspectos = async (userId) => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+        .from('prospectos')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error cargando prospectos:', error);
+        return;
+    }
+    setProspectos((data || []).map(fromDb));
+};
+
+
+            // ==================== CÁLCULOS PARA DASHBOARD ====================
+            const metrics = {
+                totalProspectos: prospectos.filter(p => p.estado !== 'Cerrado').length,
+                reunionesAgendadas: prospectos.filter(p => p.estado === 'Reunión agendada').length,
+                propuestasEnviadas: prospectos.filter(p => p.estado === 'Propuesta enviada').length,
+                pipelineTotal: prospectos.reduce((sum, p) => sum + (p.valor || 0), 0),
+                tasaConversion: 0, // Calcular desde cerrados
+                proximosCierres: prospectos.filter(p => p.probabilidad > 60).length
+            };
+
+            // ==================== ESTADOS DEL KANBAN ====================
+            const estadosKanban = [
+                { id: 'contactado', nombre: 'Contactado', color: 'azul', emoji: '🔵' },
+                { id: 'reunion', nombre: 'Reunión agendada', color: 'amarillo', emoji: '🟡' },
+                { id: 'propuesta', nombre: 'Propuesta enviada', color: 'naranja', emoji: '🟠' },
+                { id: 'negociacion', nombre: 'Negociación', color: 'verde', emoji: '🟢' }
+            ];
+
+            const getEstadoKey = (estado) => {
+                if (estado === 'Contactado') return 'contactado';
+                if (estado === 'Reunión agendada') return 'reunion';
+                if (estado === 'Propuesta enviada') return 'propuesta';
+                if (estado === 'Negociación') return 'negociacion';
+                return 'contactado';
+            };
+
+            const prospectosPorEstado = (estadoKey) => {
+                return prospectos.filter(p => getEstadoKey(p.estado) === estadoKey);
+            };
+
+            // ==================== HANDLERS ====================
+            const handleAddProspecto = () => {
+                setEditingProspecto(null);
+                setShowModal(true);
+            };
+
+            const handleEditProspecto = (prospecto) => {
+                setEditingProspecto(prospecto);
+                setShowModal(true);
+            };
+
+            const handleSaveProspecto = async (data) => {
+    // Ajuste de probabilidad por estado (si viene vacío)
+    const estadoToProb = {
+        'Contactado': 10,
+        'Reunión agendada': 25,
+        'Propuesta enviada': 40,
+        'Negociación': 70
+    };
+    const payload = {
+        ...data,
+        probabilidad: data.probabilidad ?? estadoToProb[data.estado] ?? 10
+    };
+
+    if (useMockData || !supabase || !user?.id) {
+        // ==================== MODO MOCK ====================
+        if (editingProspecto) {
+            setProspectos(prev => prev.map(p =>
+                p.id === editingProspecto.id ? { ...p, ...payload } : p
+            ));
+        } else {
+            const newProspecto = {
+                ...payload,
+                id: Date.now(),
+                fechaContacto: new Date().toISOString().split('T')[0]
+            };
+            setProspectos(prev => [...prev, newProspecto]);
+        }
+        setShowModal(false);
+        return;
+    }
+
+    // ==================== MODO SUPABASE ====================
+    try {
+        if (editingProspecto) {
+            const { error } = await supabase
+                .from('prospectos')
+                .update({ ...toDb(payload) })
+                .eq('id', editingProspecto.id)
+                .eq('user_id', user.id);
+
+            if (error) throw error;
+        } else {
+            const insertRow = {
+                user_id: user.id,
+                ...toDb({
+                    ...payload,
+                    fechaContacto: new Date().toISOString().split('T')[0]
+                })
+            };
+
+            const { error } = await supabase
+                .from('prospectos')
+                .insert(insertRow);
+
+            if (error) throw error;
+        }
+
+        await loadProspectos(user.id);
+        setShowModal(false);
+    } catch (e) {
+        console.error('Error guardando prospecto:', e);
+        alert('No se pudo guardar. Revisa la consola y las políticas (RLS) en Supabase.');
+    }
+};
+                    setProspectos(prev => [...prev, newProspecto]);
+                }
+                setShowModal(false);
+            };
+
+            const handleDeleteProspecto = async (id) => {
+    if (!confirm('¿Eliminar este prospecto?')) return;
+
+    if (useMockData || !supabase || !user?.id) {
+        setProspectos(prev => prev.filter(p => p.id !== id));
+        return;
+    }
+
+    try {
+        const { error } = await supabase
+            .from('prospectos')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        await loadProspectos(user.id);
+    } catch (e) {
+        console.error('Error eliminando prospecto:', e);
+        alert('No se pudo eliminar. Revisa RLS en Supabase.');
+    }
+};
+
+            const handleMoveProspecto = async (prospectoId, nuevoEstado) => {
+    const probMap = {
+        'Contactado': 10,
+        'Reunión agendada': 25,
+        'Propuesta enviada': 40,
+        'Negociación': 70
+    };
+    const nuevaProb = probMap[nuevoEstado] ?? 10;
+
+    // UI optimista
+    setProspectos(prev => prev.map(p => (
+        p.id === prospectoId ? { ...p, estado: nuevoEstado, probabilidad: nuevaProb } : p
+    )));
+
+    if (useMockData || !supabase || !user?.id) return;
+
+    try {
+        const { error } = await supabase
+            .from('prospectos')
+            .update({ estado: nuevoEstado, probabilidad: nuevaProb })
+            .eq('id', prospectoId)
+            .eq('user_id', user.id);
+
+        if (error) throw error;
+    } catch (e) {
+        console.error('Error moviendo prospecto:', e);
+        alert('No se pudo actualizar el estado. Revisa RLS en Supabase.');
+        // fallback: recargar
+        await loadProspectos(user.id);
+    }
+};
+
+            // ==================== RENDER ====================
+            if (loading) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center">
+                        <div className="text-xl text-gray-600">Cargando CRM THO...</div>
+                    </div>
+                );
+            }
+
+            if (!user) {
+                return <LoginScreen />;
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h1 className="text-2xl font-bold text-naranja">CRM THO</h1>
+                                    <p className="text-sm text-gray-600">The Human Org</p>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                    <button
+                                        onClick={handleAddProspecto}
+                                        className="px-4 py-2 bg-naranja hover:bg-orange-600 text-white rounded-lg font-medium transition"
+                                    >
+                                        + Nuevo Prospecto
+                                    </button>
+                                    <div className="text-sm text-gray-600">
+                                        {user.user_metadata?.name || user.name || user.email}
+                                    </div>
+                                    {!useMockData && supabase && user?.id && (
+                                        <button
+                                            onClick={async () => { try { await supabase.auth.signOut(); } catch(e) {} }}
+                                            className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg font-medium transition"
+                                        >
+                                            Cerrar sesión
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Tabs */}
+                    <div className="bg-white border-b border-gray-200">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <nav className="flex space-x-8">
+                                {[
+                                    { id: 'dashboard', nombre: '📊 Dashboard' },
+                                    { id: 'pipeline', nombre: '🎯 Pipeline' },
+                                    { id: 'cerrados', nombre: '✅ Cerrados' },
+                                    { id: 'tickets', nombre: '🎫 Tickets' },
+                                    { id: 'keyaccounts', nombre: '🔑 Key Accounts' }
+                                ].map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`py-4 px-1 border-b-2 font-medium text-sm transition ${
+                                            activeTab === tab.id
+                                                ? 'border-naranja text-naranja'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        {tab.nombre}
+                                    </button>
+                                ))}
+                            </nav>
+                        </div>
+                    </div>
+
+                    {/* Content */}
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} />}
+                        {activeTab === 'pipeline' && (
+                            <KanbanBoard
+                                estados={estadosKanban}
+                                prospectosPorEstado={prospectosPorEstado}
+                                onEdit={handleEditProspecto}
+                                onDelete={handleDeleteProspecto}
+                                onMove={handleMoveProspecto}
+                            />
+                        )}
+                        {activeTab === 'cerrados' && <CerradosView />}
+                        {activeTab === 'tickets' && <TicketsView />}
+                        {activeTab === 'keyaccounts' && <KeyAccountsView />}
+                    </main>
+
+                    {/* Modal */}
+                    {showModal && (
+                        <ProspectoModal
+                            prospecto={editingProspecto}
+                            onSave={handleSaveProspecto}
+                            onClose={() => setShowModal(false)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // ==================== COMPONENTE DASHBOARD ====================
+        function Dashboard({ metrics, prospectos }) {
+            return (
+                <div className="space-y-6">
+                    {/* Métricas principales */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <MetricCard
+                            title="Prospectos Activos"
+                            value={metrics.totalProspectos}
+                            subtitle="En pipeline"
+                            color="azul"
+                        />
+                        <MetricCard
+                            title="Propuestas Enviadas"
+                            value={metrics.propuestasEnviadas}
+                            subtitle="Pendientes"
+                            color="naranja"
+                        />
+                        <MetricCard
+                            title="Pipeline Total"
+                            value={`${metrics.pipelineTotal} UF`}
+                            subtitle="Valor estimado"
+                            color="verde"
+                        />
+                    </div>
+
+                    {/* Alertas */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <AlertBox
+                            title="⚠️ Seguimientos Pendientes"
+                            items={prospectos.filter(p => new Date(p.fechaLimite) < new Date())}
+                            color="yellow"
+                        />
+                        <AlertBox
+                            title="🎉 Próximos Cierres"
+                            items={prospectos.filter(p => p.probabilidad > 60)}
+                            color="green"
+                        />
+                    </div>
+                </div>
+            );
+        }
+
+        function MetricCard({ title, value, subtitle, color }) {
+            return (
+                <div className={`bg-white rounded-lg shadow p-6 border-l-4 border-${color}`}>
+                    <div className="text-sm font-medium text-gray-600 mb-2">{title}</div>
+                    <div className={`text-3xl font-bold text-${color} mb-1`}>{value}</div>
+                    <div className="text-xs text-gray-500">{subtitle}</div>
+                </div>
+            );
+        }
+
+        function AlertBox({ title, items, color }) {
+            const bgColor = color === 'yellow' ? 'bg-yellow-50' : 'bg-green-50';
+            const borderColor = color === 'yellow' ? 'border-yellow-200' : 'border-green-200';
+            
+            return (
+                <div className={`${bgColor} rounded-lg border ${borderColor} p-4`}>
+                    <h3 className="font-semibold text-gray-800 mb-3">{title}</h3>
+                    {items.length === 0 ? (
+                        <p className="text-sm text-gray-600">Ninguno por ahora</p>
+                    ) : (
+                        <ul className="space-y-2">
+                            {items.slice(0, 5).map(item => (
+                                <li key={item.id} className="text-sm text-gray-700">
+                                    • {item.organizacion} - {item.tipo}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            );
+        }
+
+        // ==================== COMPONENTE KANBAN ====================
+        function KanbanBoard({ estados, prospectosPorEstado, onEdit, onDelete, onMove }) {
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {estados.map(estado => (
+                        <KanbanColumn
+                            key={estado.id}
+                            estado={estado}
+                            prospectos={prospectosPorEstado(estado.id)}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                            onMove={onMove}
+                        />
+                    ))}
+                </div>
+            );
+        }
+
+        function KanbanColumn({ estado, prospectos, onEdit, onDelete, onMove }) {
+            return (
+                <div className="bg-gray-100 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-semibold text-gray-800">
+                            {estado.emoji} {estado.nombre}
+                        </h3>
+                        <span className="text-xs text-gray-600 bg-white px-2 py-1 rounded">
+                            {prospectos.length}
+                        </span>
+                    </div>
+                    <div className="space-y-3">
+                        {prospectos.map(prospecto => (
+                            <ProspectoCard
+                                key={prospecto.id}
+                                prospecto={prospecto}
+                                onEdit={() => onEdit(prospecto)}
+                                onDelete={() => onDelete(prospecto.id)}
+                                onMove={onMove}
+                            />
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        function ProspectoCard({ prospecto, onEdit, onDelete, onMove }) {
+            const isOverdue = new Date(prospecto.fechaLimite) < new Date();
+            
+            return (
+                <div className={`bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition cursor-pointer border-l-4 ${
+                    isOverdue ? 'border-red-500' : 'border-azul'
+                }`}>
+                    <div onClick={onEdit}>
+                        <h4 className="font-semibold text-gray-900 mb-1">{prospecto.organizacion}</h4>
+                        <p className="text-sm text-gray-600 mb-2">{prospecto.contacto}</p>
+                        <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                            <span>{prospecto.tipo}</span>
+                            <span className="font-semibold text-naranja">{prospecto.valor} UF</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                            <span className={isOverdue ? 'text-red-600 font-medium' : 'text-gray-500'}>
+                                📅 {prospecto.fechaLimite}
+                            </span>
+                            <span className="text-verde">{prospecto.probabilidad}%</span>
+                        </div>
+                    </div>
+                    <div className="flex space-x-2 mt-3 pt-3 border-t border-gray-100">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                            className="flex-1 text-xs text-azul hover:text-blue-700 font-medium"
+                        >
+                            Editar
+                        </button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                            className="flex-1 text-xs text-red-500 hover:text-red-700 font-medium"
+                        >
+                            Eliminar
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==================== MODAL PROSPECTO ====================
+        function ProspectoModal({ prospecto, onSave, onClose }) {
+            const [formData, setFormData] = useState(prospecto || {
+                organizacion: '',
+                contacto: '',
+                tipo: 'Ticket RC Express',
+                estado: 'Contactado',
+                valor: '',
+                proximoPaso: '',
+                fechaLimite: '',
+                notas: ''
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900">
+                                    {prospecto ? 'Editar Prospecto' : 'Nuevo Prospecto'}
+                                </h2>
+                                <button
+                                    onClick={onClose}
+                                    className="text-gray-400 hover:text-gray-600 text-2xl"
+                                >
+                                    ×
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Organización *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.organizacion}
+                                            onChange={(e) => setFormData({...formData, organizacion: e.target.value})}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Contacto *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.contacto}
+                                            onChange={(e) => setFormData({...formData, contacto: e.target.value})}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Tipo *
+                                        </label>
+                                        <select
+                                            required
+                                            value={formData.tipo}
+                                            onChange={(e) => setFormData({...formData, tipo: e.target.value})}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                        >
+                                            <option>Ticket RC Express</option>
+                                            <option>Ticket Diag Org</option>
+                                            <option>Ticket ESG</option>
+                                            <option>Key Account Nivel 1</option>
+                                            <option>Key Account Nivel 2</option>
+                                            <option>Key Account Nivel 3</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Estado *
+                                        </label>
+                                        <select
+                                            required
+                                            value={formData.estado}
+                                            onChange={(e) => setFormData({...formData, estado: e.target.value})}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                        >
+                                            <option>Contactado</option>
+                                            <option>Reunión agendada</option>
+                                            <option>Propuesta enviada</option>
+                                            <option>Negociación</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Valor (UF) *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            required
+                                            value={formData.valor}
+                                            onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value)})}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Fecha Límite *
+                                        </label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={formData.fechaLimite}
+                                            onChange={(e) => setFormData({...formData, fechaLimite: e.target.value})}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Próximo Paso *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.proximoPaso}
+                                        onChange={(e) => setFormData({...formData, proximoPaso: e.target.value})}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                        placeholder="Ej: Llamar para seguimiento"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Notas
+                                    </label>
+                                    <textarea
+                                        value={formData.notas}
+                                        onChange={(e) => setFormData({...formData, notas: e.target.value})}
+                                        rows="3"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                        placeholder="Notas adicionales sobre el prospecto..."
+                                    />
+                                </div>
+
+                                <div className="flex space-x-3 pt-4">
+                                    <button
+                                        type="submit"
+                                        className="flex-1 px-4 py-2 bg-naranja hover:bg-orange-600 text-white rounded-lg font-medium transition"
+                                    >
+                                        Guardar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={onClose}
+                                        className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium transition"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==================== VISTAS PLACEHOLDER ====================
+        function CerradosView() {
+            return (
+                <div className="bg-white rounded-lg shadow p-8 text-center">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">✅ Cerrados</h2>
+                    <p className="text-gray-600">Vista de prospectos cerrados (ganados y perdidos)</p>
+                    <p className="text-sm text-gray-500 mt-2">Esta sección se completará en la implementación final</p>
+                </div>
+            );
+        }
+
+        function TicketsView() {
+            return (
+                <div className="bg-white rounded-lg shadow p-8 text-center">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">🎫 Tickets en Ejecución</h2>
+                    <p className="text-gray-600">Gestión de tickets vendidos en progreso</p>
+                    <p className="text-sm text-gray-500 mt-2">Esta sección se completará en la implementación final</p>
+                </div>
+            );
+        }
+
+        function KeyAccountsView() {
+            return (
+                <div className="bg-white rounded-lg shadow p-8 text-center">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">🔑 Key Accounts</h2>
+                    <p className="text-gray-600">Seguimiento de clientes grandes y contratos continuos</p>
+                    <p className="text-sm text-gray-500 mt-2">Esta sección se completará en la implementación final</p>
+                </div>
+            );
+        }
+
+        
+function LoginScreen() {
+    const [mode, setMode] = useState('login'); // 'login' | 'signup'
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [msg, setMsg] = useState('');
+
+    const canUseSupabase = !!(supabase && supabase.auth && supabase.auth.signInWithPassword);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setMsg('');
+
+        if (!canUseSupabase) {
+            setMsg('Supabase no está disponible. Revisa SUPABASE_URL/KEY y el script de supabase-js.');
+            return;
+        }
+
+        setBusy(true);
+        try {
+            if (mode === 'signup') {
+                const { error } = await supabase.auth.signUp({ email, password });
+                if (error) throw error;
+                setMsg('✅ Cuenta creada. Revisa tu correo para confirmar (si está habilitado). Luego inicia sesión.');
+                setMode('login');
+            } else {
+                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                // No hacemos setUser acá: lo hace onAuthStateChange en CRMApp
+            }
+        } catch (err) {
+            const m = err?.message || 'Error inesperado.';
+            setMsg(`⚠️ ${m}`);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-pink-50">
+            <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold text-naranja mb-2">CRM THO</h1>
+                    <p className="text-gray-600">The Human Org</p>
+                </div>
+
+                {!canUseSupabase ? (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-gray-700">
+                        <p className="font-semibold mb-2">No pude iniciar Supabase Auth.</p>
+                        <p className="mb-2">Causas típicas:</p>
+                        <ul className="list-disc pl-5 space-y-1">
+                            <li>SUPABASE_URL o SUPABASE_KEY incorrectos</li>
+                            <li>No cargó el script de @supabase/supabase-js</li>
+                        </ul>
+                    </div>
+                ) : (
+                    <>
+                        <div className="flex gap-2 mb-6">
+                            <button
+                                onClick={() => { setMode('login'); setMsg(''); }}
+                                className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${mode === 'login' ? 'bg-naranja text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                            >
+                                Iniciar sesión
+                            </button>
+                            <button
+                                onClick={() => { setMode('signup'); setMsg(''); }}
+                                className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${mode === 'signup' ? 'bg-naranja text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                            >
+                                Crear cuenta
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <input
+                                    type="email"
+                                    required
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                    placeholder="nombre@empresa.cl"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                                <input
+                                    type="password"
+                                    required
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-naranja focus:border-transparent"
+                                    placeholder="Mínimo 6 caracteres"
+                                    minLength={6}
+                                />
+                            </div>
+
+                            {msg && (
+                                <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                    {msg}
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                disabled={busy}
+                                className="w-full px-4 py-3 bg-naranja hover:bg-orange-600 disabled:opacity-60 text-white rounded-lg font-medium transition"
+                            >
+                                {busy ? 'Procesando…' : (mode === 'signup' ? 'Crear cuenta' : 'Entrar')}
+                            </button>
+
+                            <p className="text-xs text-gray-500 text-center">
+                                Si tu proyecto tiene “Email confirmations” activado, al crear cuenta debes confirmar por correo.
+                            </p>
+                        </form>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ==================== RENDER ====================
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<CRMApp />);
+    </script>
+</body>
+</html>
