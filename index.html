@@ -30,7 +30,7 @@
         const { useState, useEffect } = React;
         
         const SUPABASE_URL = 'https://bepifbenblkqjuplvylh.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlcGlmYmVuYmxrcWp1cGx2eWxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc5OTk3OTMsImV4cCI6MjA1MzU3NTc5M30.tXEqUnit-8k7aIzUlwcZfuqL_JKNLaEyGUOXUPnCUZY';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlcGlmYmVuYmxrcWp1cGx2eWxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgxOTU3MzgsImV4cCI6MjA1Mzc3MTczOH0.LgO6yMKWz0hE3WaGBx2oqA_yxw3DZ0Ow5yqeQGgMRJo';
         const supabase = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const exportToCSV = (data, filename) => {
@@ -82,23 +82,27 @@
             };
 
             const loadProspectos = async () => {
-                const { data } = await supabase.from('prospectos').select('*').order('created_at', { ascending: false });
-                setProspectos(data || []);
+                const { data, error } = await supabase.from('prospectos').select('*').order('created_at', { ascending: false });
+                if (error) console.error('Error loading prospectos:', error);
+                else setProspectos(data || []);
             };
 
             const loadCerrados = async () => {
-                const { data } = await supabase.from('cerrados').select('*').order('fecha_cierre', { ascending: false });
-                setCerrados(data || []);
+                const { data, error } = await supabase.from('cerrados').select('*').order('fecha_cierre', { ascending: false });
+                if (error) console.error('Error loading cerrados:', error);
+                else setCerrados(data || []);
             };
 
             const loadTickets = async () => {
-                const { data } = await supabase.from('tickets').select('*').order('fecha_inicio', { ascending: false });
-                setTickets(data || []);
+                const { data, error } = await supabase.from('tickets').select('*').order('fecha_inicio', { ascending: false });
+                if (error) console.error('Error loading tickets:', error);
+                else setTickets(data || []);
             };
 
             const loadKeyAccounts = async () => {
-                const { data } = await supabase.from('key_accounts').select('*').order('created_at', { ascending: false });
-                setKeyAccounts(data || []);
+                const { data, error } = await supabase.from('key_accounts').select('*').order('created_at', { ascending: false });
+                if (error) console.error('Error loading key accounts:', error);
+                else setKeyAccounts(data || []);
             };
 
             const metrics = {
@@ -158,14 +162,16 @@
                 if (!requireAuth()) return;
                 try {
                     if (editingItem) {
-                        await supabase.from('prospectos').update(data).eq('id', editingItem.id);
+                        const { error } = await supabase.from('prospectos').update(data).eq('id', editingItem.id);
+                        if (error) throw error;
                     } else {
-                        await supabase.from('prospectos').insert([data]);
+                        const { error } = await supabase.from('prospectos').insert([data]);
+                        if (error) throw error;
                     }
                     await loadProspectos();
                     setShowModal(false);
                 } catch (error) { 
-                    console.error('Error:', error);
+                    console.error('Error completo:', error);
                     alert('Error al guardar: ' + error.message); 
                 }
             };
@@ -173,8 +179,9 @@
             const handleDeleteProspecto = async (id) => {
                 if (!requireAuth()) return;
                 if (!confirm('¿Eliminar?')) return;
-                await supabase.from('prospectos').delete().eq('id', id);
-                await loadProspectos();
+                const { error } = await supabase.from('prospectos').delete().eq('id', id);
+                if (error) alert('Error: ' + error.message);
+                else await loadProspectos();
             };
 
             const handleMoveProspecto = async (prospectoId, nuevoEstado) => {
@@ -183,8 +190,9 @@
                 if (nuevoEstado === 'Reunión agendada') probabilidad = 25;
                 if (nuevoEstado === 'Propuesta enviada') probabilidad = 40;
                 if (nuevoEstado === 'Negociación') probabilidad = 70;
-                await supabase.from('prospectos').update({ estado: nuevoEstado, probabilidad }).eq('id', prospectoId);
-                await loadProspectos();
+                const { error } = await supabase.from('prospectos').update({ estado: nuevoEstado, probabilidad }).eq('id', prospectoId);
+                if (error) console.error('Error:', error);
+                else await loadProspectos();
             };
 
             const handleCerrarProspecto = async (prospecto, ganado) => {
@@ -199,10 +207,12 @@
                         razon_perdida: '',
                         escalo: false,
                         valor_total_final: prospecto.valor,
-                        fecha_contacto: prospecto.fecha_contacto
+                        fecha_contacto: prospecto.created_at
                     };
-                    await supabase.from('cerrados').insert([cerrado]);
-                    await supabase.from('prospectos').delete().eq('id', prospecto.id);
+                    const { error: insertError } = await supabase.from('cerrados').insert([cerrado]);
+                    if (insertError) throw insertError;
+                    const { error: deleteError } = await supabase.from('prospectos').delete().eq('id', prospecto.id);
+                    if (deleteError) throw deleteError;
                     await loadProspectos();
                     await loadCerrados();
                 } catch (error) { alert('Error: ' + error.message); }
@@ -213,9 +223,11 @@
                 try {
                     const table = type === 'cerrado' ? 'cerrados' : type === 'ticket' ? 'tickets' : 'key_accounts';
                     if (editingItem) {
-                        await supabase.from(table).update(data).eq('id', editingItem.id);
+                        const { error } = await supabase.from(table).update(data).eq('id', editingItem.id);
+                        if (error) throw error;
                     } else {
-                        await supabase.from(table).insert([data]);
+                        const { error } = await supabase.from(table).insert([data]);
+                        if (error) throw error;
                     }
                     if (type === 'cerrado') await loadCerrados();
                     if (type === 'ticket') await loadTickets();
@@ -228,10 +240,13 @@
                 if (!requireAuth()) return;
                 if (!confirm('¿Eliminar?')) return;
                 const table = type === 'cerrado' ? 'cerrados' : type === 'ticket' ? 'tickets' : 'key_accounts';
-                await supabase.from(table).delete().eq('id', id);
-                if (type === 'cerrado') await loadCerrados();
-                if (type === 'ticket') await loadTickets();
-                if (type === 'keyaccount') await loadKeyAccounts();
+                const { error } = await supabase.from(table).delete().eq('id', id);
+                if (error) alert('Error: ' + error.message);
+                else {
+                    if (type === 'cerrado') await loadCerrados();
+                    if (type === 'ticket') await loadTickets();
+                    if (type === 'keyaccount') await loadKeyAccounts();
+                }
             };
 
             if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-xl text-gray-600">Cargando...</div></div>;
@@ -367,7 +382,7 @@
             );
         }
 
-        // [TODOS LOS COMPONENTES ANTERIORES SE MANTIENEN IGUAL]
+        // [COMPONENTES IGUALES - Dashboard, MetricCard, KanbanBoard, etc.]
         function Dashboard({ metrics, prospectos }) {
             return (
                 <div className="space-y-6">
@@ -625,11 +640,11 @@
                                         <SelectField label="Estado" required value={formData.estado} onChange={(e) => setFormData({...formData, estado: e.target.value})} options={['Contactado', 'Reunión agendada', 'Propuesta enviada', 'Negociación']} />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <InputField label="Valor (UF)" type="number" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value)})} />
+                                        <InputField label="Valor (UF)" type="number" step="0.01" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value) || 0})} />
                                         <InputField label="Fecha Límite" type="date" required value={formData.fecha_limite} onChange={(e) => setFormData({...formData, fecha_limite: e.target.value})} />
                                     </div>
                                     <InputField label="Próximo Paso" required value={formData.proximo_paso} onChange={(e) => setFormData({...formData, proximo_paso: e.target.value})} />
-                                    <TextAreaField label="Notas" value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
+                                    <TextAreaField label="Notas" value={formData.notas || ''} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
                                 </>)}
                                 {type === 'cerrado' && (<>
                                     <InputField label="Organización" required value={formData.organizacion} onChange={(e) => setFormData({...formData, organizacion: e.target.value})} />
@@ -638,10 +653,10 @@
                                         <SelectField label="Estado Final" required value={formData.estado_final} onChange={(e) => setFormData({...formData, estado_final: e.target.value})} options={['Ganado', 'Perdido']} />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <InputField label="Valor (UF)" type="number" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value)})} />
+                                        <InputField label="Valor (UF)" type="number" step="0.01" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value) || 0})} />
                                         <InputField label="Fecha Cierre" type="date" required value={formData.fecha_cierre} onChange={(e) => setFormData({...formData, fecha_cierre: e.target.value})} />
                                     </div>
-                                    {formData.estado_final === 'Perdido' && <SelectField label="Razón" value={formData.razon_perdida} onChange={(e) => setFormData({...formData, razon_perdida: e.target.value})} options={['Presupuesto', 'Timing', 'Competencia', 'No respondió', 'No calificado', 'Otro']} />}
+                                    {formData.estado_final === 'Perdido' && <SelectField label="Razón" value={formData.razon_perdida || ''} onChange={(e) => setFormData({...formData, razon_perdida: e.target.value})} options={['Presupuesto', 'Timing', 'Competencia', 'No respondió', 'No calificado', 'Otro']} />}
                                 </>)}
                                 {type === 'ticket' && (<>
                                     <div className="grid grid-cols-2 gap-4">
@@ -654,9 +669,9 @@
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <SelectField label="Fase" required value={formData.fase_actual} onChange={(e) => setFormData({...formData, fase_actual: e.target.value})} options={['Kick-off', 'Levantamiento', 'Análisis', 'Entrega', 'Cerrado']} />
-                                        <InputField label="% Avance" type="number" min="0" max="100" required value={formData.porcentaje_avance} onChange={(e) => setFormData({...formData, porcentaje_avance: parseInt(e.target.value)})} />
+                                        <InputField label="% Avance" type="number" min="0" max="100" required value={formData.porcentaje_avance} onChange={(e) => setFormData({...formData, porcentaje_avance: parseInt(e.target.value) || 0})} />
                                     </div>
-                                    <InputField label="Responsable" value={formData.responsable} onChange={(e) => setFormData({...formData, responsable: e.target.value})} />
+                                    <InputField label="Responsable" value={formData.responsable || ''} onChange={(e) => setFormData({...formData, responsable: e.target.value})} />
                                 </>)}
                                 {type === 'keyaccount' && (<>
                                     <div className="grid grid-cols-2 gap-4">
@@ -664,9 +679,9 @@
                                         <InputField label="Servicio" required value={formData.servicio} onChange={(e) => setFormData({...formData, servicio: e.target.value})} />
                                     </div>
                                     <div className="grid grid-cols-3 gap-4">
-                                        <InputField label="UF/mes" type="number" required value={formData.uf_mes} onChange={(e) => setFormData({...formData, uf_mes: parseFloat(e.target.value)})} />
+                                        <InputField label="UF/mes" type="number" step="0.01" required value={formData.uf_mes} onChange={(e) => setFormData({...formData, uf_mes: parseFloat(e.target.value) || 0})} />
                                         <InputField label="Inicio" type="date" required value={formData.inicio_contrato} onChange={(e) => setFormData({...formData, inicio_contrato: e.target.value})} />
-                                        <InputField label="Fin" type="date" value={formData.fin_contrato} onChange={(e) => setFormData({...formData, fin_contrato: e.target.value})} />
+                                        <InputField label="Fin" type="date" value={formData.fin_contrato || ''} onChange={(e) => setFormData({...formData, fin_contrato: e.target.value})} />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <SelectField label="Renovación" value={formData.renovacion} onChange={(e) => setFormData({...formData, renovacion: e.target.value})} options={['Confirmada', 'En conversación', 'No renovará', 'Por definir']} />
