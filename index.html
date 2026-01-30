@@ -187,7 +187,7 @@ window.addEventListener('unhandledrejection', (e) => {
                 try {
                     const { data, error } = await supabase
                         .from('crm_events')
-                        .select('event_type,title,entity_type,entity_id,created_at,created_by_email')
+                        .select('event_type,title,entity_type,entity_id,created_at,created_by_email,payload')
                         .order('created_at', { ascending: false })
                         .limit(10);
                     
@@ -195,7 +195,54 @@ window.addEventListener('unhandledrejection', (e) => {
                         console.warn('No se pudo cargar actividad:', error);
                         setActividadReciente([]);
                     } else {
-                        setActividadReciente(data || []);
+                        // Procesar eventos para hacerlos más descriptivos
+                        const procesados = (data || []).map(evento => {
+                            let detalleTexto = evento.title || 'Actividad';
+                            
+                            // Mejorar descripción basándose en el payload
+                            if (evento.payload) {
+                                const { old: antes, new: despues } = evento.payload;
+                                
+                                // Detectar cambios específicos
+                                if (antes && despues) {
+                                    const cambios = [];
+                                    
+                                    // Cambio de contacto
+                                    if (antes.contacto !== despues.contacto) {
+                                        cambios.push(`contacto: ${antes.contacto || '(vacío)'} → ${despues.contacto}`);
+                                    }
+                                    
+                                    // Cambio de estado
+                                    if (antes.estado !== despues.estado) {
+                                        cambios.push(`estado: ${antes.estado} → ${despues.estado}`);
+                                    }
+                                    
+                                    // Cambio de fase
+                                    if (antes.fase_actual !== despues.fase_actual) {
+                                        cambios.push(`fase: ${antes.fase_actual} → ${despues.fase_actual}`);
+                                    }
+                                    
+                                    // Cambio de valor
+                                    if (antes.valor !== despues.valor) {
+                                        cambios.push(`valor: ${antes.valor} → ${despues.valor} UF`);
+                                    }
+                                    
+                                    if (cambios.length > 0) {
+                                        detalleTexto = `${despues.organizacion || evento.entity_type}: ${cambios[0]}`;
+                                    }
+                                } else if (despues && evento.event_type === 'insert') {
+                                    // Creación nueva
+                                    detalleTexto = `${despues.organizacion || evento.entity_type} creado`;
+                                }
+                            }
+                            
+                            return {
+                                ...evento,
+                                titulo_mejorado: detalleTexto
+                            };
+                        });
+                        
+                        setActividadReciente(procesados);
                     }
                 } catch (e) {
                     console.warn('Error cargando actividad:', e);
@@ -276,19 +323,12 @@ window.addEventListener('unhandledrejection', (e) => {
                 return sum + monto; // Ya está en UF
             }, 0);
 
-            // Ingresos (UF) - incluye cerrados ganados + MRR + tickets
-            const ingresosCerradosEsteMes = cerradosEsteMes
-                .filter(c => c.estado_final === 'Ganado')
-                .reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
+            // Ingresos REALES = Solo trabajo activo (MRR + Tickets)
+            // El historial es pasado, no cuenta para ingresos actuales
+            const ingresosEsteMes = mrrActual + valorTickets;
             
-            // Ingresos TOTALES = cerrados one-time + MRR recurrente + tickets activos
-            const ingresosEsteMes = ingresosCerradosEsteMes + mrrActual + valorTickets;
-            
-            const ingresosCerradosMesAnterior = cerradosMesAnterior
-                .filter(c => c.estado_final === 'Ganado')
-                .reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
-            
-            const ingresosMesAnterior = ingresosCerradosMesAnterior + mrrActual; // Asumimos mismo MRR
+            // Para comparación mes anterior, asumimos mismo nivel
+            const ingresosMesAnterior = mrrActual + valorTickets; // Podríamos mejorarlo después
 
             const variacionIngresos = ingresosMesAnterior > 0 
                 ? Math.round(((ingresosEsteMes - ingresosMesAnterior) / ingresosMesAnterior) * 100)
@@ -1522,14 +1562,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     {/* MÉTRICAS PRINCIPALES */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white rounded-lg shadow p-6 border-l-4 border-verde">
-                            <div className="text-sm text-gray-600 mb-2">💰 Ingresos este mes</div>
+                            <div className="text-sm text-gray-600 mb-2">💰 Trabajo Activo (MRR + Tickets)</div>
                             <div className="text-3xl font-bold text-verde mb-1">{Math.round(metrics.ingresosEsteMes)} UF</div>
                             <div className="text-sm text-gray-500">${Math.round(metrics.ingresosEsteMes * UF_APROX).toLocaleString('es-CL')}</div>
                             <div className="mt-3 text-xs space-y-1 border-t pt-2">
-                                <div className="flex justify-between text-gray-600">
-                                    <span>Cerrados ganados:</span>
-                                    <span className="font-medium">{Math.round(metrics.ingresosCerrados)} UF</span>
-                                </div>
                                 <div className="flex justify-between text-gray-600">
                                     <span>MRR recurrente:</span>
                                     <span className="font-medium">{Math.round(metrics.mrrActual)} UF</span>
@@ -1538,6 +1574,9 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     <span>Tickets activos:</span>
                                     <span className="font-medium">{Math.round(metrics.valorTickets)} UF</span>
                                 </div>
+                            </div>
+                            <div className="mt-2 text-xs text-gray-500">
+                                💡 Solo trabajo activo (excluye Historial)
                             </div>
                             <div className="mt-2 text-xs pt-2 border-t">
                                 <span className="text-gray-500">Anterior: {Math.round(metrics.ingresosMesAnterior)} UF</span>
@@ -1592,7 +1631,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         <div key={idx} className="flex items-start space-x-2 text-sm border-b border-gray-100 pb-2 last:border-0">
                                             <span className="text-lg">{getEventIcon(act.event_type)}</span>
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-gray-800 font-medium truncate">{act.title || 'Actividad'}</div>
+                                                <div className="text-gray-800 font-medium truncate">{act.titulo_mejorado || act.title || 'Actividad'}</div>
                                                 <div className="text-xs text-gray-500">
                                                     {act.created_by_email || 'Sistema'} · {formatTimeAgo(act.created_at)}
                                                 </div>
