@@ -2060,14 +2060,45 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             };
 
             const getEventIcon = (eventType) => {
-                if (eventType?.includes('created')) return '✨';
-                if (eventType?.includes('updated')) return '✏️';
+                if (eventType?.includes('insert') || eventType?.includes('created')) return '✨';
+                if (eventType?.includes('update')) return '✏️';
+                if (eventType?.includes('delete')) return '🗑️';
                 if (eventType?.includes('stage') || eventType?.includes('moved')) return '🔄';
                 if (eventType?.includes('closed')) return '✅';
                 if (eventType?.includes('converted')) return '🔄';
                 if (eventType?.includes('renewal')) return '🔑';
                 if (eventType?.includes('cancelled')) return '❌';
                 return '📝';
+            };
+            
+            const getDetalles = (item) => {
+                // Si tiene payload, extraer cambios específicos
+                if (item.payload) {
+                    const { old: antes, new: despues } = item.payload;
+                    const cambios = [];
+                    
+                    if (antes && despues) {
+                        // Detectar cambios específicos
+                        const campos = ['organizacion', 'contacto', 'estado', 'fase_actual', 'valor', 'valor_monto', 
+                                       'valor_moneda', 'uf_mes', 'tipo', 'ticket', 'servicio', 'salud', 
+                                       'probabilidad', 'porcentaje_avance', 'responsable'];
+                        
+                        campos.forEach(campo => {
+                            if (antes[campo] !== despues[campo] && (antes[campo] || despues[campo])) {
+                                const labelCampo = campo.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                cambios.push({
+                                    campo: labelCampo,
+                                    antes: antes[campo] || '(vacío)',
+                                    despues: despues[campo] || '(vacío)'
+                                });
+                            }
+                        });
+                    }
+                    
+                    return cambios;
+                }
+                
+                return [];
             };
 
             return (
@@ -2095,29 +2126,56 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     </div>
                                 ) : (
                                     <ul className="divide-y">
-                                        {items.map((it, idx) => (
-                                            <li key={idx} className="p-4 hover:bg-gray-50">
-                                                <div className="flex items-start space-x-3">
-                                                    <span className="text-xl">{getEventIcon(it.event_type || it.label)}</span>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="text-sm font-medium text-gray-900">
-                                                                {it.title || it.label || 'Actividad'}
+                                        {items.map((it, idx) => {
+                                            const detalles = getDetalles(it);
+                                            const titulo = it.title || it.label || 'Actividad';
+                                            
+                                            return (
+                                                <li key={idx} className="p-4 hover:bg-gray-50">
+                                                    <div className="flex items-start space-x-3">
+                                                        <span className="text-xl">{getEventIcon(it.event_type || it.label)}</span>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="text-sm font-medium text-gray-900">
+                                                                    {titulo}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">{formatDT(it.created_at)}</div>
                                                             </div>
-                                                            <div className="text-xs text-gray-500">{formatDT(it.created_at)}</div>
+                                                            {it.email && (
+                                                                <div className="text-xs text-gray-600 mt-1">
+                                                                    Por: {it.email}
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {/* Mostrar detalles de cambios */}
+                                                            {detalles.length > 0 && (
+                                                                <div className="mt-2 space-y-1">
+                                                                    {detalles.map((detalle, i) => (
+                                                                        <div key={i} className="text-xs bg-gray-50 p-2 rounded">
+                                                                            <span className="font-medium text-gray-700">{detalle.campo}:</span>
+                                                                            <span className="text-gray-500 mx-1">{detalle.antes}</span>
+                                                                            <span className="text-gray-400">→</span>
+                                                                            <span className="text-gray-900 ml-1 font-medium">{detalle.despues}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {it.kind === 'transition' && it.payload && (
+                                                                <div className="text-xs text-gray-600 mt-2 bg-blue-50 p-2 rounded">
+                                                                    <span className="font-medium">Transición:</span> {it.payload.from} → {it.payload.to}
+                                                                    {it.payload.notes && (
+                                                                        <div className="mt-1 text-gray-600">
+                                                                            {it.payload.notes}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        {it.email && (
-                                                            <div className="text-xs text-gray-600 mt-1">
-                                                                Por: {it.email}
-                                                            </div>
-                                                        )}
-                                                        {it.kind === 'transition' && it.payload && (
-                                                            <div className="text-xs text-gray-600 mt-2 bg-gray-50 p-2 rounded">
-                                                                <span className="font-medium">De:</span> {it.payload.from} 
-                                                                <span className="mx-2">→</span>
-                                                                <span className="font-medium">A:</span> {it.payload.to}
-                                                                {it.payload.notes && (
-                                                                    <div className="mt-1">
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
                                                                         <span className="font-medium">Notas:</span> {it.payload.notes}
                                                                     </div>
                                                                 )}
