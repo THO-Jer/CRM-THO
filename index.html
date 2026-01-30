@@ -261,23 +261,28 @@ window.addEventListener('unhandledrejection', (e) => {
                 return f.getMonth() === mesAnterior && f.getFullYear() === añoMesAnterior;
             });
 
-            // Ingresos (UF)
-            const ingresosEsteMes = cerradosEsteMes
-                .filter(c => c.estado_final === 'Ganado')
-                .reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
-            
-            const ingresosMesAnterior = cerradosMesAnterior
-                .filter(c => c.estado_final === 'Ganado')
-                .reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
-
-            const variacionIngresos = ingresosMesAnterior > 0 
-                ? Math.round(((ingresosEsteMes - ingresosMesAnterior) / ingresosMesAnterior) * 100)
-                : 0;
-
             // MRR (Monthly Recurring Revenue)
             const mrrActual = keyAccounts
                 .filter(ka => (ka.salud || '').toLowerCase() !== 'cerrado')
                 .reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
+
+            // Ingresos (UF) - incluye cerrados ganados + MRR
+            const ingresosCerradosEsteMes = cerradosEsteMes
+                .filter(c => c.estado_final === 'Ganado')
+                .reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
+            
+            // Ingresos TOTALES = cerrados one-time + MRR recurrente
+            const ingresosEsteMes = ingresosCerradosEsteMes + mrrActual;
+            
+            const ingresosCerradosMesAnterior = cerradosMesAnterior
+                .filter(c => c.estado_final === 'Ganado')
+                .reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
+            
+            const ingresosMesAnterior = ingresosCerradosMesAnterior + mrrActual; // Asumimos mismo MRR
+
+            const variacionIngresos = ingresosMesAnterior > 0 
+                ? Math.round(((ingresosEsteMes - ingresosMesAnterior) / ingresosMesAnterior) * 100)
+                : ingresosEsteMes > 0 ? 100 : 0;
 
             // Alertas
             const prospectosVencidos = prospectos.filter(p => {
@@ -407,6 +412,7 @@ window.addEventListener('unhandledrejection', (e) => {
                 
                 // Avanzadas
                 ingresosEsteMes,
+                ingresosCerrados: ingresosCerradosEsteMes,
                 ingresosMesAnterior,
                 variacionIngresos,
                 mrrActual,
@@ -1508,7 +1514,17 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             <div className="text-sm text-gray-600 mb-2">💰 Ingresos este mes</div>
                             <div className="text-3xl font-bold text-verde mb-1">{Math.round(metrics.ingresosEsteMes)} UF</div>
                             <div className="text-sm text-gray-500">${Math.round(metrics.ingresosEsteMes * UF_APROX).toLocaleString('es-CL')}</div>
-                            <div className="mt-2 text-xs">
+                            <div className="mt-3 text-xs space-y-1 border-t pt-2">
+                                <div className="flex justify-between text-gray-600">
+                                    <span>Cerrados ganados:</span>
+                                    <span className="font-medium">{Math.round(metrics.ingresosCerrados)} UF</span>
+                                </div>
+                                <div className="flex justify-between text-gray-600">
+                                    <span>MRR recurrente:</span>
+                                    <span className="font-medium">{Math.round(metrics.mrrActual)} UF</span>
+                                </div>
+                            </div>
+                            <div className="mt-2 text-xs pt-2 border-t">
                                 <span className="text-gray-500">Anterior: {Math.round(metrics.ingresosMesAnterior)} UF</span>
                                 {metrics.variacionIngresos !== 0 && (<span className={`ml-2 font-medium ${metrics.variacionIngresos > 0 ? 'text-green-600' : 'text-red-600'}`}>{metrics.variacionIngresos > 0 ? '↗' : '↘'} {Math.abs(metrics.variacionIngresos)}%</span>)}
                             </div>
