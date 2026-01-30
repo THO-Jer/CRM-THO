@@ -69,7 +69,7 @@
 
             // Conversión
             const [convertOpen, setConvertOpen] = useState(false);
-            const [convertProspecto, setConvertProspecto] = useState(null);
+            const [convertSource, setConvertSource] = useState({ type: 'prospecto', item: null });
             const [convertTarget, setConvertTarget] = useState('ticket');
             const [convertForm, setConvertForm] = useState({
                 ticket: '',
@@ -216,126 +216,165 @@
             };
 
             // -------------------------
-            // Conversión de Prospectos
-            // -------------------------
-            const openConvert = (prospecto) => {
-                setConvertProspecto(prospecto);
-                const today = new Date().toISOString().split('T')[0];
-                const defaultEntrega = prospecto?.fecha_limite || today;
-                setConvertTarget('ticket');
-                setConvertForm({
-                    ticket: `Ejecución - ${prospecto?.organizacion || ''}`.trim(),
-                    fecha_inicio: today,
-                    fecha_entrega: defaultEntrega,
-                    responsable: '',
-                    servicio: prospecto?.tipo || 'Servicio',
-                    uf_mes: String(prospecto?.valor ?? ''),
-                    inicio_contrato: today,
-                    fin_contrato: defaultEntrega,
-                    notes: ''
-                });
-                setConvertOpen(true);
-            };
+// Conversión (Prospectos y Cerrados)
+// -------------------------
+const openConvert = (prospecto) => {
+    setConvertSource({ type: 'prospecto', item: prospecto });
+    const today = new Date().toISOString().split('T')[0];
+    const defaultEntrega = prospecto?.fecha_limite || today;
+    setConvertTarget('ticket');
+    setConvertForm({
+        ticket: `Ejecución - ${prospecto?.organizacion || ''}`.trim(),
+        fecha_inicio: today,
+        fecha_entrega: defaultEntrega,
+        responsable: '',
+        servicio: prospecto?.tipo || 'Servicio',
+        uf_mes: String(prospecto?.valor ?? ''),
+        inicio_contrato: today,
+        fin_contrato: defaultEntrega,
+        notes: ''
+    });
+    setConvertOpen(true);
+};
 
-            const closeConvert = () => {
-                setConvertOpen(false);
-                setConvertProspecto(null);
-            };
+const openConvertFromCerrado = (cerrado) => {
+    setConvertSource({ type: 'cerrado', item: cerrado });
+    const today = new Date().toISOString().split('T')[0];
+    // En cerrados no hay fecha_limite: proponemos hoy como punto de partida
+    setConvertTarget('ticket');
+    setConvertForm({
+        ticket: `Ejecución - ${cerrado?.organizacion || ''}`.trim(),
+        fecha_inicio: today,
+        fecha_entrega: today,
+        responsable: '',
+        servicio: cerrado?.tipo || 'Servicio',
+        uf_mes: String(cerrado?.valor ?? ''),
+        inicio_contrato: today,
+        fin_contrato: today,
+        notes: ''
+    });
+    setConvertOpen(true);
+};
 
-            const submitConvert = async () => {
-                if (!requireAuth()) return;
-                if (!convertProspecto) return;
+const closeConvert = () => {
+    setConvertOpen(false);
+    setConvertSource({ type: 'prospecto', item: null });
+};
 
-                try {
-                    const p = convertProspecto;
-                    const pId = p.id;
+const submitConvert = async () => {
+if (!requireAuth()) return;
+const sourceType = convertSource?.type;
+const source = convertSource?.item;
+if (!sourceType || !source) return;
 
-                    // 1) Crear entidad destino
-                    let toType = null;
-                    let toId = null;
+try {
+    const fromId = source.id;
+    const fromEntityType = (sourceType === 'prospecto') ? 'prospectos' : 'cerrados';
+    const transitionFrom = (sourceType === 'prospecto') ? 'prospecto' : 'cerrado';
 
-                    if (convertTarget === 'ticket') {
-                        const ticketRow = {
-                            organizacion: p.organizacion,
-                            ticket: convertForm.ticket || `Ejecución - ${p.organizacion}`,
-                            fecha_inicio: convertForm.fecha_inicio,
-                            fecha_entrega: convertForm.fecha_entrega,
-                            fase_actual: 'Inicio',
-                            porcentaje_avance: 0,
-                            responsable: convertForm.responsable || '',
-                            satisfaccion: null,
-                            escalo: false,
-                            proxima_accion: p.proximo_paso || '',
-                            status: 'Activo'
-                        };
-                        const { data, error } = await supabase.from('tickets').insert([ticketRow]).select('id').single();
-                        if (error) throw error;
-                        toType = 'ticket';
-                        toId = data.id;
+    // 1) Crear entidad destino
+    let toType = null;   // 'ticket' | 'key_account'
+    let toId = null;
 
-                        await logEvent('tickets', toId, 'created_from_prospect', 'Creado desde prospecto', { from_prospecto_id: pId });
-                    } else {
-                        const kaRow = {
-                            organizacion: p.organizacion,
-                            servicio: convertForm.servicio || p.tipo,
-                            uf_mes: Number(convertForm.uf_mes || p.valor || 0),
-                            inicio_contrato: convertForm.inicio_contrato,
-                            fin_contrato: convertForm.fin_contrato,
-                            renovacion: 'Mensual',
-                            salud: 'OK',
-                            ultima_reunion: null,
-                            proxima_reunion: null,
-                            valor_uf_cierre: null,
-                            fecha_cierre_uf: null
-                        };
-                        const { data, error } = await supabase.from('key_accounts').insert([kaRow]).select('id').single();
-                        if (error) throw error;
-                        toType = 'key_account';
-                        toId = data.id;
+    if (convertTarget === 'ticket') {
+        const ticketRow = {
+            organizacion: source.organizacion,
+            ticket: convertForm.ticket || `Ejecución - ${source.organizacion}`,
+            fecha_inicio: convertForm.fecha_inicio,
+            fecha_entrega: convertForm.fecha_entrega,
+            fase_actual: 'Inicio',
+            porcentaje_avance: 0,
+            responsable: convertForm.responsable || '',
+            satisfaccion: null,
+            escalo: false,
+            proxima_accion: (sourceType === 'prospecto' ? (source.proximo_paso || '') : ''),
+            status: 'Activo'
+        };
+        const { data, error } = await supabase.from('tickets').insert([ticketRow]).select('id').single();
+        if (error) throw error;
+        toType = 'ticket';
+        toId = data.id;
 
-                        // Seed de renovación activa (si existe tabla)
-                        try {
-                            await supabase.from('crm_renewals').insert([{
-                                key_account_id: toId,
-                                start_date: kaRow.inicio_contrato,
-                                end_date: kaRow.fin_contrato,
-                                uf_mes: kaRow.uf_mes,
-                                status: 'active',
-                                notes: 'Seed desde conversión'
-                            }]);
-                        } catch (e) { /* no-op */ }
+        await logEvent('tickets', toId, 'created_from_' + transitionFrom, `Creado desde ${transitionFrom}`, { from_type: transitionFrom, from_id: fromId });
+    } else {
+        const kaRow = {
+            organizacion: source.organizacion,
+            servicio: convertForm.servicio || source.tipo || 'Servicio',
+            uf_mes: Number(convertForm.uf_mes || source.valor || 0),
+            inicio_contrato: convertForm.inicio_contrato,
+            fin_contrato: convertForm.fin_contrato,
+            renovacion: 'Mensual',
+            salud: 'OK',
+            ultima_reunion: null,
+            proxima_reunion: null,
+            valor_uf_cierre: null,
+            fecha_cierre_uf: null
+        };
+        const { data, error } = await supabase.from('key_accounts').insert([kaRow]).select('id').single();
+        if (error) throw error;
+        toType = 'key_account';
+        toId = data.id;
 
-                        await logEvent('key_accounts', toId, 'created_from_prospect', 'Creado desde prospecto', { from_prospecto_id: pId });
-                    }
+        // Seed de renovación activa (si existe tabla)
+        try {
+            await supabase.from('crm_renewals').insert([{
+                key_account_id: toId,
+                start_date: kaRow.inicio_contrato,
+                end_date: kaRow.fin_contrato,
+                uf_mes: kaRow.uf_mes,
+                status: 'active',
+                notes: `Seed desde conversión (${transitionFrom})`
+            }]);
+        } catch (e) { /* no-op */ }
 
-                    // 2) Guardar link (prospecto -> destino)
-                    try {
-                        await supabase.from('crm_entity_links').insert([{
-                            from_type: 'prospecto',
-                            from_id: pId,
-                            to_type: toType,
-                            to_id: toId,
-                            link_type: 'transition'
-                        }]);
-                    } catch (e) { /* no-op */ }
+        await logEvent('key_accounts', toId, 'created_from_' + transitionFrom, `Creado desde ${transitionFrom}`, { from_type: transitionFrom, from_id: fromId });
+    }
 
-                    // 3) Marcar prospecto como convertido (lo mantenemos para historial)
-                    const { error: updErr } = await supabase.from('prospectos')
-                        .update({ estado: 'Convertido', proximo_paso: `Convertido a ${toType === 'ticket' ? 'Ticket' : 'Key Account'}` })
-                        .eq('id', pId);
-                    if (updErr) throw updErr;
+    // 2) Guardar link (origen -> destino)
+    try {
+        await supabase.from('crm_entity_links').insert([{
+            from_type: transitionFrom,
+            from_id: fromId,
+            to_type: toType,
+            to_id: toId,
+            link_type: 'transition'
+        }]);
+    } catch (e) { /* no-op */ }
 
-                    await logEvent('prospectos', pId, 'converted', 'Prospecto convertido', { to_type: toType, to_id: toId });
+    // 2.1) Guardar transición (si existe la tabla crm_transitions)
+    try {
+        await supabase.from('crm_transitions').insert([{
+            entity_from: transitionFrom,
+            entity_from_id: fromId,
+            entity_to: toType,
+            entity_to_id: toId,
+            reason: 'Conversión',
+            notes: convertForm.notes || null,
+            created_by_email: user?.email || null
+        }]);
+    } catch (e) { /* no-op */ }
 
-                    // 4) Refresh
-                    await loadProspectos();
-                    await loadTickets();
-                    await loadKeyAccounts();
+    // 3) Si venimos desde prospecto: marcar como convertido (no lo borramos)
+    if (sourceType === 'prospecto') {
+        const { error: updErr } = await supabase.from('prospectos')
+            .update({ estado: 'Convertido', proximo_paso: `Convertido a ${toType === 'ticket' ? 'Ticket' : 'Key Account'}` })
+            .eq('id', fromId);
+        if (updErr) throw updErr;
+    }
 
-                    closeConvert();
-                } catch (error) {
-                    alert('Error al convertir: ' + error.message);
-                }
+    await logEvent(fromEntityType, fromId, 'converted', `${transitionFrom} convertido`, { to_type: toType, to_id: toId });
+
+    // 4) Refresh
+    await loadProspectos();
+    await loadCerrados();
+    await loadTickets();
+    await loadKeyAccounts();
+
+    closeConvert();
+} catch (error) {
+    alert('Error al convertir: ' + error.message);
+}
+
             };
 
             // -------------------------
@@ -680,8 +719,8 @@
 
                     <main className="max-w-7xl mx-auto px-4 py-8">
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} />}
-                        {activeTab === 'pipeline' && <KanbanBoard onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
-                        {activeTab === 'cerrados' && <CerradosView onHistory={openHistory} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
+                        {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
+                        {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                         {activeTab === 'tickets' && <TicketsView onHistory={openHistory} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                         {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
                     </main>
@@ -695,7 +734,7 @@
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <h3 className="text-xl font-bold">Convertir prospecto</h3>
-                                        <p className="text-sm text-gray-600">{convertProspecto?.organizacion}</p>
+                                        <p className="text-sm text-gray-600">{convertSource?.item?.organizacion}</p>
                                     </div>
                                     <button onClick={closeConvert} className="text-gray-500 hover:text-gray-800">✕</button>
                                 </div>
@@ -888,17 +927,17 @@
             return <div className={`bg-white rounded-lg shadow p-6 border-l-4 border-${color}`}><div className="text-sm text-gray-600 mb-2">{title}</div><div className={`text-3xl font-bold text-${color} mb-1`}>{value}</div><div className="text-xs text-gray-500">{subtitle}</div></div>;
         }
 
-        function KanbanBoard({estados, prospectosPorEstado, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey, onHistory}) {
+        function KanbanBoard({estados, prospectosPorEstado, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey, onHistory, onConvert}) {
             return (
                 <div className="grid grid-cols-4 gap-4">
                     {estados.map(estado => (
-                        <KanbanColumn onHistory={onHistory} key={estado.id} estado={estado} prospectos={prospectosPorEstado(estado.id)} onEdit={onEdit} onDelete={onDelete} onMove={onMove} onCerrar={onCerrar} getEstadoFromKey={getEstadoFromKey} />
+                        <KanbanColumn onHistory={onHistory} key={estado.id} estado={estado} prospectos={prospectosPorEstado(estado.id)} onEdit={onEdit} onDelete={onDelete} onMove={onMove} onCerrar={onCerrar} getEstadoFromKey={getEstadoFromKey} onConvert={onConvert} />
                     ))}
                 </div>
             );
         }
 
-        function KanbanColumn({estado, prospectos, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey, onHistory}) {
+        function KanbanColumn({estado, prospectos, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey, onHistory, onConvert}) {
             const handleDragStart = (e, p) => { e.dataTransfer.setData('prospectoId', p.id); e.currentTarget.classList.add('dragging'); };
             const handleDragEnd = (e) => { e.currentTarget.classList.remove('dragging'); };
             const handleDragOver = (e) => { e.preventDefault(); };
@@ -911,7 +950,7 @@
                         <span className="text-xs bg-white px-2 py-1 rounded">{prospectos.length}</span>
                     </div>
                     <div className="space-y-3">
-                        {prospectos.map(p => <ProspectoCard key={p.id} prospecto={p} onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} onCerrar={onCerrar} onConvert={(pp)=>openConvert(pp)} onHistory={() => onHistory('prospectos', p.id, p.organizacion)} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
+                        {prospectos.map(p => <ProspectoCard key={p.id} prospecto={p} onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} onCerrar={onCerrar} onConvert={onConvert} onHistory={() => onHistory('prospectos', p.id, p.organizacion)} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
                     </div>
                 </div>
             );
@@ -953,7 +992,7 @@
             );
         }
 
-        function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory}) {
+        function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory, onConvertClosed}) {
             const ganados = cerrados.filter(c => c.estado_final === 'Ganado');
             const valorGanado = ganados.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
             
@@ -993,6 +1032,9 @@
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(c)} className="text-azul">Editar</button>
                                             <button onClick={() => onHistory('cerrados', c.id, c.organizacion)} className="text-gray-700">Historial</button>
+                                            {onConvertClosed && (
+                                                <button onClick={() => onConvertClosed(c)} className="text-azul">Reactivar</button>
+                                            )}
                                             <button onClick={() => onDelete(c.id)} className="text-red-600">Eliminar</button>
                                         </td>
                                     </tr>
