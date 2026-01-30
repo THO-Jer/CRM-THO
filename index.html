@@ -182,18 +182,119 @@ window.addEventListener('unhandledrejection', (e) => {
                 }
             };
 
+            // ===== MÉTRICAS AVANZADAS =====
+            const hoy = new Date();
+            const mesActual = hoy.getMonth();
+            const añoActual = hoy.getFullYear();
+            const mesAnterior = mesActual === 0 ? 11 : mesActual - 1;
+            const añoMesAnterior = mesActual === 0 ? añoActual - 1 : añoActual;
+
+            // Cerrados este mes
+            const cerradosEsteMes = cerrados.filter(c => {
+                const f = new Date(c.fecha_cierre);
+                return f.getMonth() === mesActual && f.getFullYear() === añoActual;
+            });
+            
+            // Cerrados mes anterior
+            const cerradosMesAnterior = cerrados.filter(c => {
+                const f = new Date(c.fecha_cierre);
+                return f.getMonth() === mesAnterior && f.getFullYear() === añoMesAnterior;
+            });
+
+            // Ingresos (UF)
+            const ingresosEsteMes = cerradosEsteMes
+                .filter(c => c.estado_final === 'Ganado')
+                .reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
+            
+            const ingresosMesAnterior = cerradosMesAnterior
+                .filter(c => c.estado_final === 'Ganado')
+                .reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
+
+            const variacionIngresos = ingresosMesAnterior > 0 
+                ? Math.round(((ingresosEsteMes - ingresosMesAnterior) / ingresosMesAnterior) * 100)
+                : 0;
+
+            // MRR (Monthly Recurring Revenue)
+            const mrrActual = keyAccounts
+                .filter(ka => (ka.salud || '').toLowerCase() !== 'cerrado')
+                .reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
+
+            // Alertas
+            const prospectosVencidos = prospectos.filter(p => {
+                const limite = new Date(p.fecha_limite);
+                return limite < hoy && p.estado !== 'Convertido';
+            });
+
+            const prospectosSinActividad = prospectos.filter(p => {
+                if (!p.updated_at) return false;
+                const ultimaActividad = new Date(p.updated_at);
+                const diasSinActividad = Math.floor((hoy - ultimaActividad) / (1000 * 60 * 60 * 24));
+                return diasSinActividad > 14;
+            });
+
+            const keyAccountsPorRenovar = keyAccounts.filter(ka => {
+                if (!ka.fin_contrato || (ka.salud || '').toLowerCase() === 'cerrado') return false;
+                const fin = new Date(ka.fin_contrato);
+                const diasHastaFin = Math.floor((fin - hoy) / (1000 * 60 * 60 * 24));
+                return diasHastaFin > 0 && diasHastaFin <= 30;
+            });
+
+            // Conversión
+            const tasaConversion = cerrados.length > 0 
+                ? Math.round((cerrados.filter(c => c.estado_final === 'Ganado').length / cerrados.length) * 100) 
+                : 0;
+
+            const tasaConversionMesAnterior = cerradosMesAnterior.length > 0
+                ? Math.round((cerradosMesAnterior.filter(c => c.estado_final === 'Ganado').length / cerradosMesAnterior.length) * 100)
+                : 0;
+
+            // Salud del negocio
+            let saludNegocio = 'Saludable';
+            let saludColor = 'verde';
+            let saludMensaje = 'Pipeline estable, conversión sobre promedio';
+            
+            if (prospectosVencidos.length > 5 || tasaConversion < 50) {
+                saludNegocio = 'Requiere atención';
+                saludColor = 'naranja';
+                saludMensaje = 'Múltiples prospectos vencidos, revisar pipeline';
+            }
+            if (prospectosVencidos.length > 10 || tasaConversion < 30 || mrrActual === 0) {
+                saludNegocio = 'Crítico';
+                saludColor = 'red';
+                saludMensaje = 'Acción urgente requerida';
+            }
+
             const metrics = {
+                // Básicas
                 totalProspectos: prospectos.length,
                 reunionesAgendadas: prospectos.filter(p => p.estado === 'Reunión agendada').length,
                 propuestasEnviadas: prospectos.filter(p => p.estado === 'Propuesta enviada').length,
                 pipelineTotal: prospectos.reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0),
-                cerradosEsteMes: cerrados.filter(c => {
-                    const fecha = new Date(c.fecha_cierre);
-                    const hoy = new Date();
-                    return fecha.getMonth() === hoy.getMonth() && fecha.getFullYear() === hoy.getFullYear();
-                }).length,
-                tasaConversion: cerrados.length > 0 ? Math.round((cerrados.filter(c => c.estado_final === 'Ganado').length / cerrados.length) * 100) : 0,
-                proximosCierres: prospectos.filter(p => p.probabilidad > 60).length
+                proximosCierres: prospectos.filter(p => p.probabilidad > 60).length,
+                
+                // Avanzadas
+                ingresosEsteMes,
+                ingresosMesAnterior,
+                variacionIngresos,
+                mrrActual,
+                tasaConversion,
+                tasaConversionMesAnterior,
+                cerradosEsteMes: cerradosEsteMes.length,
+                
+                // Alertas
+                prospectosVencidos: prospectosVencidos.length,
+                prospectosSinActividad: prospectosSinActividad.length,
+                keyAccountsPorRenovar: keyAccountsPorRenovar.length,
+                
+                // Salud
+                saludNegocio,
+                saludColor,
+                saludMensaje,
+                
+                // Listas detalladas
+                prospectosVencidosDetalle: prospectosVencidos,
+                prospectosSinActividadDetalle: prospectosSinActividad,
+                keyAccountsPorRenovarDetalle: keyAccountsPorRenovar
             };
 
             const estadosKanban = [
@@ -653,13 +754,45 @@ const items = [
             const handleSaveProspecto = async (data) => {
                 if (!requireAuth()) return;
                 try {
+                    let savedId = null;
                     if (editingItem) {
+                        // UPDATE: registrar qué cambió
+                        const cambios = {};
+                        Object.keys(data).forEach(key => {
+                            if (editingItem[key] !== data[key]) {
+                                cambios[key] = { anterior: editingItem[key], nuevo: data[key] };
+                            }
+                        });
+                        
                         const { error } = await supabase.from('prospectos').update(data).eq('id', editingItem.id);
                         if (error) throw error;
+                        
+                        savedId = editingItem.id;
+                        
+                        // Log del update
+                        if (Object.keys(cambios).length > 0) {
+                            await logEvent('prospectos', savedId, 'updated', 'Prospecto actualizado', {
+                                changed_fields: Object.keys(cambios),
+                                changes: cambios,
+                                updated_by: user?.email || 'unknown'
+                            });
+                        }
                     } else {
-                        const { error } = await supabase.from('prospectos').insert([data]);
+                        // INSERT: registrar creación
+                        const { data: inserted, error } = await supabase.from('prospectos').insert([data]).select('id').single();
                         if (error) throw error;
+                        
+                        savedId = inserted?.id;
+                        
+                        // Log de creación
+                        await logEvent('prospectos', savedId, 'created', 'Prospecto creado', {
+                            organizacion: data.organizacion,
+                            valor: data.valor,
+                            tipo: data.tipo,
+                            created_by: user?.email || 'unknown'
+                        });
                     }
+                    
                     await loadProspectos();
                     setShowModal(false);
                 } catch (error) { 
@@ -678,13 +811,29 @@ const items = [
 
             const handleMoveProspecto = async (prospectoId, nuevoEstado) => {
                 if (!requireAuth()) return;
+                
+                // Obtener estado anterior
+                const prospecto = prospectos.find(p => p.id === prospectoId);
+                const estadoAnterior = prospecto?.estado;
+                
                 let probabilidad = 10;
                 if (nuevoEstado === 'Reunión agendada') probabilidad = 25;
                 if (nuevoEstado === 'Propuesta enviada') probabilidad = 40;
                 if (nuevoEstado === 'Negociación') probabilidad = 70;
+                
                 const { error } = await supabase.from('prospectos').update({ estado: nuevoEstado, probabilidad }).eq('id', prospectoId);
-                if (error) console.error('Error:', error);
-                else await loadProspectos();
+                if (error) {
+                    console.error('Error:', error);
+                } else {
+                    // Log del movimiento
+                    await logEvent('prospectos', prospectoId, 'stage_changed', `Movido a "${nuevoEstado}"`, {
+                        from: estadoAnterior,
+                        to: nuevoEstado,
+                        probabilidad: probabilidad,
+                        moved_by: user?.email || 'unknown'
+                    });
+                    await loadProspectos();
+                }
             };
 
             const handleCerrarProspecto = async (prospecto, ganado) => {
@@ -703,6 +852,14 @@ const items = [
                     };
                     const { error: insertError } = await supabase.from('cerrados').insert([cerrado]);
                     if (insertError) throw insertError;
+                    
+                    // Log antes de borrar
+                    await logEvent('prospectos', prospecto.id, 'closed', `Cerrado como "${ganado ? 'Ganado' : 'Perdido'}"`, {
+                        estado_final: ganado ? 'Ganado' : 'Perdido',
+                        valor: prospecto.valor,
+                        closed_by: user?.email || 'unknown'
+                    });
+                    
                     const { error: deleteError } = await supabase.from('prospectos').delete().eq('id', prospecto.id);
                     if (deleteError) throw deleteError;
                     await loadProspectos();
@@ -908,7 +1065,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     )}
 
                     <main className="max-w-7xl mx-auto px-4 py-8">
-                        {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} />}
+                        {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                         {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
@@ -1112,18 +1269,100 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
         }
 
         // [COMPONENTES IGUALES - Dashboard, MetricCard, KanbanBoard, etc.]
-        function Dashboard({ metrics, prospectos }) {
+        function Dashboard({ metrics, prospectos, cerrados, tickets, keyAccounts, user }) {
+            const [showAlertas, setShowAlertas] = useState(true);
+            const UF_APROX = 38000;
+            const totalAlertas = (metrics.prospectosVencidos || 0) + (metrics.prospectosSinActividad || 0) + (metrics.keyAccountsPorRenovar || 0);
+            
             return (
                 <div className="space-y-6">
-                    <div className="grid grid-cols-3 gap-6">
-                        <MetricCard title="Prospectos" value={metrics.totalProspectos} subtitle="Activos" color="azul" />
-                        <MetricCard title="Propuestas" value={metrics.propuestasEnviadas} subtitle="Enviadas" color="naranja" />
-                        <MetricCard title="Pipeline" value={`${Math.round(metrics.pipelineTotal)} UF`} subtitle="Total" color="verde" />
+                    {/* BANNER DE ALERTAS */}
+                    {showAlertas && totalAlertas > 0 && (
+                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
+                            <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                    <div className="flex items-center">
+                                        <span className="text-2xl mr-2">⚠️</span>
+                                        <h3 className="text-sm font-medium text-yellow-800">
+                                            {totalAlertas} {totalAlertas === 1 ? 'alerta requiere' : 'alertas requieren'} tu atención
+                                        </h3>
+                                    </div>
+                                    <div className="mt-2 text-sm text-yellow-700 space-y-1">
+                                        {metrics.prospectosVencidos > 0 && (<div>• {metrics.prospectosVencidos} prospecto{metrics.prospectosVencidos > 1 ? 's' : ''} vencido{metrics.prospectosVencidos > 1 ? 's' : ''}</div>)}
+                                        {metrics.prospectosSinActividad > 0 && (<div>• {metrics.prospectosSinActividad} prospecto{metrics.prospectosSinActividad > 1 ? 's' : ''} sin actividad (&gt;14 días)</div>)}
+                                        {metrics.keyAccountsPorRenovar > 0 && (<div>• {metrics.keyAccountsPorRenovar} Key Account{metrics.keyAccountsPorRenovar > 1 ? 's' : ''} por renovar (&lt;30 días)</div>)}
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowAlertas(false)} className="ml-4 text-yellow-400 hover:text-yellow-600">✕</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ESTADO DEL NEGOCIO */}
+                    <div className={`bg-white rounded-lg shadow p-6 border-l-4 border-${metrics.saludColor}`}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold text-gray-800">🎯 Estado del Negocio</h2>
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${metrics.saludNegocio === 'Saludable' ? 'bg-green-100 text-green-800' : metrics.saludNegocio === 'Requiere atención' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+                                {metrics.saludNegocio === 'Saludable' ? '🟢' : metrics.saludNegocio === 'Requiere atención' ? '🟡' : '🔴'} {metrics.saludNegocio}
+                            </span>
+                        </div>
+                        <p className="text-gray-600">{metrics.saludMensaje}</p>
                     </div>
-                    <div className="grid grid-cols-3 gap-6">
-                        <MetricCard title="Cerrados" value={metrics.cerradosEsteMes} subtitle="Este mes" color="verde" />
-                        <MetricCard title="Conversión" value={`${metrics.tasaConversion}%`} subtitle="Tasa" color="azul" />
-                        <MetricCard title="Hot" value={metrics.proximosCierres} subtitle=">60%" color="fucsia" />
+
+                    {/* MÉTRICAS PRINCIPALES */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-verde">
+                            <div className="text-sm text-gray-600 mb-2">💰 Ingresos este mes</div>
+                            <div className="text-3xl font-bold text-verde mb-1">{Math.round(metrics.ingresosEsteMes)} UF</div>
+                            <div className="text-sm text-gray-500">${Math.round(metrics.ingresosEsteMes * UF_APROX).toLocaleString('es-CL')}</div>
+                            <div className="mt-2 text-xs">
+                                <span className="text-gray-500">Anterior: {Math.round(metrics.ingresosMesAnterior)} UF</span>
+                                {metrics.variacionIngresos !== 0 && (<span className={`ml-2 font-medium ${metrics.variacionIngresos > 0 ? 'text-green-600' : 'text-red-600'}`}>{metrics.variacionIngresos > 0 ? '↗' : '↘'} {Math.abs(metrics.variacionIngresos)}%</span>)}
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-azul">
+                            <div className="text-sm text-gray-600 mb-2">🔑 MRR (Recurrente)</div>
+                            <div className="text-3xl font-bold text-azul mb-1">{Math.round(metrics.mrrActual)} UF/mes</div>
+                            <div className="text-sm text-gray-500">${Math.round(metrics.mrrActual * UF_APROX).toLocaleString('es-CL')}/mes</div>
+                            <div className="mt-2 text-xs text-gray-500">Anual: ~{Math.round(metrics.mrrActual * 12)} UF</div>
+                        </div>
+
+                        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-naranja">
+                            <div className="text-sm text-gray-600 mb-2">📊 Tasa de Conversión</div>
+                            <div className="text-3xl font-bold text-naranja mb-1">{metrics.tasaConversion}%</div>
+                            <div className="text-sm text-gray-500">{cerrados.filter(c => c.estado_final === 'Ganado').length} ganados / {cerrados.length} total</div>
+                            <div className="mt-2 text-xs">
+                                <span className="text-gray-500">Anterior: {metrics.tasaConversionMesAnterior}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* PIPELINE Y DETALLES */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-white rounded-lg shadow p-6">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4">🎯 Pipeline Activo</h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center"><span className="text-gray-600">Total prospectos</span><span className="font-bold text-lg">{metrics.totalProspectos}</span></div>
+                                <div className="flex justify-between items-center"><span className="text-gray-600">Valor total</span><span className="font-bold text-lg text-verde">{Math.round(metrics.pipelineTotal)} UF</span></div>
+                                <div className="h-px bg-gray-200"></div>
+                                <div className="flex justify-between items-center text-sm"><span className="text-gray-500">🔵 Contactado</span><span>{prospectos.filter(p => p.estado === 'Contactado').length}</span></div>
+                                <div className="flex justify-between items-center text-sm"><span className="text-gray-500">🟡 Reunión agendada</span><span>{metrics.reunionesAgendadas}</span></div>
+                                <div className="flex justify-between items-center text-sm"><span className="text-gray-500">🟠 Propuesta enviada</span><span>{metrics.propuestasEnviadas}</span></div>
+                                <div className="flex justify-between items-center text-sm"><span className="text-gray-500">🟢 Negociación</span><span>{prospectos.filter(p => p.estado === 'Negociación').length}</span></div>
+                                <div className="flex justify-between items-center text-sm font-medium text-fucsia"><span>🔥 Hot (&gt;60%)</span><span>{metrics.proximosCierres}</span></div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-lg shadow p-6">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4">📊 Resumen</h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between"><span className="text-gray-600">Tickets activos</span><span className="font-bold">{tickets.length}</span></div>
+                                <div className="flex justify-between"><span className="text-gray-600">Key Accounts</span><span className="font-bold">{keyAccounts.length}</span></div>
+                                <div className="flex justify-between"><span className="text-gray-600">Cerrados este mes</span><span className="font-bold">{metrics.cerradosEsteMes}</span></div>
+                                <div className="flex justify-between"><span className="text-gray-600">Total histórico</span><span className="font-bold">{cerrados.length}</span></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             );
