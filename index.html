@@ -764,10 +764,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 let lossReason = '';
                 let ufValue = '';
                 if (alsoClosed) {
-                    const opt = prompt('¿Cómo terminó este ticket?
-
-1 = Ganado (finalizado)
-2 = Perdido/Cancelado', '1');
+                    const opt = prompt('¿Cómo terminó este ticket?\n\n1 = Ganado (finalizado)\n2 = Perdido/Cancelado', '1');
                     closedOutcome = (opt === '2') ? 'Perdido' : 'Ganado';
                     ufValue = prompt('UF del ticket (opcional, para métricas). Deja vacío si no aplica.', '') || '';
                     if (closedOutcome === 'Perdido') {
