@@ -154,6 +154,12 @@ window.addEventListener('unhandledrejection', (e) => {
             const [filesLoading, setFilesLoading] = useState(false);
             const [uploadingFile, setUploadingFile] = useState(false);
 
+            // Estados de Contabilidad
+            const [facturasEmitidas, setFacturasEmitidas] = useState([]);
+            const [facturasRecibidas, setFacturasRecibidas] = useState([]);
+            const [cajaChica, setCajaChica] = useState([]);
+            const [contaTab, setContaTab] = useState('emitidas'); // Sub-tab activa
+
             const [historyOpen, setHistoryOpen] = useState(false);
             const [historyLoading, setHistoryLoading] = useState(false);
             const [historyTitle, setHistoryTitle] = useState('');
@@ -213,7 +219,16 @@ window.addEventListener('unhandledrejection', (e) => {
             };
 
             const loadAllData = async () => {
-                await Promise.all([loadProspectos(), loadCerrados(), loadTickets(), loadKeyAccounts(), loadActividad()]);
+                await Promise.all([
+                    loadProspectos(), 
+                    loadCerrados(), 
+                    loadTickets(), 
+                    loadKeyAccounts(), 
+                    loadActividad(),
+                    loadFacturasEmitidas(),
+                    loadFacturasRecibidas(),
+                    loadCajaChica()
+                ]);
             };
 
             const loadActividad = async () => {
@@ -320,6 +335,25 @@ window.addEventListener('unhandledrejection', (e) => {
                     });
                     setKeyAccounts(cleaned);
                 }
+            };
+
+            // ===== CARGA DE CONTABILIDAD =====
+            const loadFacturasEmitidas = async () => {
+                const { data, error } = await supabase.from('facturas_emitidas').select('*').order('fecha_emision', { ascending: false });
+                if (error) console.error('Error loading facturas emitidas:', error);
+                else setFacturasEmitidas(data || []);
+            };
+
+            const loadFacturasRecibidas = async () => {
+                const { data, error } = await supabase.from('facturas_recibidas').select('*').order('fecha_emision', { ascending: false });
+                if (error) console.error('Error loading facturas recibidas:', error);
+                else setFacturasRecibidas(data || []);
+            };
+
+            const loadCajaChica = async () => {
+                const { data, error } = await supabase.from('caja_chica').select('*').order('fecha', { ascending: false });
+                if (error) console.error('Error loading caja chica:', error);
+                else setCajaChica(data || []);
             };
 
             // ===== MÉTRICAS AVANZADAS =====
@@ -1414,6 +1448,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     { id: 'dashboard', nombre: '📊 Dashboard' },
                                     { id: 'pipeline', nombre: '🎯 Pipeline' },
                                     { id: 'reportes', nombre: '📈 Reportes' },
+                                    { id: 'contabilidad', nombre: '💰 Contabilidad' },
                                     { id: 'cerrados', nombre: '📜 Historial' },
                                     { id: 'tickets', nombre: '🎫 Tickets' },
                                     { id: 'keyaccounts', nombre: '🔑 Key Accounts' }
@@ -1443,8 +1478,9 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} actividadReciente={actividadReciente} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
+                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); }} />}
                         {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
-                        {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
+                        {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType='ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                         {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
                     </main>
 
@@ -2053,116 +2089,448 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         </div>
                     </div>
                     
-                    {/* Script para renderizar gráficos */}
+                    {/* Script optimizado para gráficos */}
                     <script dangerouslySetInnerHTML={{__html: `
                         (function() {
-                            // Esperar a que Chart.js esté disponible
-                            if (typeof Chart === 'undefined') {
-                                console.warn('Chart.js no está disponible');
-                                return;
-                            }
-                            
-                            // Destruir gráficos existentes si los hay
-                            ['chartIngresos', 'chartPipeline', 'chartConversion'].forEach(id => {
+                            if (typeof Chart === 'undefined') return;
+                            const createChart = (id, type, data, color, opts = {}) => {
                                 const canvas = document.getElementById(id);
-                                if (canvas && canvas.chart) {
-                                    canvas.chart.destroy();
-                                }
-                            });
-                            
-                            // Gráfico 1: Ingresos
-                            const ctxIngresos = document.getElementById('chartIngresos');
-                            if (ctxIngresos) {
-                                ctxIngresos.chart = new Chart(ctxIngresos, {
-                                    type: 'line',
-                                    data: {
-                                        labels: ${JSON.stringify(datosIngresos.labels)},
-                                        datasets: [{
-                                            label: 'Ingresos (UF)',
-                                            data: ${JSON.stringify(datosIngresos.data)},
-                                            borderColor: 'rgb(34, 197, 94)',
-                                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                                            tension: 0.3,
-                                            fill: true
-                                        }]
-                                    },
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: { display: false }
-                                        },
-                                        scales: {
-                                            y: { beginAtZero: true }
-                                        }
-                                    }
+                                if (!canvas) return;
+                                if (canvas.chart) canvas.chart.destroy();
+                                canvas.chart = new Chart(canvas, {
+                                    type,
+                                    data: { labels: data.labels, datasets: [{ label: opts.label || '', data: data.data, borderColor: color, backgroundColor: color.replace('rgb', 'rgba').replace(')', ', 0.1)'), tension: 0.3, fill: true, ...opts.dataset }] },
+                                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ...opts.yAxis } } }
                                 });
-                            }
-                            
-                            // Gráfico 2: Pipeline
-                            const ctxPipeline = document.getElementById('chartPipeline');
-                            if (ctxPipeline) {
-                                ctxPipeline.chart = new Chart(ctxPipeline, {
-                                    type: 'bar',
-                                    data: {
-                                        labels: ${JSON.stringify(datosPipeline.labels)},
-                                        datasets: [{
-                                            label: 'Valor (UF)',
-                                            data: ${JSON.stringify(datosPipeline.data)},
-                                            backgroundColor: ['#60A5FA', '#FBBF24', '#F97316', '#10B981']
-                                        }]
-                                    },
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: { display: false }
-                                        },
-                                        scales: {
-                                            y: { beginAtZero: true }
-                                        }
-                                    }
-                                });
-                            }
-                            
-                            // Gráfico 3: Conversión
-                            const ctxConversion = document.getElementById('chartConversion');
-                            if (ctxConversion) {
-                                ctxConversion.chart = new Chart(ctxConversion, {
-                                    type: 'line',
-                                    data: {
-                                        labels: ${JSON.stringify(datosConversion.labels)},
-                                        datasets: [{
-                                            label: 'Conversión (%)',
-                                            data: ${JSON.stringify(datosConversion.data)},
-                                            borderColor: 'rgb(249, 115, 22)',
-                                            backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                                            tension: 0.3,
-                                            fill: true
-                                        }]
-                                    },
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: { display: false }
-                                        },
-                                        scales: {
-                                            y: { 
-                                                beginAtZero: true,
-                                                max: 100,
-                                                ticks: {
-                                                    callback: function(value) {
-                                                        return value + '%';
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                });
-                            }
+                            };
+                            createChart('chartIngresos', 'line', ${JSON.stringify(datosIngresos)}, 'rgb(34, 197, 94)', { label: 'Ingresos (UF)' });
+                            createChart('chartPipeline', 'bar', ${JSON.stringify(datosPipeline)}, '', { label: 'Valor (UF)', dataset: { backgroundColor: ['#60A5FA', '#FBBF24', '#F97316', '#10B981'] } });
+                            createChart('chartConversion', 'line', ${JSON.stringify(datosConversion)}, 'rgb(249, 115, 22)', { label: 'Conversión (%)', yAxis: { max: 100, ticks: { callback: v => v + '%' } } });
                         })();
                     `}} />
+                </div>
+            );
+        }
+
+        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, tickets, keyAccounts, ufActual, contaTab, setContaTab, onReload }) {
+            const [showModal, setShowModal] = useState(false);
+            const [modalType, setModalType] = useState(null);
+            const [editing, setEditing] = useState(null);
+            
+            const handleSave = async (data) => {
+                try {
+                    const table = modalType === 'emitida' ? 'facturas_emitidas' : modalType === 'recibida' ? 'facturas_recibidas' : 'caja_chica';
+                    
+                    if (editing) {
+                        await supabase.from(table).update(data).eq('id', editing.id);
+                    } else {
+                        await supabase.from(table).insert([data]);
+                    }
+                    
+                    setShowModal(false);
+                    setEditing(null);
+                    onReload();
+                } catch (err) {
+                    alert('Error: ' + err.message);
+                }
+            };
+            
+            const handleDelete = async (id, type) => {
+                if (!confirm('¿Eliminar este registro?')) return;
+                const table = type === 'emitida' ? 'facturas_emitidas' : type === 'recibida' ? 'facturas_recibidas' : 'caja_chica';
+                await supabase.from(table).delete().eq('id', id);
+                onReload();
+            };
+            
+            // Calcular métricas
+            const totalEmitidas = facturasEmitidas.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+            const totalRecibidas = facturasRecibidas.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+            const totalCajaChica = cajaChica.reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0);
+            const margen = totalEmitidas - totalRecibidas - (totalCajaChica / (ufActual || 38000));
+            
+            return (
+                <div className="space-y-6">
+                    <h2 className="text-2xl font-bold">💰 Contabilidad</h2>
+                    
+                    {/* Métricas resumen */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <MetricCard title="💵 Emitidas" value={`${Math.round(totalEmitidas)} UF`} subtitle={`$${Math.round(totalEmitidas * ufActual).toLocaleString('es-CL')}`} color="verde" />
+                        <MetricCard title="📥 Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * ufActual).toLocaleString('es-CL')}`} color="naranja" />
+                        <MetricCard title="💵 Caja Chica" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / ufActual)} UF`} color="azul" />
+                        <MetricCard title="📊 Margen" value={`${Math.round(margen)} UF`} subtitle={margen >= 0 ? '🟢 Positivo' : '🔴 Negativo'} color={margen >= 0 ? 'verde' : 'naranja'} />
+                    </div>
+                    
+                    {/* Sub-tabs */}
+                    <div className="bg-white rounded-lg shadow">
+                        <div className="border-b px-6">
+                            <nav className="flex space-x-6 overflow-x-auto">
+                                {[
+                                    { id: 'emitidas', nombre: '📤 Facturas Emitidas' },
+                                    { id: 'recibidas', nombre: '📥 Facturas Recibidas' },
+                                    { id: 'caja', nombre: '💵 Caja Chica' },
+                                    { id: 'pl', nombre: '📊 Estado de Resultados' }
+                                ].map(tab => (
+                                    <button 
+                                        key={tab.id} 
+                                        onClick={() => setContaTab(tab.id)}
+                                        className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${contaTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500'}`}
+                                    >
+                                        {tab.nombre}
+                                    </button>
+                                ))}
+                            </nav>
+                        </div>
+                        
+                        <div className="p-6">
+                            {/* Facturas Emitidas */}
+                            {contaTab === 'emitidas' && (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-bold">Facturas Emitidas</h3>
+                                        <button onClick={() => { setEditing(null); setModalType('emitida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
+                                    </div>
+                                    
+                                    {/* Desktop */}
+                                    <div className="hidden md:block overflow-x-auto">
+                                        <table className="min-w-full divide-y">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">N° Factura</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Cliente</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Fecha</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Monto</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Estado</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {facturasEmitidas.length === 0 ? (
+                                                    <tr><td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">Sin facturas emitidas</td></tr>
+                                                ) : facturasEmitidas.map(f => (
+                                                    <tr key={f.id} className="hover:bg-gray-50">
+                                                        <td className="px-4 py-3 text-sm font-medium">{f.numero_factura}</td>
+                                                        <td className="px-4 py-3 text-sm">{f.cliente}</td>
+                                                        <td className="px-4 py-3 text-sm">{f.fecha_emision}</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{f.monto_uf} UF</td>
+                                                        <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Vencida' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado}</span></td>
+                                                        <td className="px-4 py-3 text-right space-x-2">
+                                                            <button onClick={() => { setEditing(f); setModalType('emitida'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
+                                                            <button onClick={() => handleDelete(f.id, 'emitida')} className="text-red-600 text-sm">Eliminar</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    {/* Mobile */}
+                                    <div className="md:hidden space-y-3">
+                                        {facturasEmitidas.length === 0 ? (
+                                            <div className="text-center text-sm text-gray-500 py-4">Sin facturas emitidas</div>
+                                        ) : facturasEmitidas.map(f => (
+                                            <div key={f.id} className="border rounded-lg p-4">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <div className="font-bold">{f.numero_factura}</div>
+                                                        <div className="text-sm text-gray-600">{f.cliente}</div>
+                                                    </div>
+                                                    <span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Vencida' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado}</span>
+                                                </div>
+                                                <div className="text-sm space-y-1 mb-3">
+                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{f.fecha_emision}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Monto:</span><span className="font-medium">{f.monto_uf} UF</span></div>
+                                                </div>
+                                                <div className="flex gap-2 pt-2 border-t">
+                                                    <button onClick={() => { setEditing(f); setModalType('emitida'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                                    <button onClick={() => handleDelete(f.id, 'emitida')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Facturas Recibidas */}
+                            {contaTab === 'recibidas' && (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-bold">Facturas Recibidas (Gastos)</h3>
+                                        <button onClick={() => { setEditing(null); setModalType('recibida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
+                                    </div>
+                                    
+                                    <div className="hidden md:block overflow-x-auto">
+                                        <table className="min-w-full divide-y">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Proveedor</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Categoría</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Fecha</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Monto</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Estado</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {facturasRecibidas.length === 0 ? (
+                                                    <tr><td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">Sin facturas recibidas</td></tr>
+                                                ) : facturasRecibidas.map(f => (
+                                                    <tr key={f.id} className="hover:bg-gray-50">
+                                                        <td className="px-4 py-3 text-sm font-medium">{f.proveedor}</td>
+                                                        <td className="px-4 py-3 text-sm">{f.categoria}</td>
+                                                        <td className="px-4 py-3 text-sm">{f.fecha_emision}</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{f.monto_uf} UF</td>
+                                                        <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado}</span></td>
+                                                        <td className="px-4 py-3 text-right space-x-2">
+                                                            <button onClick={() => { setEditing(f); setModalType('recibida'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
+                                                            <button onClick={() => handleDelete(f.id, 'recibida')} className="text-red-600 text-sm">Eliminar</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <div className="md:hidden space-y-3">
+                                        {facturasRecibidas.length === 0 ? (
+                                            <div className="text-center text-sm text-gray-500 py-4">Sin facturas recibidas</div>
+                                        ) : facturasRecibidas.map(f => (
+                                            <div key={f.id} className="border rounded-lg p-4">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <div className="font-bold">{f.proveedor}</div>
+                                                        <div className="text-sm text-gray-600">{f.categoria}</div>
+                                                    </div>
+                                                    <span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado}</span>
+                                                </div>
+                                                <div className="text-sm space-y-1 mb-3">
+                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{f.fecha_emision}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Monto:</span><span className="font-medium">{f.monto_uf} UF</span></div>
+                                                </div>
+                                                <div className="flex gap-2 pt-2 border-t">
+                                                    <button onClick={() => { setEditing(f); setModalType('recibida'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                                    <button onClick={() => handleDelete(f.id, 'recibida')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Caja Chica */}
+                            {contaTab === 'caja' && (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-bold">Caja Chica</h3>
+                                        <button onClick={() => { setEditing(null); setModalType('caja'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Gasto</button>
+                                    </div>
+                                    
+                                    <div className="hidden md:block overflow-x-auto">
+                                        <table className="min-w-full divide-y">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Fecha</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Concepto</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Categoría</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Monto</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Responsable</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {cajaChica.length === 0 ? (
+                                                    <tr><td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">Sin gastos de caja chica</td></tr>
+                                                ) : cajaChica.map(c => (
+                                                    <tr key={c.id} className="hover:bg-gray-50">
+                                                        <td className="px-4 py-3 text-sm">{c.fecha}</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{c.concepto}</td>
+                                                        <td className="px-4 py-3 text-sm">{c.categoria}</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">${Math.round(c.monto_clp).toLocaleString('es-CL')}</td>
+                                                        <td className="px-4 py-3 text-sm">{c.responsable}</td>
+                                                        <td className="px-4 py-3 text-right space-x-2">
+                                                            <button onClick={() => { setEditing(c); setModalType('caja'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
+                                                            <button onClick={() => handleDelete(c.id, 'caja')} className="text-red-600 text-sm">Eliminar</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <div className="md:hidden space-y-3">
+                                        {cajaChica.length === 0 ? (
+                                            <div className="text-center text-sm text-gray-500 py-4">Sin gastos de caja chica</div>
+                                        ) : cajaChica.map(c => (
+                                            <div key={c.id} className="border rounded-lg p-4">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <div className="font-bold">{c.concepto}</div>
+                                                        <div className="text-sm text-gray-600">{c.categoria}</div>
+                                                    </div>
+                                                    <span className="font-medium text-verde">${Math.round(c.monto_clp).toLocaleString('es-CL')}</span>
+                                                </div>
+                                                <div className="text-sm space-y-1 mb-3">
+                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{c.fecha}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Responsable:</span><span>{c.responsable}</span></div>
+                                                </div>
+                                                <div className="flex gap-2 pt-2 border-t">
+                                                    <button onClick={() => { setEditing(c); setModalType('caja'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                                    <button onClick={() => handleDelete(c.id, 'caja')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Estado de Resultados */}
+                            {contaTab === 'pl' && (
+                                <div className="space-y-6">
+                                    <h3 className="font-bold text-lg">📊 Estado de Resultados (P&L)</h3>
+                                    
+                                    <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6">
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center border-b pb-3">
+                                                <span className="text-lg font-bold text-gray-700">💰 INGRESOS</span>
+                                                <span className="text-2xl font-bold text-verde">{Math.round(totalEmitidas)} UF</span>
+                                            </div>
+                                            
+                                            <div className="flex justify-between items-center border-b pb-3">
+                                                <span className="text-lg font-bold text-gray-700">📥 GASTOS</span>
+                                                <span className="text-2xl font-bold text-naranja">{Math.round(totalRecibidas + (totalCajaChica / ufActual))} UF</span>
+                                            </div>
+                                            
+                                            <div className="flex justify-between items-center pt-2">
+                                                <span className="text-xl font-bold text-gray-900">📊 RESULTADO</span>
+                                                <span className={`text-3xl font-bold ${margen >= 0 ? 'text-verde' : 'text-red-600'}`}>
+                                                    {margen >= 0 ? '+' : ''}{Math.round(margen)} UF
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="text-sm text-gray-600 text-center mt-4 pt-4 border-t">
+                                                ≈ ${Math.round(margen * ufActual).toLocaleString('es-CL')} CLP
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Desglose de gastos */}
+                                    <div>
+                                        <h4 className="font-bold mb-3">Gastos por Categoría</h4>
+                                        <div className="space-y-2">
+                                            {Object.entries(
+                                                facturasRecibidas.reduce((acc, f) => {
+                                                    acc[f.categoria] = (acc[f.categoria] || 0) + parseFloat(f.monto_uf || 0);
+                                                    return acc;
+                                                }, {})
+                                            ).map(([cat, val]) => (
+                                                <div key={cat} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                                                    <span className="font-medium">{cat}</span>
+                                                    <span className="text-naranja font-bold">{Math.round(val)} UF</span>
+                                                </div>
+                                            ))}
+                                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                                                <span className="font-medium">Caja Chica</span>
+                                                <span className="text-naranja font-bold">{Math.round(totalCajaChica / ufActual)} UF</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* Modal de contabilidad */}
+                    {showModal && <ContaModal type={modalType} item={editing} ufActual={ufActual} tickets={tickets} keyAccounts={keyAccounts} onSave={handleSave} onClose={() => { setShowModal(false); setEditing(null); }} />}
+                </div>
+            );
+        }
+        
+        // Modal para Contabilidad
+        function ContaModal({ type, item, ufActual, tickets, keyAccounts, onSave, onClose }) {
+            const getDefault = () => {
+                if (type === 'emitida') return { numero_factura: '', cliente: '', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, ticket_id: null, key_account_id: null };
+                if (type === 'recibida') return { numero_factura: '', proveedor: '', categoria: 'Servicios', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null };
+                if (type === 'caja') return { fecha: new Date().toISOString().split('T')[0], concepto: '', monto_clp: '', categoria: 'Otros', responsable: '', comprobante: '' };
+            };
+            
+            const [form, setForm] = useState(item || getDefault());
+            
+            // Auto-calcular UF o CLP
+            const handleMontoChange = (field, value) => {
+                const num = parseFloat(value) || 0;
+                if (field === 'monto_uf') {
+                    setForm({ ...form, monto_uf: value, monto_clp: Math.round(num * (form.uf_dia || ufActual)) });
+                } else if (field === 'monto_clp') {
+                    setForm({ ...form, monto_clp: value, monto_uf: (num / (form.uf_dia || ufActual)).toFixed(2) });
+                }
+            };
+            
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+                    <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+                        <div className="flex justify-between mb-4">
+                            <h3 className="text-xl font-bold">
+                                {item ? 'Editar' : 'Nueva'} {type === 'emitida' ? 'Factura Emitida' : type === 'recibida' ? 'Factura Recibida' : 'Gasto Caja Chica'}
+                            </h3>
+                            <button onClick={onClose} className="text-2xl">×</button>
+                        </div>
+                        
+                        <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
+                            {type === 'emitida' && (<>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <InputField label="N° Factura" required value={form.numero_factura} onChange={(e) => setForm({...form, numero_factura: e.target.value})} />
+                                    <InputField label="Cliente" required value={form.cliente} onChange={(e) => setForm({...form, cliente: e.target.value})} />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <InputField label="Fecha Emisión" type="date" required value={form.fecha_emision} onChange={(e) => setForm({...form, fecha_emision: e.target.value})} />
+                                    <SelectField label="Estado" value={form.estado} onChange={(e) => setForm({...form, estado: e.target.value})} options={['Pendiente', 'Pagada', 'Vencida']} />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <InputField label="Monto UF" type="number" step="0.01" required value={form.monto_uf} onChange={(e) => handleMontoChange('monto_uf', e.target.value)} />
+                                    <InputField label="Monto CLP" type="number" required value={form.monto_clp} onChange={(e) => handleMontoChange('monto_clp', e.target.value)} />
+                                    <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e) => setForm({...form, uf_dia: parseFloat(e.target.value)})} />
+                                </div>
+                                <TextAreaField label="Descripción" value={form.descripcion || ''} onChange={(e) => setForm({...form, descripcion: e.target.value})} />
+                                {form.estado === 'Pagada' && (
+                                    <InputField label="Fecha Pago" type="date" value={form.fecha_pago || ''} onChange={(e) => setForm({...form, fecha_pago: e.target.value})} />
+                                )}
+                            </>)}
+                            
+                            {type === 'recibida' && (<>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <InputField label="Proveedor" required value={form.proveedor} onChange={(e) => setForm({...form, proveedor: e.target.value})} />
+                                    <SelectField label="Categoría" required value={form.categoria} onChange={(e) => setForm({...form, categoria: e.target.value})} options={['Servicios', 'Oficina', 'Marketing', 'Tecnología', 'Sueldos', 'Otros']} />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <InputField label="Fecha Emisión" type="date" required value={form.fecha_emision} onChange={(e) => setForm({...form, fecha_emision: e.target.value})} />
+                                    <SelectField label="Estado" value={form.estado} onChange={(e) => setForm({...form, estado: e.target.value})} options={['Pendiente', 'Pagada']} />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <InputField label="Monto UF" type="number" step="0.01" required value={form.monto_uf} onChange={(e) => handleMontoChange('monto_uf', e.target.value)} />
+                                    <InputField label="Monto CLP" type="number" required value={form.monto_clp} onChange={(e) => handleMontoChange('monto_clp', e.target.value)} />
+                                    <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e) => setForm({...form, uf_dia: parseFloat(e.target.value)})} />
+                                </div>
+                                <TextAreaField label="Descripción" value={form.descripcion || ''} onChange={(e) => setForm({...form, descripcion: e.target.value})} />
+                            </>)}
+                            
+                            {type === 'caja' && (<>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <InputField label="Fecha" type="date" required value={form.fecha} onChange={(e) => setForm({...form, fecha: e.target.value})} />
+                                    <InputField label="Monto CLP" type="number" required value={form.monto_clp} onChange={(e) => setForm({...form, monto_clp: e.target.value})} />
+                                </div>
+                                <InputField label="Concepto" required value={form.concepto} onChange={(e) => setForm({...form, concepto: e.target.value})} />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <SelectField label="Categoría" value={form.categoria} onChange={(e) => setForm({...form, categoria: e.target.value})} options={['Transporte', 'Alimentación', 'Materiales', 'Otros']} />
+                                    <InputField label="Responsable" value={form.responsable || ''} onChange={(e) => setForm({...form, responsable: e.target.value})} />
+                                </div>
+                                <InputField label="Comprobante (opcional)" value={form.comprobante || ''} onChange={(e) => setForm({...form, comprobante: e.target.value})} />
+                            </>)}
+                            
+                            <div className="flex gap-3 pt-4">
+                                <button type="submit" className="flex-1 px-4 py-2 color-naranja text-white rounded-lg font-medium">Guardar</button>
+                                <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-100 rounded-lg font-medium">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             );
         }
