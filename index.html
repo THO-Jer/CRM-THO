@@ -121,7 +121,11 @@
             const loadProspectos = async () => {
                 const { data, error } = await supabase.from('prospectos').select('*').order('created_at', { ascending: false });
                 if (error) console.error('Error loading prospectos:', error);
-                else setProspectos(data || []);
+                else {
+                    // No mostramos prospectos ya convertidos (quedan solo como registro histórico)
+                    const cleaned = (data || []).filter(p => (p.estado || '').toLowerCase() !== 'convertido');
+                    setProspectos(cleaned);
+                }
             };
 
             const loadCerrados = async () => {
@@ -139,7 +143,14 @@
             const loadKeyAccounts = async () => {
                 const { data, error } = await supabase.from('key_accounts').select('*').order('created_at', { ascending: false });
                 if (error) console.error('Error loading key accounts:', error);
-                else setKeyAccounts(data || []);
+                else {
+                    // Por defecto ocultamos cuentas cerradas/canceladas
+                    const cleaned = (data || []).filter(ka => {
+                        const s = (ka.salud || '').toLowerCase();
+                        return !['cerrado','cancelado','canceled','cancelled'].includes(s);
+                    });
+                    setKeyAccounts(cleaned);
+                }
             };
 
             const metrics = {
@@ -440,7 +451,13 @@ try {
                                 .eq('status', 'active');
                         }
 
-                        await logEvent('key_accounts', kaId, 'renewal_cancelled', 'Contrato cancelado', { cancel_reason: renewalForm.cancel_reason || null });
+                        await logEvent('key_accounts', kaId, 'renewal_cancelled', 'Contrato cancelado', { cancel_reason: renewalForm.cancel_reason || null });});
+
+                        // Marcamos el Key Account como cerrado para que salga del listado activo
+                        await supabase.from('key_accounts')
+                            .update({ salud: 'Cerrado', updated_at: new Date().toISOString() })
+                            .eq('id', kaId);
+
                         // opcional: registrar pérdida en Cerrados (para visibilidad directiva)
                         if (cancelAlsoRegisterLoss) {
                             const today = new Date().toISOString().split('T')[0];
@@ -701,10 +718,33 @@ const items = [
             const handleCloseTicket = async (ticket) => {
                 if (!requireAuth()) return;
                 if (!ticket) return;
-                const ok = confirm(`¿Marcar este ticket como finalizado?
 
-${ticket.organizacion} — ${ticket.ticket}`);
+                // 1) Finalizar ticket
+                const ok = confirm(`¿Finalizar este ticket?
+
+${ticket.organizacion} — ${ticket.ticket}
+
+Se marcará como 100% y Cerrado.`);
                 if (!ok) return;
+
+                // 2) ¿Registrar también en "Cerrados"?
+                const alsoClosed = confirm(`¿Quieres registrar el término del ticket en la pestaña "Cerrados"?
+
+Recomendado: así queda como histórico y después puedes reactivarlo/convertirlo.`);
+                let closedOutcome = 'Ganado';
+                let lossReason = '';
+                let ufValue = '';
+                if (alsoClosed) {
+                    const opt = prompt('¿Cómo terminó este ticket?
+
+1 = Ganado (finalizado)
+2 = Perdido/Cancelado', '1');
+                    closedOutcome = (opt === '2') ? 'Perdido' : 'Ganado';
+                    ufValue = prompt('UF del ticket (opcional, para métricas). Deja vacío si no aplica.', '') || '';
+                    if (closedOutcome === 'Perdido') {
+                        lossReason = prompt('Motivo de pérdida/cancelación (opcional)', '') || '';
+                    }
+                }
 
                 try {
                     const payload = {
@@ -721,7 +761,47 @@ ${ticket.organizacion} — ${ticket.ticket}`);
 
                     if (error) throw error;
 
-                    await logEvent('tickets', ticket.id, 'ticket_closed', 'Ticket finalizado', { status: 'Cerrado' });
+                    await logEvent('tickets', ticket.id, 'ticket_closed', 'Ticket finalizado', { status: 'Cerrado', outcome: alsoClosed ? closedOutcome : null });
+
+                    // 3) Si corresponde, crear registro en "cerrados" + link + evento
+                    if (alsoClosed) {
+                        const today = new Date().toISOString().split('T')[0];
+                        const closedRow = {
+                            organizacion: ticket.organizacion,
+                            tipo: ticket.ticket,
+                            estado_final: closedOutcome,
+                            fecha_cierre: today,
+                            valor: ufValue ? parseFloat(ufValue) : null,
+                            razon_perdida: closedOutcome === 'Perdido' ? lossReason : null,
+                            escalo: !!ticket.escalo,
+                            valor_total_final: ufValue ? parseFloat(ufValue) : null,
+                            fecha_contacto: today
+                        };
+
+                        const { data: cData, error: cErr } = await supabase
+                            .from('cerrados')
+                            .insert([closedRow])
+                            .select('*')
+                            .single();
+
+                        if (cErr) {
+                            console.warn('No se pudo registrar ticket en cerrados:', cErr.message);
+                        } else if (cData?.id) {
+                            // link suave (si existe)
+                            try {
+                                await supabase.from('crm_entity_links').insert([{
+                                    from_type: 'ticket',
+                                    from_id: ticket.id,
+                                    to_type: 'cerrado',
+                                    to_id: cData.id,
+                                    link_type: 'completion'
+                                }]);
+                            } catch (e) { /* no-op */ }
+
+                            await logEvent('cerrados', cData.id, 'ticket_closed_recorded', 'Ticket registrado en Cerrados', { ticket_id: ticket.id, outcome: closedOutcome });
+                            await loadCerrados();
+                        }
+                    }
 
                     await loadTickets();
                 } catch (err) {
