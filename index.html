@@ -121,6 +121,15 @@ window.addEventListener('unhandledrejection', (e) => {
             const [ufActual, setUfActual] = useState(38000); // Valor UF del día
             const [actividadReciente, setActividadReciente] = useState([]);
 
+            // Modal de archivos
+            const [filesModalOpen, setFilesModalOpen] = useState(false);
+            const [filesEntityType, setFilesEntityType] = useState(null);
+            const [filesEntityId, setFilesEntityId] = useState(null);
+            const [filesEntityName, setFilesEntityName] = useState('');
+            const [filesList, setFilesList] = useState([]);
+            const [filesLoading, setFilesLoading] = useState(false);
+            const [uploadingFile, setUploadingFile] = useState(false);
+
             const [historyOpen, setHistoryOpen] = useState(false);
             const [historyLoading, setHistoryLoading] = useState(false);
             const [historyTitle, setHistoryTitle] = useState('');
@@ -960,6 +969,133 @@ const items = [
                 }
             };
 
+            // ===== GESTIÓN DE ARCHIVOS =====
+            const openFilesModal = async (entityType, entityId, entityName) => {
+                if (!requireAuth()) return;
+                setFilesEntityType(entityType);
+                setFilesEntityId(entityId);
+                setFilesEntityName(entityName);
+                setFilesModalOpen(true);
+                await loadFiles(entityType, entityId);
+            };
+
+            const loadFiles = async (entityType, entityId) => {
+                setFilesLoading(true);
+                try {
+                    const folderPath = `${entityType}/${entityId}`;
+                    const { data, error } = await supabase.storage
+                        .from('crm-archivos')
+                        .list(folderPath);
+                    
+                    if (error) throw error;
+                    setFilesList(data || []);
+                } catch (err) {
+                    console.error('Error cargando archivos:', err);
+                    setFilesList([]);
+                } finally {
+                    setFilesLoading(false);
+                }
+            };
+
+            const uploadFile = async (file) => {
+                if (!file) return;
+                setUploadingFile(true);
+                try {
+                    const folderPath = `${filesEntityType}/${filesEntityId}`;
+                    const fileName = `${Date.now()}_${file.name}`;
+                    const filePath = `${folderPath}/${fileName}`;
+                    
+                    const { error: uploadError } = await supabase.storage
+                        .from('crm-archivos')
+                        .upload(filePath, file);
+                    
+                    if (uploadError) throw uploadError;
+                    
+                    // Registrar en historial
+                    await logEvent(
+                        filesEntityType, 
+                        filesEntityId, 
+                        'file_uploaded', 
+                        `Archivo subido: ${file.name}`,
+                        { filename: file.name, size: file.size, type: file.type }
+                    );
+                    
+                    await loadFiles(filesEntityType, filesEntityId);
+                    alert('Archivo subido correctamente');
+                } catch (err) {
+                    console.error('Error subiendo archivo:', err);
+                    alert('Error al subir archivo: ' + err.message);
+                } finally {
+                    setUploadingFile(false);
+                }
+            };
+
+            const downloadFile = async (fileName) => {
+                try {
+                    const folderPath = `${filesEntityType}/${filesEntityId}`;
+                    const { data, error } = await supabase.storage
+                        .from('crm-archivos')
+                        .download(`${folderPath}/${fileName}`);
+                    
+                    if (error) throw error;
+                    
+                    const url = URL.createObjectURL(data);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName.split('_').slice(1).join('_'); // Remover timestamp
+                    a.click();
+                    URL.revokeObjectURL(url);
+                } catch (err) {
+                    console.error('Error descargando archivo:', err);
+                    alert('Error al descargar: ' + err.message);
+                }
+            };
+
+            const deleteFile = async (fileName) => {
+                if (!confirm('¿Eliminar este archivo?')) return;
+                try {
+                    const folderPath = `${filesEntityType}/${filesEntityId}`;
+                    const { error } = await supabase.storage
+                        .from('crm-archivos')
+                        .remove([`${folderPath}/${fileName}`]);
+                    
+                    if (error) throw error;
+                    
+                    // Registrar en historial
+                    await logEvent(
+                        filesEntityType, 
+                        filesEntityId, 
+                        'file_deleted', 
+                        `Archivo eliminado: ${fileName}`,
+                        { filename: fileName }
+                    );
+                    
+                    await loadFiles(filesEntityType, filesEntityId);
+                    alert('Archivo eliminado');
+                } catch (err) {
+                    console.error('Error eliminando archivo:', err);
+                    alert('Error al eliminar: ' + err.message);
+                }
+            };
+
+            const getFileIcon = (fileName) => {
+                const ext = fileName.split('.').pop().toLowerCase();
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return '🖼️';
+                if (['pdf'].includes(ext)) return '📄';
+                if (['doc', 'docx'].includes(ext)) return '📝';
+                if (['xls', 'xlsx'].includes(ext)) return '📊';
+                if (['zip', 'rar'].includes(ext)) return '📦';
+                return '📎';
+            };
+
+            const formatFileSize = (bytes) => {
+                if (!bytes) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+            };
+
 
             const handleSaveProspecto = async (data) => {
                 if (!requireAuth()) return;
@@ -1283,14 +1419,15 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} actividadReciente={actividadReciente} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
-                        {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
-                        {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
-                        {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
+                        {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
+                        {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
+                        {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
                     </main>
 
                     {showModal && <UniversalModal type={modalType} item={editingItem} onSave={(data) => modalType === 'prospecto' ? handleSaveProspecto(data) : handleSaveOther(modalType, data)} onClose={() => setShowModal(false)} />}
                     
                     {historyOpen && <HistoryModal open={historyOpen} title={historyTitle} items={historyItems} loading={historyLoading} onClose={() => { setHistoryOpen(false); setHistoryItems([]); }} />}
+                    {filesModalOpen && <FilesModal open={filesModalOpen} onClose={() => setFilesModalOpen(false)} entityName={filesEntityName} files={filesList} loading={filesLoading} uploading={uploadingFile} onUpload={uploadFile} onDownload={downloadFile} onDelete={deleteFile} getIcon={getFileIcon} formatSize={formatFileSize} />}
                     {convertOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-4 z-50">
                             <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
@@ -2006,7 +2143,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             );
         }
 
-        function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory, onConvertClosed}) {
+        function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory, onConvertClosed, onFiles}) {
             const [filtroAño, setFiltroAño] = useState('todos');
             
             // Extraer años únicos de los cierres
@@ -2067,6 +2204,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         <td className="px-6 py-4 text-sm text-gray-500">{c.fecha_cierre}</td>
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(c)} className="text-azul">Editar</button>
+                                            <button onClick={() => onFiles && onFiles('cerrados', c.id, c.organizacion)} className="text-gray-700">📎</button>
                                             <button onClick={() => onHistory('cerrados', c.id, c.organizacion)} className="text-gray-700">Historial</button>
                                             {onConvertClosed && (
                                                 <button onClick={() => onConvertClosed(c)} className="text-azul">Reactivar</button>
@@ -2082,7 +2220,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             );
         }
 
-        function TicketsView({tickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose}) {
+        function TicketsView({tickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose, onFiles}) {
             return (
                 <div className="space-y-6">
                     <div className="flex justify-between">
@@ -2124,6 +2262,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         <td className="px-6 py-4 text-sm text-gray-500">{t.fecha_entrega}</td>
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(t)} className="text-azul">Editar</button>
+                                            <button onClick={() => onFiles && onFiles('tickets', t.id, t.organizacion)} className="text-gray-700">📎</button>
                                             <button onClick={() => onHistory('tickets', t.id, t.organizacion)} className="text-gray-700">Historial</button>
                                             <button onClick={() => onClose && onClose(t)} className="text-verde">Finalizar</button>
                                             <button onClick={() => onDelete(t.id)} className="text-red-600">Eliminar</button>
@@ -2137,7 +2276,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             );
         }
 
-        function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel}) {
+        function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles}) {
             const totalMRR = keyAccounts.reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
             
             return (
@@ -2175,6 +2314,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         <td className="px-6 py-4 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${ka.salud === 'Excelente' ? 'bg-green-100 text-green-800' : ka.salud === 'Buena' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'}`}>{ka.salud || '-'}</span></td>
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(ka)} className="text-azul">Editar</button>
+                                            <button onClick={() => onFiles && onFiles('key_accounts', ka.id, ka.organizacion)} className="text-gray-700">📎</button>
                                             <button onClick={() => onRenew && onRenew(ka)} className="text-verde">Renovar</button>
                                             <button onClick={() => onCancel && onCancel(ka)} className="text-naranja">Cancelar</button>
                                             <button onClick={() => onHistory('key_accounts', ka.id, ka.organizacion)} className="text-gray-700">Historial</button>
@@ -2448,8 +2588,113 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             );
         }
 
+        function FilesModal({ open, onClose, entityName, files, loading, uploading, onUpload, onDownload, onDelete, getIcon, formatSize }) {
+            if (!open) return null;
+            
+            const fileInputRef = React.useRef(null);
+            
+            const handleFileSelect = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    onUpload(file);
+                    e.target.value = ''; // Reset input
+                }
+            };
+            
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+                        <div className="flex items-start justify-between mb-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">📎 Archivos Adjuntos</h3>
+                                <p className="text-sm text-gray-600">{entityName}</p>
+                            </div>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-xl">✕</button>
+                        </div>
+                        
+                        {/* Botón subir */}
+                        <div className="mb-4">
+                            <input 
+                                ref={fileInputRef}
+                                type="file" 
+                                onChange={handleFileSelect}
+                                className="hidden"
+                                disabled={uploading}
+                            />
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={uploading}
+                                className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-naranja hover:bg-orange-50 transition-colors disabled:opacity-50"
+                            >
+                                {uploading ? (
+                                    <span className="text-gray-600">⏳ Subiendo archivo...</span>
+                                ) : (
+                                    <span className="text-gray-700">📤 Click para subir archivo</span>
+                                )}
+                            </button>
+                            <p className="text-xs text-gray-500 mt-1 text-center">
+                                Soporta: PDF, imágenes, Word, Excel (máx. 50MB)
+                            </p>
+                        </div>
+                        
+                        {/* Lista de archivos */}
+                        <div className="flex-1 overflow-auto border rounded-lg">
+                            {loading ? (
+                                <div className="p-6 text-center text-sm text-gray-600">Cargando archivos...</div>
+                            ) : files.length === 0 ? (
+                                <div className="p-6 text-center">
+                                    <div className="text-4xl mb-2">📭</div>
+                                    <div className="text-sm font-medium text-gray-700 mb-1">Sin archivos</div>
+                                    <div className="text-xs text-gray-500">Sube archivos usando el botón de arriba</div>
+                                </div>
+                            ) : (
+                                <ul className="divide-y">
+                                    {files.map((file, idx) => {
+                                        const displayName = file.name.split('_').slice(1).join('_') || file.name;
+                                        return (
+                                            <li key={idx} className="p-4 hover:bg-gray-50">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                                        <span className="text-2xl">{getIcon(file.name)}</span>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-sm font-medium text-gray-900 truncate">
+                                                                {displayName}
+                                                            </div>
+                                                            <div className="text-xs text-gray-500">
+                                                                {formatSize(file.metadata?.size)}
+                                                                {file.created_at && ` • ${new Date(file.created_at).toLocaleDateString('es-CL')}`}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center space-x-2 ml-4">
+                                                        <button 
+                                                            onClick={() => onDownload(file.name)}
+                                                            className="px-3 py-1 text-sm text-azul hover:bg-blue-50 rounded"
+                                                        >
+                                                            ⬇️ Descargar
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => onDelete(file.name)}
+                                                            className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<CRMApp />);
     </script>
+
 </body>
 </html>
