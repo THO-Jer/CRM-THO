@@ -60,6 +60,13 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [filterTipo, setFilterTipo] = useState('todos');
 
+            const [historyOpen, setHistoryOpen] = useState(false);
+            const [historyLoading, setHistoryLoading] = useState(false);
+            const [historyTitle, setHistoryTitle] = useState('');
+            const [historyEntityType, setHistoryEntityType] = useState(null);
+            const [historyEntityId, setHistoryEntityId] = useState(null);
+            const [historyItems, setHistoryItems] = useState([]);
+
             useEffect(() => { checkAccess(); }, []);
             useEffect(() => { if (user) loadAllData(); }, [user]);
 
@@ -157,6 +164,75 @@
                 }
                 return true;
             };
+
+
+            const transitionEntityMap = {
+                'prospectos': 'prospecto',
+                'tickets': 'ticket',
+                'key_accounts': 'key_account',
+                'cerrados': 'cerrado'
+            };
+
+            const openHistory = async (entityType, entityId, title = '') => {
+                if (!requireAuth()) return;
+                setHistoryOpen(true);
+                setHistoryLoading(true);
+                setHistoryTitle(title || `${entityType} ${entityId}`);
+                setHistoryEntityType(entityType);
+                setHistoryEntityId(entityId);
+                try {
+                    const { data: events, error: evErr } = await supabase
+                        .from('crm_events')
+                        .select('event_type,title,payload,created_at,created_by_email')
+                        .eq('entity_type', entityType)
+                        .eq('entity_id', entityId)
+                        .order('created_at', { ascending: false })
+                        .limit(200);
+
+                    if (evErr) throw evErr;
+
+                    const transitionType = transitionEntityMap[entityType] || entityType;
+                    const { data: transitions, error: trErr } = await supabase
+                        .from('crm_transitions')
+                        .select('created_at,entity_from,entity_from_id,entity_to,entity_to_id,reason,notes')
+                        .or(`and(entity_from.eq.${transitionType},entity_from_id.eq.${entityId}),and(entity_to.eq.${transitionType},entity_to_id.eq.${entityId})`)
+                        .order('created_at', { ascending: false })
+                        .limit(200);
+
+                    if (trErr) {
+                        // Si no existe la tabla o hay RLS, no bloqueamos el historial de eventos
+                        console.warn('No se pudieron cargar transiciones:', trErr.message);
+                    }
+
+                    const items = [
+                        ...(events || []).map(e => ({
+                            kind: 'event',
+                            created_at: e.created_at,
+                            label: (e.event_type || 'event').toUpperCase(),
+                            title: e.title || '',
+                            email: e.created_by_email || '',
+                            payload: e.payload
+                        })),
+                        ...((transitions || []) || []).map(t => ({
+                            kind: 'transition',
+                            created_at: t.created_at,
+                            label: 'TRANSICIÓN',
+                            title: t.reason || '',
+                            email: '',
+                            payload: { from: t.entity_from, to: t.entity_to, notes: t.notes }
+                        }))
+                    ].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+                    setHistoryItems(items);
+                } catch (err) {
+                    console.error('Error cargando historial:', err);
+                    alert('No se pudo cargar el historial: ' + (err?.message || err));
+                    setHistoryItems([]);
+                } finally {
+                    setHistoryLoading(false);
+                }
+            };
+
 
             const handleSaveProspecto = async (data) => {
                 if (!requireAuth()) return;
@@ -331,6 +407,7 @@
 
                     {showModal && <UniversalModal type={modalType} item={editingItem} onSave={(data) => modalType === 'prospecto' ? handleSaveProspecto(data) : handleSaveOther(modalType, data)} onClose={() => setShowModal(false)} />}
                     
+                    {historyOpen && <HistoryModal open={historyOpen} title={historyTitle} items={historyItems} loading={historyLoading} onClose={() => { setHistoryOpen(false); setHistoryItems([]); }} />}
                     {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
                 </div>
             );
@@ -427,13 +504,13 @@
                         <span className="text-xs bg-white px-2 py-1 rounded">{prospectos.length}</span>
                     </div>
                     <div className="space-y-3">
-                        {prospectos.map(p => <ProspectoCard key={p.id} prospecto={p} onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} onCerrar={onCerrar} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
+                        {prospectos.map(p => <ProspectoCard key={p.id} prospecto={p} onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} onCerrar={onCerrar} onHistory={() => openHistory('prospectos', p.id, p.organizacion)} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
                     </div>
                 </div>
             );
         }
 
-        function ProspectoCard({ prospecto, onEdit, onDelete, onCerrar, onDragStart, onDragEnd }) {
+        function ProspectoCard({ prospecto, onEdit, onDelete, onCerrar, onHistory, onDragStart, onDragEnd }) {
             const [showActions, setShowActions] = useState(false);
             const isOverdue = new Date(prospecto.fecha_limite) < new Date();
             
@@ -454,6 +531,7 @@
                     </div>
                     <div className="flex space-x-2 pt-3 border-t border-gray-100 mt-3">
                         <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="flex-1 text-xs text-azul">✏️ Editar</button>
+                        <button onClick={(e) => { e.stopPropagation(); onHistory && onHistory(); }} className="flex-1 text-xs text-gray-700">🕘 Historial</button>
                         <button onClick={(e) => { e.stopPropagation(); setShowActions(!showActions); }} className="flex-1 text-xs text-verde">✅ Cerrar</button>
                         <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="flex-1 text-xs text-red-500">🗑️</button>
                     </div>
@@ -506,6 +584,7 @@
                                         <td className="px-6 py-4 text-sm text-gray-500">{c.fecha_cierre}</td>
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(c)} className="text-azul">Editar</button>
+                                            <button onClick={() => openHistory('cerrados', c.id, c.organizacion)} className="text-gray-700">Historial</button>
                                             <button onClick={() => onDelete(c.id)} className="text-red-600">Eliminar</button>
                                         </td>
                                     </tr>
@@ -549,6 +628,7 @@
                                         <td className="px-6 py-4 text-sm text-gray-500">{t.fecha_entrega}</td>
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(t)} className="text-azul">Editar</button>
+                                            <button onClick={() => openHistory('tickets', t.id, t.organizacion)} className="text-gray-700">Historial</button>
                                             <button onClick={() => onDelete(t.id)} className="text-red-600">Eliminar</button>
                                         </td>
                                     </tr>
@@ -598,6 +678,7 @@
                                         <td className="px-6 py-4 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${ka.salud === 'Excelente' ? 'bg-green-100 text-green-800' : ka.salud === 'Buena' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'}`}>{ka.salud || '-'}</span></td>
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(ka)} className="text-azul">Editar</button>
+                                            <button onClick={() => openHistory('key_accounts', ka.id, ka.organizacion)} className="text-gray-700">Historial</button>
                                             <button onClick={() => onDelete(ka.id)} className="text-red-600">Eliminar</button>
                                         </td>
                                     </tr>
@@ -709,6 +790,62 @@
 
         function TextAreaField({ label, ...props }) {
             return <div><label className="block text-sm font-medium text-gray-700 mb-1">{label}</label><textarea {...props} rows="3" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-naranja" /></div>;
+        }
+
+
+        function HistoryModal({ open, title, items, loading, onClose }) {
+            if (!open) return null;
+
+            const formatDT = (dt) => {
+                try { return new Date(dt).toLocaleString('es-CL'); } catch { return dt; }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+                        <div className="flex items-start justify-between mb-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">Actividad</h3>
+                                <p className="text-sm text-gray-600">{title}</p>
+                            </div>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-800">✕</button>
+                        </div>
+
+                        {loading ? (
+                            <div className="text-sm text-gray-600">Cargando historial...</div>
+                        ) : (
+                            <div className="max-h-[60vh] overflow-auto border rounded-lg">
+                                {(!items || items.length === 0) ? (
+                                    <div className="p-4 text-sm text-gray-600">Aún no hay actividad registrada.</div>
+                                ) : (
+                                    <ul className="divide-y">
+                                        {items.map((it, idx) => (
+                                            <li key={idx} className="p-3">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="text-xs font-semibold text-gray-700">{it.label}</div>
+                                                    <div className="text-xs text-gray-500">{formatDT(it.created_at)}</div>
+                                                </div>
+                                                {it.title && <div className="text-sm text-gray-900 mt-1">{it.title}</div>}
+                                                {it.email && <div className="text-xs text-gray-500 mt-1">{it.email}</div>}
+                                                {it.kind === 'transition' && it.payload && (
+                                                    <div className="text-xs text-gray-600 mt-2">
+                                                        <span className="font-medium">De:</span> {it.payload.from} → <span className="font-medium">A:</span> {it.payload.to}
+                                                        {it.payload.notes ? <div className="mt-1"><span className="font-medium">Notas:</span> {it.payload.notes}</div> : null}
+                                                    </div>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="mt-4 flex justify-end">
+                            <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
