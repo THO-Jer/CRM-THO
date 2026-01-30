@@ -22,6 +22,26 @@
         .border-fucsia { border-color: #E91E8C; }
         .kanban-column { min-height: 400px; }
         .dragging { opacity: 0.5; }
+        
+        /* Responsive improvements */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Touch-friendly buttons on mobile */
+        @media (max-width: 768px) {
+            button { min-height: 44px; }
+            .kanban-column { min-height: 300px; }
+        }
+        
+        /* Hide table on mobile - will show cards instead */
+        @media (max-width: 768px) {
+            .desktop-table { display: none; }
+            .mobile-cards { display: block; }
+        }
+        @media (min-width: 769px) {
+            .desktop-table { display: table; }
+            .mobile-cards { display: none; }
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -1385,7 +1405,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
 
                     <div className="bg-white border-b">
                         <div className="max-w-7xl mx-auto px-4">
-                            <nav className="flex space-x-8">
+                            <nav className="flex space-x-4 md:space-x-8 overflow-x-auto scrollbar-hide">
                                 {[
                                     { id: 'dashboard', nombre: '📊 Dashboard' },
                                     { id: 'pipeline', nombre: '🎯 Pipeline' },
@@ -1394,7 +1414,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     { id: 'tickets', nombre: '🎫 Tickets' },
                                     { id: 'keyaccounts', nombre: '🔑 Key Accounts' }
                                 ].map(tab => (
-                                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500'}`}>{tab.nombre}</button>
+                                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`py-4 px-2 md:px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500'}`}>{tab.nombre}</button>
                                 ))}
                             </nav>
                         </div>
@@ -2159,13 +2179,13 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             
             return (
                 <div className="space-y-6">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                         <h2 className="text-2xl font-bold">Historial de Cierres</h2>
-                        <div className="flex space-x-3 items-center">
+                        <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
                             <select 
                                 value={filtroAño} 
                                 onChange={(e) => setFiltroAño(e.target.value)}
-                                className="px-3 py-2 border rounded-lg text-sm"
+                                className="px-3 py-2 border rounded-lg text-sm flex-1 sm:flex-none"
                             >
                                 <option value="todos">Todos los años ({cerrados.length})</option>
                                 {años.map(año => {
@@ -2173,16 +2193,18 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     return <option key={año} value={año}>{año} ({count})</option>;
                                 })}
                             </select>
-                            <button onClick={onExport} className="px-4 py-2 bg-gray-100 rounded-lg">📥 CSV</button>
-                            <button onClick={onAdd} className="px-4 py-2 color-naranja text-white rounded-lg">+ Agregar</button>
+                            <button onClick={onExport} className="px-4 py-2 bg-gray-100 rounded-lg text-sm">📥 CSV</button>
+                            <button onClick={onAdd} className="px-4 py-2 color-naranja text-white rounded-lg text-sm whitespace-nowrap">+ Agregar</button>
                         </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         <MetricCard title="Ganado" value={`${Math.round(valorGanado)} UF`} subtitle={`${ganados.length} de ${cerradosFiltrados.length}`} color="verde" />
                         <MetricCard title="Conversión" value={`${cerradosFiltrados.length > 0 ? Math.round((ganados.length/cerradosFiltrados.length)*100) : 0}%`} subtitle={filtroAño === 'todos' ? 'Global' : `Año ${filtroAño}`} color="azul" />
                         <MetricCard title="Valor Total" value={`${Math.round(cerradosFiltrados.reduce((s, c) => s + (parseFloat(c.valor) || 0), 0))} UF`} subtitle={filtroAño === 'todos' ? 'Histórico' : `Año ${filtroAño}`} color="naranja" />
                     </div>
-                    <div className="bg-white rounded-lg shadow overflow-hidden">
+                    
+                    {/* DESKTOP: Tabla */}
+                    <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
@@ -2216,6 +2238,48 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             </tbody>
                         </table>
                     </div>
+                    
+                    {/* MOBILE: Cards */}
+                    <div className="md:hidden space-y-4">
+                        {cerradosFiltrados.length === 0 ? (
+                            <div className="bg-white rounded-lg shadow p-6 text-center text-sm text-gray-500">
+                                Sin datos para {filtroAño === 'todos' ? 'mostrar' : `el año ${filtroAño}`}
+                            </div>
+                        ) : cerradosFiltrados.map(c => (
+                            <div key={c.id} className="bg-white rounded-lg shadow p-4">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div>
+                                        <h3 className="font-bold text-lg">{c.organizacion}</h3>
+                                        <p className="text-sm text-gray-600">{c.tipo}</p>
+                                    </div>
+                                    <span className={`px-2 py-1 text-xs rounded-full ${c.estado_final === 'Ganado' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                        {c.estado_final}
+                                    </span>
+                                </div>
+                                
+                                <div className="space-y-2 mb-3 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Valor:</span>
+                                        <span className="font-medium">{c.valor} UF</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Fecha:</span>
+                                        <span>{c.fecha_cierre}</span>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex flex-wrap gap-2 pt-3 border-t">
+                                    <button onClick={() => onEdit(c)} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                    <button onClick={() => onFiles && onFiles('cerrados', c.id, c.organizacion)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
+                                    <button onClick={() => onHistory('cerrados', c.id, c.organizacion)} className="px-3 py-2 text-sm bg-gray-50 rounded text-xs">Historial</button>
+                                    {onConvertClosed && (
+                                        <button onClick={() => onConvertClosed(c)} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded text-xs">Reactivar</button>
+                                    )}
+                                    <button onClick={() => onDelete(c.id)} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             );
         }
@@ -2223,14 +2287,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
         function TicketsView({tickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose, onFiles}) {
             return (
                 <div className="space-y-6">
-                    <div className="flex justify-between">
+                    <div className="flex flex-col sm:flex-row justify-between gap-3">
                         <h2 className="text-2xl font-bold">Tickets</h2>
                         <div className="flex space-x-3">
-                            <button onClick={onExport} className="px-4 py-2 bg-gray-100 rounded-lg">📥 CSV</button>
-                            <button onClick={onAdd} className="px-4 py-2 color-naranja text-white rounded-lg">+ Nuevo</button>
+                            <button onClick={onExport} className="px-4 py-2 bg-gray-100 rounded-lg text-sm">📥 CSV</button>
+                            <button onClick={onAdd} className="px-4 py-2 color-naranja text-white rounded-lg text-sm whitespace-nowrap">+ Nuevo</button>
                         </div>
                     </div>
-                    <div className="bg-white rounded-lg shadow overflow-hidden">
+                    
+                    {/* DESKTOP: Tabla */}
+                    <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
                         <table className="min-w-full divide-y">
                             <thead className="bg-gray-50">
                                 <tr>
@@ -2272,6 +2338,55 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             </tbody>
                         </table>
                     </div>
+                    
+                    {/* MOBILE: Cards */}
+                    <div className="md:hidden space-y-4">
+                        {tickets.length === 0 ? (
+                            <div className="bg-white rounded-lg shadow p-6 text-center text-sm text-gray-500">Sin datos</div>
+                        ) : tickets.map(t => (
+                            <div key={t.id} className="bg-white rounded-lg shadow p-4">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div>
+                                        <h3 className="font-bold text-lg">{t.organizacion}</h3>
+                                        <p className="text-sm text-gray-600">{t.ticket}</p>
+                                    </div>
+                                    {t.valor_monto && (
+                                        <span className="text-sm font-medium text-verde">
+                                            {t.valor_moneda === 'CLP' ? `$${Math.round(t.valor_monto).toLocaleString('es-CL')}` : `${t.valor_monto} UF`}
+                                        </span>
+                                    )}
+                                </div>
+                                
+                                <div className="space-y-2 mb-3 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Fase:</span>
+                                        <span className="font-medium">{t.fase_actual}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600">Avance:</span>
+                                        <div className="flex items-center">
+                                            <div className="w-20 bg-gray-200 rounded-full h-2 mr-2">
+                                                <div className="color-naranja h-2 rounded-full" style={{ width: `${t.porcentaje_avance || 0}%` }}></div>
+                                            </div>
+                                            <span className="text-xs">{t.porcentaje_avance || 0}%</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Entrega:</span>
+                                        <span>{t.fecha_entrega}</span>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex flex-wrap gap-2 pt-3 border-t">
+                                    <button onClick={() => onEdit(t)} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                    <button onClick={() => onFiles && onFiles('tickets', t.id, t.organizacion)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
+                                    <button onClick={() => onHistory('tickets', t.id, t.organizacion)} className="px-3 py-2 text-sm bg-gray-50 rounded text-xs">Historial</button>
+                                    <button onClick={() => onClose && onClose(t)} className="flex-1 px-3 py-2 text-sm bg-green-50 text-verde rounded">Finalizar</button>
+                                    <button onClick={() => onDelete(t.id)} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             );
         }
@@ -2281,18 +2396,20 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             
             return (
                 <div className="space-y-6">
-                    <div className="flex justify-between">
+                    <div className="flex flex-col sm:flex-row justify-between gap-3">
                         <h2 className="text-2xl font-bold">Key Accounts</h2>
                         <div className="flex space-x-3">
-                            <button onClick={onExport} className="px-4 py-2 bg-gray-100 rounded-lg">📥 CSV</button>
-                            <button onClick={onAdd} className="px-4 py-2 color-naranja text-white rounded-lg">+ Nuevo</button>
+                            <button onClick={onExport} className="px-4 py-2 bg-gray-100 rounded-lg text-sm">📥 CSV</button>
+                            <button onClick={onAdd} className="px-4 py-2 color-naranja text-white rounded-lg text-sm whitespace-nowrap">+ Nuevo</button>
                         </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         <MetricCard title="MRR" value={`${Math.round(totalMRR)} UF/mes`} subtitle={`~$${Math.round(totalMRR * 38000).toLocaleString()}`} color="verde" />
                         <MetricCard title="Clientes" value={keyAccounts.length} subtitle="Activos" color="azul" />
                     </div>
-                    <div className="bg-white rounded-lg shadow overflow-hidden">
+                    
+                    {/* DESKTOP: Tabla */}
+                    <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
                         <table className="min-w-full divide-y">
                             <thead className="bg-gray-50">
                                 <tr>
@@ -2325,6 +2442,45 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             </tbody>
                         </table>
                     </div>
+                    
+                    {/* MOBILE: Cards */}
+                    <div className="md:hidden space-y-4">
+                        {keyAccounts.length === 0 ? (
+                            <div className="bg-white rounded-lg shadow p-6 text-center text-sm text-gray-500">Sin datos</div>
+                        ) : keyAccounts.map(ka => (
+                            <div key={ka.id} className="bg-white rounded-lg shadow p-4">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div>
+                                        <h3 className="font-bold text-lg">{ka.organizacion}</h3>
+                                        <p className="text-sm text-gray-600">{ka.servicio}</p>
+                                    </div>
+                                    <span className="text-sm font-medium text-verde">{ka.uf_mes} UF/mes</span>
+                                </div>
+                                
+                                <div className="space-y-2 mb-3 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Renovación:</span>
+                                        <span className="font-medium">{ka.renovacion || '-'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600">Salud:</span>
+                                        <span className={`px-2 py-1 text-xs rounded-full ${ka.salud === 'Excelente' ? 'bg-green-100 text-green-800' : ka.salud === 'Buena' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                            {ka.salud || '-'}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex flex-wrap gap-2 pt-3 border-t">
+                                    <button onClick={() => onEdit(ka)} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                    <button onClick={() => onFiles && onFiles('key_accounts', ka.id, ka.organizacion)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
+                                    <button onClick={() => onRenew && onRenew(ka)} className="flex-1 px-3 py-2 text-sm bg-green-50 text-verde rounded">Renovar</button>
+                                    <button onClick={() => onCancel && onCancel(ka)} className="flex-1 px-3 py-2 text-sm bg-orange-50 text-naranja rounded text-xs">Cancelar</button>
+                                    <button onClick={() => onHistory('key_accounts', ka.id, ka.organizacion)} className="px-3 py-2 text-sm bg-gray-50 rounded text-xs">Historial</button>
+                                    <button onClick={() => onDelete(ka.id)} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             );
         }
@@ -2342,24 +2498,24 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             const titles = { prospecto: 'Prospecto', cerrado: 'Cerrado', ticket: 'Ticket', keyaccount: 'Key Account' };
 
             return (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
                     <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6">
-                            <div className="flex justify-between mb-6">
-                                <h2 className="text-2xl font-bold">{item ? 'Editar' : 'Nuevo'} {titles[type]}</h2>
+                        <div className="p-4 sm:p-6">
+                            <div className="flex justify-between mb-4 sm:mb-6">
+                                <h2 className="text-xl sm:text-2xl font-bold">{item ? 'Editar' : 'Nuevo'} {titles[type]}</h2>
                                 <button onClick={onClose} className="text-2xl">×</button>
                             </div>
                             <form onSubmit={(e) => { e.preventDefault(); onSave(formData); }} className="space-y-4">
                                 {type === 'prospecto' && (<>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <InputField label="Organización" required value={formData.organizacion} onChange={(e) => setFormData({...formData, organizacion: e.target.value})} />
                                         <InputField label="Contacto" required value={formData.contacto} onChange={(e) => setFormData({...formData, contacto: e.target.value})} />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <SelectField label="Tipo" required value={formData.tipo} onChange={(e) => setFormData({...formData, tipo: e.target.value})} options={['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG', 'Key Account Nivel 1', 'Key Account Nivel 2', 'Key Account Nivel 3', 'Gestión de Contenido']} />
                                         <SelectField label="Estado" required value={formData.estado} onChange={(e) => setFormData({...formData, estado: e.target.value})} options={['Contactado', 'Reunión agendada', 'Propuesta enviada', 'Negociación']} />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <InputField label="Valor (UF)" type="number" step="0.01" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value) || 0})} />
                                         <InputField label="Fecha Límite" type="date" required value={formData.fecha_limite} onChange={(e) => setFormData({...formData, fecha_limite: e.target.value})} />
                                     </div>
@@ -2368,22 +2524,22 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 </>)}
                                 {type === 'cerrado' && (<>
                                     <InputField label="Organización" required value={formData.organizacion} onChange={(e) => setFormData({...formData, organizacion: e.target.value})} />
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <SelectField label="Tipo" required value={formData.tipo} onChange={(e) => setFormData({...formData, tipo: e.target.value})} options={['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG', 'Key Account Nivel 1', 'Key Account Nivel 2', 'Key Account Nivel 3']} />
                                         <SelectField label="Estado Final" required value={formData.estado_final} onChange={(e) => setFormData({...formData, estado_final: e.target.value})} options={['Ganado', 'Perdido']} />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <InputField label="Valor (UF)" type="number" step="0.01" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value) || 0})} />
                                         <InputField label="Fecha Cierre" type="date" required value={formData.fecha_cierre} onChange={(e) => setFormData({...formData, fecha_cierre: e.target.value})} />
                                     </div>
                                     {formData.estado_final === 'Perdido' && <SelectField label="Razón" value={formData.razon_perdida || ''} onChange={(e) => setFormData({...formData, razon_perdida: e.target.value})} options={['Presupuesto', 'Timing', 'Competencia', 'No respondió', 'No calificado', 'Otro']} />}
                                 </>)}
                                 {type === 'ticket' && (<>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <InputField label="Organización" required value={formData.organizacion} onChange={(e) => setFormData({...formData, organizacion: e.target.value})} />
                                         <SelectField label="Ticket" required value={formData.ticket} onChange={(e) => setFormData({...formData, ticket: e.target.value})} options={['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG']} />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <InputField label="Fecha Inicio" type="date" required value={formData.fecha_inicio} onChange={(e) => setFormData({...formData, fecha_inicio: e.target.value})} />
                                         <InputField label="Fecha Entrega" type="date" required value={formData.fecha_entrega} onChange={(e) => setFormData({...formData, fecha_entrega: e.target.value})} />
                                     </div>
@@ -2392,13 +2548,13 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         <SelectField label="Moneda" required value={formData.valor_moneda || 'UF'} onChange={(e) => setFormData({...formData, valor_moneda: e.target.value})} options={['UF', 'CLP']} />
                                         <InputField label="% Avance" type="number" min="0" max="100" required value={formData.porcentaje_avance} onChange={(e) => setFormData({...formData, porcentaje_avance: parseInt(e.target.value) || 0})} />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <SelectField label="Fase" required value={formData.fase_actual} onChange={(e) => setFormData({...formData, fase_actual: e.target.value})} options={['Kick-off', 'Levantamiento', 'Análisis', 'Entrega', 'Cerrado']} />
                                         <InputField label="Responsable" value={formData.responsable || ''} onChange={(e) => setFormData({...formData, responsable: e.target.value})} />
                                     </div>
                                 </>)}
                                 {type === 'keyaccount' && (<>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <InputField label="Organización" required value={formData.organizacion} onChange={(e) => setFormData({...formData, organizacion: e.target.value})} />
                                         <InputField label="Servicio" required value={formData.servicio} onChange={(e) => setFormData({...formData, servicio: e.target.value})} />
                                     </div>
@@ -2407,7 +2563,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         <InputField label="Inicio" type="date" required value={formData.inicio_contrato} onChange={(e) => setFormData({...formData, inicio_contrato: e.target.value})} />
                                         <InputField label="Fin" type="date" value={formData.fin_contrato || ''} onChange={(e) => setFormData({...formData, fin_contrato: e.target.value})} />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <SelectField label="Renovación" value={formData.renovacion} onChange={(e) => setFormData({...formData, renovacion: e.target.value})} options={['Confirmada', 'En conversación', 'No renovará', 'Por definir']} />
                                         <SelectField label="Salud" value={formData.salud} onChange={(e) => setFormData({...formData, salud: e.target.value})} options={['Excelente', 'Buena', 'Riesgo', 'Crítico']} />
                                     </div>
