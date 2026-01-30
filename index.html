@@ -480,7 +480,7 @@ try {
                                 .eq('status', 'active');
                         }
 
-                        await logEvent('key_accounts', kaId, 'renewal_cancelled', 'Contrato cancelado', { cancel_reason: renewalForm.cancel_reason || null });});
+                        await logEvent('key_accounts', kaId, 'renewal_cancelled', 'Contrato cancelado', { cancel_reason: renewalForm.cancel_reason || null });
 
                         // Marcamos el Key Account como cerrado para que salga del listado activo
                         await supabase.from('key_accounts')
