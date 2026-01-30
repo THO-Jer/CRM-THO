@@ -94,7 +94,8 @@
                 cancel_reason: '',
                 notes: ''
             });
-
+            const [cancelAlsoRegisterLoss, setCancelAlsoRegisterLoss] = useState(true);
+            
 
             useEffect(() => { checkAccess(); }, []);
             useEffect(() => { if (user) loadAllData(); }, [user]);
@@ -399,6 +400,7 @@ try {
                 const today = new Date().toISOString().split('T')[0];
                 setRenewalKA(ka);
                 setRenewalMode('cancel');
+                setCancelAlsoRegisterLoss(true);
                 setRenewalForm({
                     start_date: today,
                     end_date: ka?.fin_contrato || today,
@@ -439,6 +441,29 @@ try {
                         }
 
                         await logEvent('key_accounts', kaId, 'renewal_cancelled', 'Contrato cancelado', { cancel_reason: renewalForm.cancel_reason || null });
+                        // opcional: registrar pérdida en Cerrados (para visibilidad directiva)
+                        if (cancelAlsoRegisterLoss) {
+                            const today = new Date().toISOString().split('T')[0];
+                            const closedRow = {
+                                organizacion: renewalKA.organizacion,
+                                tipo: renewalKA.servicio,
+                                estado_final: 'Perdido',
+                                fecha_cierre: today,
+                                valor: renewalKA.uf_mes,
+                                razon_perdida: renewalForm.cancel_reason || '',
+                                escalo: false,
+                                valor_total_final: renewalKA.uf_mes,
+                                fecha_contacto: today
+                            };
+                            const { error: cerrErr } = await supabase.from('cerrados').insert([closedRow]);
+                            if (!cerrErr) {
+                                // evento espejo para el cerrado creado (si podemos recuperar id, ideal; aquí dejamos evento solo en KA)
+                                await loadCerrados();
+                            } else {
+                                console.warn('No se pudo registrar en cerrados:', cerrErr.message);
+                            }
+                        }
+
                     } else {
                         const start = renewalForm.start_date;
                         const end = renewalForm.end_date;
@@ -524,7 +549,24 @@ try {
                         console.warn('No se pudieron cargar transiciones:', trErr.message);
                     }
 
-                    const items = [
+                    
+                    // También intentamos cargar vínculos/transiciones desde crm_entity_links (si existe)
+                    let links = [];
+                    try {
+                        const et = transitionType;
+                        const { data: lnk, error: lnkErr } = await supabase
+                            .from('crm_entity_links')
+                            .select('created_at,from_type,from_id,to_type,to_id,reason,notes')
+                            .or(`and(from_type.eq.${et},from_id.eq.${entityId}),and(to_type.eq.${et},to_id.eq.${entityId})`)
+                            .order('created_at', { ascending: false })
+                            .limit(200);
+
+                        if (lnkErr) throw lnkErr;
+                        links = lnk || [];
+                    } catch (e) {
+                        console.warn('No se pudieron cargar crm_entity_links:', e?.message || e);
+                    }
+const items = [
                         ...(events || []).map(e => ({
                             kind: 'event',
                             created_at: e.created_at,
@@ -540,6 +582,14 @@ try {
                             title: t.reason || '',
                             email: '',
                             payload: { from: t.entity_from, to: t.entity_to, notes: t.notes }
+                        })),
+                        ...(links || []).map(l => ({
+                            kind: 'link',
+                            created_at: l.created_at,
+                            label: 'TRANSICIÓN',
+                            title: l.reason || '',
+                            email: '',
+                            payload: { from: l.from_type, to: l.to_type, notes: l.notes, from_id: l.from_id, to_id: l.to_id }
                         }))
                     ].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
 
@@ -645,6 +695,40 @@ try {
                 }
             };
 
+            // -------------------------
+            // Cerrar / finalizar Ticket
+            // -------------------------
+            const handleCloseTicket = async (ticket) => {
+                if (!requireAuth()) return;
+                if (!ticket) return;
+                const ok = confirm(`¿Marcar este ticket como finalizado?
+
+${ticket.organizacion} — ${ticket.ticket}`);
+                if (!ok) return;
+
+                try {
+                    const payload = {
+                        status: 'Cerrado',
+                        porcentaje_avance: 100,
+                        fase_actual: ticket.fase_actual || 'Finalizado',
+                        updated_at: new Date().toISOString()
+                    };
+
+                    const { error } = await supabase
+                        .from('tickets')
+                        .update(payload)
+                        .eq('id', ticket.id);
+
+                    if (error) throw error;
+
+                    await logEvent('tickets', ticket.id, 'ticket_closed', 'Ticket finalizado', { status: 'Cerrado' });
+
+                    await loadTickets();
+                } catch (err) {
+                    alert('Error al finalizar ticket: ' + (err?.message || err));
+                }
+            };
+
             if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-xl text-gray-600">Cargando...</div></div>;
 
             return (
@@ -721,7 +805,7 @@ try {
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
-                        {activeTab === 'tickets' && <TicketsView onHistory={openHistory} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
+                        {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                         {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
                     </main>
 
@@ -820,6 +904,14 @@ try {
                                             <label className="text-sm font-medium text-gray-700">Notas</label>
                                             <textarea value={renewalForm.notes} onChange={(e) => setRenewalForm({...renewalForm, notes: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" rows="3" />
                                         </div>
+
+                                        <div className="flex items-center space-x-2 pt-1">
+                                            <input id="cancelAlsoRegisterLoss" type="checkbox" checked={cancelAlsoRegisterLoss} onChange={(e) => setCancelAlsoRegisterLoss(e.target.checked)} />
+                                            <label htmlFor="cancelAlsoRegisterLoss" className="text-sm text-gray-700">
+                                                Registrar esta pérdida también en <span className="font-medium">Cerrados</span>
+                                            </label>
+                                        </div>
+
                                     </div>
                                 ) : (
                                     <div className="mt-4 space-y-3">
@@ -841,6 +933,14 @@ try {
                                             <label className="text-sm font-medium text-gray-700">Notas</label>
                                             <textarea value={renewalForm.notes} onChange={(e) => setRenewalForm({...renewalForm, notes: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" rows="3" />
                                         </div>
+
+                                        <div className="flex items-center space-x-2 pt-1">
+                                            <input id="cancelAlsoRegisterLoss" type="checkbox" checked={cancelAlsoRegisterLoss} onChange={(e) => setCancelAlsoRegisterLoss(e.target.checked)} />
+                                            <label htmlFor="cancelAlsoRegisterLoss" className="text-sm text-gray-700">
+                                                Registrar esta pérdida también en <span className="font-medium">Cerrados</span>
+                                            </label>
+                                        </div>
+
                                     </div>
                                 )}
 
@@ -1046,7 +1146,7 @@ try {
             );
         }
 
-        function TicketsView({tickets, onAdd, onEdit, onDelete, onExport, onHistory}) {
+        function TicketsView({tickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose}) {
             return (
                 <div className="space-y-6">
                     <div className="flex justify-between">
@@ -1079,6 +1179,7 @@ try {
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(t)} className="text-azul">Editar</button>
                                             <button onClick={() => onHistory('tickets', t.id, t.organizacion)} className="text-gray-700">Historial</button>
+                                            <button onClick={() => onClose && onClose(t)} className="text-verde">Finalizar</button>
                                             <button onClick={() => onDelete(t.id)} className="text-red-600">Eliminar</button>
                                         </td>
                                     </tr>
