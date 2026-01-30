@@ -266,13 +266,23 @@ window.addEventListener('unhandledrejection', (e) => {
                 .filter(ka => (ka.salud || '').toLowerCase() !== 'cerrado')
                 .reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
 
-            // Ingresos (UF) - incluye cerrados ganados + MRR
+            // Valor de tickets activos (convertir CLP a UF si es necesario)
+            const valorTickets = tickets.reduce((sum, t) => {
+                const monto = parseFloat(t.valor_monto) || 0;
+                if (t.valor_moneda === 'CLP') {
+                    // Convertir CLP a UF usando el valor actual
+                    return sum + (monto / (ufActual || 38000));
+                }
+                return sum + monto; // Ya está en UF
+            }, 0);
+
+            // Ingresos (UF) - incluye cerrados ganados + MRR + tickets
             const ingresosCerradosEsteMes = cerradosEsteMes
                 .filter(c => c.estado_final === 'Ganado')
                 .reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
             
-            // Ingresos TOTALES = cerrados one-time + MRR recurrente
-            const ingresosEsteMes = ingresosCerradosEsteMes + mrrActual;
+            // Ingresos TOTALES = cerrados one-time + MRR recurrente + tickets activos
+            const ingresosEsteMes = ingresosCerradosEsteMes + mrrActual + valorTickets;
             
             const ingresosCerradosMesAnterior = cerradosMesAnterior
                 .filter(c => c.estado_final === 'Ganado')
@@ -413,6 +423,7 @@ window.addEventListener('unhandledrejection', (e) => {
                 // Avanzadas
                 ingresosEsteMes,
                 ingresosCerrados: ingresosCerradosEsteMes,
+                valorTickets,
                 ingresosMesAnterior,
                 variacionIngresos,
                 mrrActual,
@@ -1523,6 +1534,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     <span>MRR recurrente:</span>
                                     <span className="font-medium">{Math.round(metrics.mrrActual)} UF</span>
                                 </div>
+                                <div className="flex justify-between text-gray-600">
+                                    <span>Tickets activos:</span>
+                                    <span className="font-medium">{Math.round(metrics.valorTickets)} UF</span>
+                                </div>
                             </div>
                             <div className="mt-2 text-xs pt-2 border-t">
                                 <span className="text-gray-500">Anterior: {Math.round(metrics.ingresosMesAnterior)} UF</span>
@@ -1766,6 +1781,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Organización</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ticket</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fase</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avance</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entrega</th>
@@ -1773,10 +1789,19 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {tickets.length === 0 ? <tr><td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">Sin datos</td></tr> : tickets.map(t => (
+                                {tickets.length === 0 ? <tr><td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">Sin datos</td></tr> : tickets.map(t => (
                                     <tr key={t.id} className="hover:bg-gray-50">
                                         <td className="px-6 py-4 text-sm font-medium">{t.organizacion}</td>
                                         <td className="px-6 py-4 text-sm text-gray-500">{t.ticket}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-700">
+                                            {t.valor_monto ? (
+                                                <span className="font-medium">
+                                                    {t.valor_moneda === 'CLP' ? `$${Math.round(t.valor_monto).toLocaleString('es-CL')}` : `${t.valor_monto} UF`}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400">-</span>
+                                            )}
+                                        </td>
                                         <td className="px-6 py-4 text-sm">{t.fase_actual}</td>
                                         <td className="px-6 py-4"><div className="flex items-center"><div className="w-16 bg-gray-200 rounded-full h-2 mr-2"><div className="color-naranja h-2 rounded-full" style={{ width: `${t.porcentaje_avance || 0}%` }}></div></div><span className="text-xs">{t.porcentaje_avance || 0}%</span></div></td>
                                         <td className="px-6 py-4 text-sm text-gray-500">{t.fecha_entrega}</td>
@@ -1851,7 +1876,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             const getDefault = (type) => {
                 if (type === 'prospecto') return { organizacion: '', contacto: '', tipo: 'Ticket RC Express', estado: 'Contactado', valor: '', probabilidad: 10, proximo_paso: '', fecha_limite: '', notas: '' };
                 if (type === 'cerrado') return { organizacion: '', tipo: 'Ticket RC Express', estado_final: 'Ganado', fecha_cierre: new Date().toISOString().split('T')[0], valor: '', razon_perdida: '' };
-                if (type === 'ticket') return { organizacion: '', ticket: 'Ticket RC Express', fecha_inicio: new Date().toISOString().split('T')[0], fecha_entrega: '', fase_actual: 'Kick-off', porcentaje_avance: 0, responsable: '' };
+                if (type === 'ticket') return { organizacion: '', ticket: 'Ticket RC Express', fecha_inicio: new Date().toISOString().split('T')[0], fecha_entrega: '', fase_actual: 'Kick-off', porcentaje_avance: 0, responsable: '', valor_monto: 0, valor_moneda: 'UF' };
                 if (type === 'keyaccount') return { organizacion: '', servicio: 'RC Nivel 3', uf_mes: '', inicio_contrato: '', fin_contrato: '', renovacion: 'Por definir', salud: 'Buena' };
             };
             
@@ -1905,11 +1930,15 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         <InputField label="Fecha Inicio" type="date" required value={formData.fecha_inicio} onChange={(e) => setFormData({...formData, fecha_inicio: e.target.value})} />
                                         <InputField label="Fecha Entrega" type="date" required value={formData.fecha_entrega} onChange={(e) => setFormData({...formData, fecha_entrega: e.target.value})} />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <SelectField label="Fase" required value={formData.fase_actual} onChange={(e) => setFormData({...formData, fase_actual: e.target.value})} options={['Kick-off', 'Levantamiento', 'Análisis', 'Entrega', 'Cerrado']} />
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <InputField label="Valor" type="number" step="0.01" required value={formData.valor_monto || 0} onChange={(e) => setFormData({...formData, valor_monto: parseFloat(e.target.value) || 0})} />
+                                        <SelectField label="Moneda" required value={formData.valor_moneda || 'UF'} onChange={(e) => setFormData({...formData, valor_moneda: e.target.value})} options={['UF', 'CLP']} />
                                         <InputField label="% Avance" type="number" min="0" max="100" required value={formData.porcentaje_avance} onChange={(e) => setFormData({...formData, porcentaje_avance: parseInt(e.target.value) || 0})} />
                                     </div>
-                                    <InputField label="Responsable" value={formData.responsable || ''} onChange={(e) => setFormData({...formData, responsable: e.target.value})} />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <SelectField label="Fase" required value={formData.fase_actual} onChange={(e) => setFormData({...formData, fase_actual: e.target.value})} options={['Kick-off', 'Levantamiento', 'Análisis', 'Entrega', 'Cerrado']} />
+                                        <InputField label="Responsable" value={formData.responsable || ''} onChange={(e) => setFormData({...formData, responsable: e.target.value})} />
+                                    </div>
                                 </>)}
                                 {type === 'keyaccount' && (<>
                                     <div className="grid grid-cols-2 gap-4">
