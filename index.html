@@ -1750,21 +1750,43 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
         }
 
         function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory, onConvertClosed}) {
-            const ganados = cerrados.filter(c => c.estado_final === 'Ganado');
+            const [filtroAño, setFiltroAño] = useState('todos');
+            
+            // Extraer años únicos de los cierres
+            const años = [...new Set(cerrados.map(c => new Date(c.fecha_cierre).getFullYear()))].sort((a, b) => b - a);
+            
+            // Filtrar por año
+            const cerradosFiltrados = filtroAño === 'todos' 
+                ? cerrados 
+                : cerrados.filter(c => new Date(c.fecha_cierre).getFullYear() === parseInt(filtroAño));
+            
+            const ganados = cerradosFiltrados.filter(c => c.estado_final === 'Ganado');
             const valorGanado = ganados.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
             
             return (
                 <div className="space-y-6">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-bold">Historial de Cierres</h2>
-                        <div className="flex space-x-3">
+                        <div className="flex space-x-3 items-center">
+                            <select 
+                                value={filtroAño} 
+                                onChange={(e) => setFiltroAño(e.target.value)}
+                                className="px-3 py-2 border rounded-lg text-sm"
+                            >
+                                <option value="todos">Todos los años ({cerrados.length})</option>
+                                {años.map(año => {
+                                    const count = cerrados.filter(c => new Date(c.fecha_cierre).getFullYear() === año).length;
+                                    return <option key={año} value={año}>{año} ({count})</option>;
+                                })}
+                            </select>
                             <button onClick={onExport} className="px-4 py-2 bg-gray-100 rounded-lg">📥 CSV</button>
                             <button onClick={onAdd} className="px-4 py-2 color-naranja text-white rounded-lg">+ Agregar</button>
                         </div>
                     </div>
                     <div className="grid grid-cols-3 gap-6">
-                        <MetricCard title="Ganado" value={`${Math.round(valorGanado)} UF`} subtitle={`${ganados.length} prospectos`} color="verde" />
-                        <MetricCard title="Conversión" value={`${cerrados.length > 0 ? Math.round((ganados.length/cerrados.length)*100) : 0}%`} subtitle="Global" color="azul" />
+                        <MetricCard title="Ganado" value={`${Math.round(valorGanado)} UF`} subtitle={`${ganados.length} de ${cerradosFiltrados.length}`} color="verde" />
+                        <MetricCard title="Conversión" value={`${cerradosFiltrados.length > 0 ? Math.round((ganados.length/cerradosFiltrados.length)*100) : 0}%`} subtitle={filtroAño === 'todos' ? 'Global' : `Año ${filtroAño}`} color="azul" />
+                        <MetricCard title="Valor Total" value={`${Math.round(cerradosFiltrados.reduce((s, c) => s + (parseFloat(c.valor) || 0), 0))} UF`} subtitle={filtroAño === 'todos' ? 'Histórico' : `Año ${filtroAño}`} color="naranja" />
                     </div>
                     <div className="bg-white rounded-lg shadow overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-200">
@@ -1779,7 +1801,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {cerrados.length === 0 ? <tr><td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">Sin datos</td></tr> : cerrados.map(c => (
+                                {cerradosFiltrados.length === 0 ? <tr><td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">Sin datos para {filtroAño === 'todos' ? 'mostrar' : `el año ${filtroAño}`}</td></tr> : cerradosFiltrados.map(c => (
                                     <tr key={c.id} className="hover:bg-gray-50">
                                         <td className="px-6 py-4 text-sm font-medium">{c.organizacion}</td>
                                         <td className="px-6 py-4 text-sm text-gray-500">{c.tipo}</td>
