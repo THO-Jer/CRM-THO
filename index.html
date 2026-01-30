@@ -1253,6 +1253,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 {[
                                     { id: 'dashboard', nombre: '📊 Dashboard' },
                                     { id: 'pipeline', nombre: '🎯 Pipeline' },
+                                    { id: 'reportes', nombre: '📈 Reportes' },
                                     { id: 'cerrados', nombre: '📜 Historial' },
                                     { id: 'tickets', nombre: '🎫 Tickets' },
                                     { id: 'keyaccounts', nombre: '🔑 Key Accounts' }
@@ -1281,6 +1282,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     <main className="max-w-7xl mx-auto px-4 py-8">
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} actividadReciente={actividadReciente} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
+                        {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
                         {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                         {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                         {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
@@ -1745,6 +1747,261 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             </button>
                         </div>
                     )}
+                </div>
+            );
+        }
+
+        function ReportesView({ prospectos, cerrados, tickets, keyAccounts, ufActual }) {
+            const [periodo, setPeriodo] = useState('6meses');
+            
+            // Preparar datos para gráficos
+            const prepararDatosIngresos = () => {
+                const hoy = new Date();
+                const meses = [];
+                const mesesData = [];
+                
+                // Generar últimos 6 meses
+                for (let i = 5; i >= 0; i--) {
+                    const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+                    const mesNombre = fecha.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
+                    meses.push(mesNombre);
+                    
+                    // Calcular MRR + Tickets del mes (simplificado: asumimos constante)
+                    const mrrTotal = keyAccounts.reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
+                    const ticketsTotal = tickets.reduce((sum, t) => {
+                        const monto = parseFloat(t.valor_monto) || 0;
+                        if (t.valor_moneda === 'CLP') {
+                            return sum + (monto / (ufActual || 38000));
+                        }
+                        return sum + monto;
+                    }, 0);
+                    
+                    mesesData.push(Math.round(mrrTotal + ticketsTotal));
+                }
+                
+                return { labels: meses, data: mesesData };
+            };
+            
+            const prepararDatosPipeline = () => {
+                const etapas = ['Contactado', 'Reunión agendada', 'Propuesta enviada', 'Negociación'];
+                const valores = etapas.map(etapa => {
+                    return Math.round(prospectos
+                        .filter(p => p.estado === etapa)
+                        .reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0));
+                });
+                
+                return { labels: etapas, data: valores };
+            };
+            
+            const prepararDatosConversion = () => {
+                const hoy = new Date();
+                const meses = [];
+                const tasas = [];
+                
+                for (let i = 5; i >= 0; i--) {
+                    const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+                    const mesNombre = fecha.toLocaleDateString('es-CL', { month: 'short' });
+                    const mes = fecha.getMonth();
+                    const año = fecha.getFullYear();
+                    
+                    meses.push(mesNombre);
+                    
+                    // Calcular conversión del mes
+                    const cerradosMes = cerrados.filter(c => {
+                        const f = new Date(c.fecha_cierre);
+                        return f.getMonth() === mes && f.getFullYear() === año;
+                    });
+                    
+                    const ganados = cerradosMes.filter(c => c.estado_final === 'Ganado').length;
+                    const tasa = cerradosMes.length > 0 ? Math.round((ganados / cerradosMes.length) * 100) : 0;
+                    tasas.push(tasa);
+                }
+                
+                return { labels: meses, data: tasas };
+            };
+            
+            const datosIngresos = prepararDatosIngresos();
+            const datosPipeline = prepararDatosPipeline();
+            const datosConversion = prepararDatosConversion();
+            
+            // Calcular métricas resumen
+            const totalPipeline = Math.round(prospectos.reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0));
+            const mrrActual = Math.round(keyAccounts.reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0));
+            const ticketsValor = Math.round(tickets.reduce((sum, t) => {
+                const monto = parseFloat(t.valor_monto) || 0;
+                if (t.valor_moneda === 'CLP') return sum + (monto / (ufActual || 38000));
+                return sum + monto;
+            }, 0));
+            
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold">📈 Reportes y Análisis</h2>
+                    </div>
+                    
+                    {/* Métricas resumen */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="bg-white rounded-lg shadow p-4 text-center">
+                            <div className="text-2xl font-bold text-verde">{totalPipeline} UF</div>
+                            <div className="text-xs text-gray-600">Pipeline Total</div>
+                        </div>
+                        <div className="bg-white rounded-lg shadow p-4 text-center">
+                            <div className="text-2xl font-bold text-azul">{mrrActual} UF</div>
+                            <div className="text-xs text-gray-600">MRR Actual</div>
+                        </div>
+                        <div className="bg-white rounded-lg shadow p-4 text-center">
+                            <div className="text-2xl font-bold text-naranja">{ticketsValor} UF</div>
+                            <div className="text-xs text-gray-600">Tickets Activos</div>
+                        </div>
+                        <div className="bg-white rounded-lg shadow p-4 text-center">
+                            <div className="text-2xl font-bold text-fucsia">{prospectos.length}</div>
+                            <div className="text-xs text-gray-600">Prospectos Activos</div>
+                        </div>
+                    </div>
+                    
+                    {/* Gráfico 1: Ingresos Mensuales */}
+                    <div className="bg-white rounded-lg shadow p-6">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">💰 Ingresos Mensuales (MRR + Tickets)</h3>
+                        <div className="h-64">
+                            <canvas id="chartIngresos"></canvas>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2 text-center">
+                            Últimos 6 meses · Valores en UF
+                        </div>
+                    </div>
+                    
+                    {/* Gráfico 2: Pipeline por Etapa */}
+                    <div className="bg-white rounded-lg shadow p-6">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">🎯 Pipeline por Etapa</h3>
+                        <div className="h-64">
+                            <canvas id="chartPipeline"></canvas>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2 text-center">
+                            Valor total en cada etapa · Valores en UF
+                        </div>
+                    </div>
+                    
+                    {/* Gráfico 3: Tasa de Conversión */}
+                    <div className="bg-white rounded-lg shadow p-6">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">📊 Tasa de Conversión Histórica</h3>
+                        <div className="h-64">
+                            <canvas id="chartConversion"></canvas>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2 text-center">
+                            Porcentaje de prospectos ganados por mes
+                        </div>
+                    </div>
+                    
+                    {/* Script para renderizar gráficos */}
+                    <script dangerouslySetInnerHTML={{__html: `
+                        (function() {
+                            // Esperar a que Chart.js esté disponible
+                            if (typeof Chart === 'undefined') {
+                                console.warn('Chart.js no está disponible');
+                                return;
+                            }
+                            
+                            // Destruir gráficos existentes si los hay
+                            ['chartIngresos', 'chartPipeline', 'chartConversion'].forEach(id => {
+                                const canvas = document.getElementById(id);
+                                if (canvas && canvas.chart) {
+                                    canvas.chart.destroy();
+                                }
+                            });
+                            
+                            // Gráfico 1: Ingresos
+                            const ctxIngresos = document.getElementById('chartIngresos');
+                            if (ctxIngresos) {
+                                ctxIngresos.chart = new Chart(ctxIngresos, {
+                                    type: 'line',
+                                    data: {
+                                        labels: ${JSON.stringify(datosIngresos.labels)},
+                                        datasets: [{
+                                            label: 'Ingresos (UF)',
+                                            data: ${JSON.stringify(datosIngresos.data)},
+                                            borderColor: 'rgb(34, 197, 94)',
+                                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                            tension: 0.3,
+                                            fill: true
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { display: false }
+                                        },
+                                        scales: {
+                                            y: { beginAtZero: true }
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            // Gráfico 2: Pipeline
+                            const ctxPipeline = document.getElementById('chartPipeline');
+                            if (ctxPipeline) {
+                                ctxPipeline.chart = new Chart(ctxPipeline, {
+                                    type: 'bar',
+                                    data: {
+                                        labels: ${JSON.stringify(datosPipeline.labels)},
+                                        datasets: [{
+                                            label: 'Valor (UF)',
+                                            data: ${JSON.stringify(datosPipeline.data)},
+                                            backgroundColor: ['#60A5FA', '#FBBF24', '#F97316', '#10B981']
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { display: false }
+                                        },
+                                        scales: {
+                                            y: { beginAtZero: true }
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            // Gráfico 3: Conversión
+                            const ctxConversion = document.getElementById('chartConversion');
+                            if (ctxConversion) {
+                                ctxConversion.chart = new Chart(ctxConversion, {
+                                    type: 'line',
+                                    data: {
+                                        labels: ${JSON.stringify(datosConversion.labels)},
+                                        datasets: [{
+                                            label: 'Conversión (%)',
+                                            data: ${JSON.stringify(datosConversion.data)},
+                                            borderColor: 'rgb(249, 115, 22)',
+                                            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                                            tension: 0.3,
+                                            fill: true
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { display: false }
+                                        },
+                                        scales: {
+                                            y: { 
+                                                beginAtZero: true,
+                                                max: 100,
+                                                ticks: {
+                                                    callback: function(value) {
+                                                        return value + '%';
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        })();
+                    `}} />
                 </div>
             );
         }
