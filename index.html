@@ -11,7 +11,11 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            overflow-x: hidden;
+            max-width: 100vw;
+        }
         .color-naranja { background-color: #FF8C42; }
         .border-naranja { border-color: #FF8C42; }
         .text-naranja { color: #FF8C42; }
@@ -1403,9 +1407,9 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         </div>
                     </header>
 
-                    <div className="bg-white border-b">
-                        <div className="max-w-7xl mx-auto px-4">
-                            <nav className="flex space-x-4 md:space-x-8 overflow-x-auto scrollbar-hide">
+                    <div className="bg-white border-b overflow-hidden">
+                        <div className="max-w-7xl mx-auto">
+                            <nav className="flex space-x-4 md:space-x-8 overflow-x-auto scrollbar-hide px-4">
                                 {[
                                     { id: 'dashboard', nombre: '📊 Dashboard' },
                                     { id: 'pipeline', nombre: '🎯 Pipeline' },
@@ -1414,7 +1418,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     { id: 'tickets', nombre: '🎫 Tickets' },
                                     { id: 'keyaccounts', nombre: '🔑 Key Accounts' }
                                 ].map(tab => (
-                                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`py-4 px-2 md:px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500'}`}>{tab.nombre}</button>
+                                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`py-4 px-2 md:px-1 border-b-2 font-medium text-sm whitespace-nowrap flex-shrink-0 ${activeTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500'}`}>{tab.nombre}</button>
                                 ))}
                             </nav>
                         </div>
