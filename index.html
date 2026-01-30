@@ -2176,25 +2176,6 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                 </li>
                                             );
                                         })}
-                                                                        <span className="font-medium">Notas:</span> {it.payload.notes}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {it.kind === 'event' && it.payload && typeof it.payload === 'object' && (
-                                                            <div className="text-xs text-gray-600 mt-2">
-                                                                {it.payload.from && it.payload.to && (
-                                                                    <div><span className="font-medium">Cambio:</span> {it.payload.from} → {it.payload.to}</div>
-                                                                )}
-                                                                {it.payload.changed_fields && (
-                                                                    <div><span className="font-medium">Campos:</span> {it.payload.changed_fields.join(', ')}</div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </li>
-                                        ))}
                                     </ul>
                                 )}
                             </div>
