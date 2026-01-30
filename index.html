@@ -399,10 +399,10 @@
 
                     <main className="max-w-7xl mx-auto px-4 py-8">
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} />}
-                        {activeTab === 'pipeline' && <KanbanBoard estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
-                        {activeTab === 'cerrados' && <CerradosView cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
-                        {activeTab === 'tickets' && <TicketsView tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
-                        {activeTab === 'keyaccounts' && <KeyAccountsView keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
+                        {activeTab === 'pipeline' && <KanbanBoard onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
+                        {activeTab === 'cerrados' && <CerradosView onHistory={openHistory} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
+                        {activeTab === 'tickets' && <TicketsView onHistory={openHistory} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
+                        {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
                     </main>
 
                     {showModal && <UniversalModal type={modalType} item={editingItem} onSave={(data) => modalType === 'prospecto' ? handleSaveProspecto(data) : handleSaveOther(modalType, data)} onClose={() => setShowModal(false)} />}
@@ -481,17 +481,17 @@
             return <div className={`bg-white rounded-lg shadow p-6 border-l-4 border-${color}`}><div className="text-sm text-gray-600 mb-2">{title}</div><div className={`text-3xl font-bold text-${color} mb-1`}>{value}</div><div className="text-xs text-gray-500">{subtitle}</div></div>;
         }
 
-        function KanbanBoard({ estados, prospectosPorEstado, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey }) {
+        function KanbanBoard({estados, prospectosPorEstado, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey, onHistory}) {
             return (
                 <div className="grid grid-cols-4 gap-4">
                     {estados.map(estado => (
-                        <KanbanColumn key={estado.id} estado={estado} prospectos={prospectosPorEstado(estado.id)} onEdit={onEdit} onDelete={onDelete} onMove={onMove} onCerrar={onCerrar} getEstadoFromKey={getEstadoFromKey} />
+                        <KanbanColumn onHistory={onHistory} key={estado.id} estado={estado} prospectos={prospectosPorEstado(estado.id)} onEdit={onEdit} onDelete={onDelete} onMove={onMove} onCerrar={onCerrar} getEstadoFromKey={getEstadoFromKey} />
                     ))}
                 </div>
             );
         }
 
-        function KanbanColumn({ estado, prospectos, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey }) {
+        function KanbanColumn({estado, prospectos, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey, onHistory}) {
             const handleDragStart = (e, p) => { e.dataTransfer.setData('prospectoId', p.id); e.currentTarget.classList.add('dragging'); };
             const handleDragEnd = (e) => { e.currentTarget.classList.remove('dragging'); };
             const handleDragOver = (e) => { e.preventDefault(); };
@@ -504,7 +504,7 @@
                         <span className="text-xs bg-white px-2 py-1 rounded">{prospectos.length}</span>
                     </div>
                     <div className="space-y-3">
-                        {prospectos.map(p => <ProspectoCard key={p.id} prospecto={p} onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} onCerrar={onCerrar} onHistory={() => openHistory('prospectos', p.id, p.organizacion)} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
+                        {prospectos.map(p => <ProspectoCard key={p.id} prospecto={p} onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} onCerrar={onCerrar} onHistory={() => onHistory('prospectos', p.id, p.organizacion)} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
                     </div>
                 </div>
             );
@@ -545,7 +545,7 @@
             );
         }
 
-        function CerradosView({ cerrados, onAdd, onEdit, onDelete, onExport }) {
+        function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory}) {
             const ganados = cerrados.filter(c => c.estado_final === 'Ganado');
             const valorGanado = ganados.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
             
@@ -584,7 +584,7 @@
                                         <td className="px-6 py-4 text-sm text-gray-500">{c.fecha_cierre}</td>
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(c)} className="text-azul">Editar</button>
-                                            <button onClick={() => openHistory('cerrados', c.id, c.organizacion)} className="text-gray-700">Historial</button>
+                                            <button onClick={() => onHistory('cerrados', c.id, c.organizacion)} className="text-gray-700">Historial</button>
                                             <button onClick={() => onDelete(c.id)} className="text-red-600">Eliminar</button>
                                         </td>
                                     </tr>
@@ -596,7 +596,7 @@
             );
         }
 
-        function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport }) {
+        function TicketsView({tickets, onAdd, onEdit, onDelete, onExport, onHistory}) {
             return (
                 <div className="space-y-6">
                     <div className="flex justify-between">
@@ -628,7 +628,7 @@
                                         <td className="px-6 py-4 text-sm text-gray-500">{t.fecha_entrega}</td>
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(t)} className="text-azul">Editar</button>
-                                            <button onClick={() => openHistory('tickets', t.id, t.organizacion)} className="text-gray-700">Historial</button>
+                                            <button onClick={() => onHistory('tickets', t.id, t.organizacion)} className="text-gray-700">Historial</button>
                                             <button onClick={() => onDelete(t.id)} className="text-red-600">Eliminar</button>
                                         </td>
                                     </tr>
@@ -640,7 +640,7 @@
             );
         }
 
-        function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, onExport }) {
+        function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory}) {
             const totalMRR = keyAccounts.reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
             
             return (
@@ -678,7 +678,7 @@
                                         <td className="px-6 py-4 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${ka.salud === 'Excelente' ? 'bg-green-100 text-green-800' : ka.salud === 'Buena' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'}`}>{ka.salud || '-'}</span></td>
                                         <td className="px-6 py-4 text-right text-sm space-x-2">
                                             <button onClick={() => onEdit(ka)} className="text-azul">Editar</button>
-                                            <button onClick={() => openHistory('key_accounts', ka.id, ka.organizacion)} className="text-gray-700">Historial</button>
+                                            <button onClick={() => onHistory('key_accounts', ka.id, ka.organizacion)} className="text-gray-700">Historial</button>
                                             <button onClick={() => onDelete(ka.id)} className="text-red-600">Eliminar</button>
                                         </td>
                                     </tr>
