@@ -2402,7 +2402,82 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             )}
                             
                             {/* Estado de Resultados */}
-                            {contaTab === 'pl' && (
+                            {contaTab === 'pl' && (() => {
+                                // Obtener años disponibles de los datos
+                                const añosDisponibles = [...new Set([
+                                    ...facturasEmitidas.map(f => new Date(f.fecha_emision).getFullYear()),
+                                    ...facturasRecibidas.map(f => new Date(f.fecha_emision).getFullYear()),
+                                    ...cajaChica.map(c => new Date(c.fecha).getFullYear())
+                                ])].sort((a, b) => b - a);
+                                
+                                if (añosDisponibles.length === 0) {
+                                    añosDisponibles.push(new Date().getFullYear());
+                                }
+                                
+                                // Generar datos mes a mes del AÑO COMPLETO seleccionado
+                                const generarDatosPL = () => {
+                                    const meses = [];
+                                    
+                                    // Enero a Diciembre del año seleccionado
+                                    for (let mes = 0; mes < 12; mes++) {
+                                        const mesNombre = new Date(añoSeleccionado, mes, 1).toLocaleDateString('es-CL', { month: 'short' });
+                                        
+                                        // Facturas Emitidas del mes
+                                        const emitidas = facturasEmitidas
+                                            .filter(f => {
+                                                const d = new Date(f.fecha_emision);
+                                                return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
+                                            })
+                                            .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+                                        
+                                        // Facturas Recibidas del mes
+                                        const recibidas = facturasRecibidas
+                                            .filter(f => {
+                                                const d = new Date(f.fecha_emision);
+                                                return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
+                                            })
+                                            .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+                                        
+                                        // Boletas (Caja Chica) del mes
+                                        const boletas = cajaChica
+                                            .filter(c => {
+                                                const d = new Date(c.fecha);
+                                                return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
+                                            })
+                                            .reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0);
+                                        const boletasUF = boletas / (ufActual || 38000);
+                                        
+                                        // Honorarios del mes
+                                        const honorarios = facturasRecibidas
+                                            .filter(f => {
+                                                const d = new Date(f.fecha_emision);
+                                                return d.getMonth() === mes && d.getFullYear() === añoSeleccionado && f.categoria === 'Honorarios';
+                                            })
+                                            .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+                                        
+                                        const resultado = emitidas - recibidas - boletasUF;
+                                        
+                                        meses.push({
+                                            mes: mesNombre,
+                                            emitidas: Math.round(emitidas),
+                                            recibidas: Math.round(recibidas),
+                                            boletas: Math.round(boletasUF),
+                                            honorarios: Math.round(honorarios),
+                                            resultado: Math.round(resultado)
+                                        });
+                                    }
+                                    
+                                    return meses;
+                                };
+                                
+                                const datosPL = generarDatosPL();
+                                const totalEmitidas = datosPL.reduce((sum, m) => sum + m.emitidas, 0);
+                                const totalRecibidas = datosPL.reduce((sum, m) => sum + m.recibidas, 0);
+                                const totalBoletas = datosPL.reduce((sum, m) => sum + m.boletas, 0);
+                                const totalHonorarios = datosPL.reduce((sum, m) => sum + m.honorarios, 0);
+                                const totalResultado = totalEmitidas - totalRecibidas - totalBoletas;
+                                
+                                return (
                                 <div className="space-y-6">
                                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                                         <div className="flex items-center gap-3">
@@ -2433,63 +2508,6 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         }} className="px-4 py-2 bg-gray-100 rounded-lg text-sm whitespace-nowrap">📥 Exportar {añoSeleccionado}</button>
                                     </div>
                                     
-                                    {(() => {
-                                        // Obtener años disponibles de los datos
-                                        const añosDisponibles = [...new Set([
-                                            ...facturasEmitidas.map(f => new Date(f.fecha_emision).getFullYear()),
-                                            ...facturasRecibidas.map(f => new Date(f.fecha_emision).getFullYear()),
-                                            ...cajaChica.map(c => new Date(c.fecha).getFullYear())
-                                        ])].sort((a, b) => b - a);
-                                        
-                                        if (añosDisponibles.length === 0) {
-                                            añosDisponibles.push(new Date().getFullYear());
-                                        }
-                                        
-                                        // Generar datos mes a mes del AÑO COMPLETO seleccionado
-                                        const generarDatosPL = () => {
-                                            const meses = [];
-                                            
-                                            // Enero a Diciembre del año seleccionado
-                                            for (let mes = 0; mes < 12; mes++) {
-                                                const mesNombre = new Date(añoSeleccionado, mes, 1).toLocaleDateString('es-CL', { month: 'short' });
-                                                
-                                                // Facturas Emitidas del mes
-                                                const emitidas = facturasEmitidas
-                                                    .filter(f => {
-                                                        const d = new Date(f.fecha_emision);
-                                                        return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
-                                                    })
-                                                    .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
-                                                
-                                                // Facturas Recibidas del mes
-                                                const recibidas = facturasRecibidas
-                                                    .filter(f => {
-                                                        const d = new Date(f.fecha_emision);
-                                                        return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
-                                                    })
-                                                    .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
-                                                
-                                                // Boletas (Caja Chica) del mes
-                                                const boletas = cajaChica
-                                                    .filter(c => {
-                                                        const d = new Date(c.fecha);
-                                                        return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
-                                                    })
-                                                    .reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0);
-                                                const boletasUF = boletas / (ufActual || 38000);
-                                                
-                                                // Honorarios del mes
-                                                const honorarios = facturasRecibidas
-                                                    .filter(f => {
-                                                        const d = new Date(f.fecha_emision);
-                                                        return d.getMonth() === mes && d.getFullYear() === añoSeleccionado && f.categoria === 'Honorarios';
-                                                    })
-                                                    .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
-                                                
-                                                const resultado = emitidas - recibidas - boletasUF;
-                                                
-                                                meses.push({
-                                                    mes: mesNombre,
                                                     emitidas: Math.round(emitidas),
                                                     recibidas: Math.round(recibidas),
                                                     boletas: Math.round(boletasUF),
@@ -2606,11 +2624,9 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                         ))}
                                                     </div>
                                                 </div>
-                                            </>
-                                        );
-                                    })()}
                                 </div>
-                            )}
+                                );
+                            })()}
                         </div>
                     </div>
                     
