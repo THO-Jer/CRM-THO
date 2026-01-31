@@ -2125,7 +2125,81 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             const [modalType, setModalType] = useState(null);
             const [editing, setEditing] = useState(null);
             const [añoSeleccionado, setAñoSeleccionado] = useState(new Date().getFullYear());
-            
+
+            // ===== PERÍODO UNIFICADO =====
+            const [periodo, setPeriodo] = useState('mes_actual');
+            const [fechaDesdeCustom, setFechaDesdeCustom] = useState('');
+            const [fechaHastaCustom, setFechaHastaCustom] = useState('');
+
+            const calcularRango = () => {
+                const hoy = new Date();
+                const y = hoy.getFullYear();
+                const m = hoy.getMonth();
+                switch (periodo) {
+                    case 'mes_actual': {
+                        return { desde: new Date(y, m, 1), hasta: new Date(y, m + 1, 0) };
+                    }
+                    case 'mes_anterior': {
+                        const mp = m === 0 ? 11 : m - 1;
+                        const yp = m === 0 ? y - 1 : y;
+                        return { desde: new Date(yp, mp, 1), hasta: new Date(yp, mp + 1, 0) };
+                    }
+                    case 'trimestre': {
+                        const inicio = m - 2;
+                        return { desde: new Date(y, inicio, 1), hasta: new Date(y, m + 1, 0) };
+                    }
+                    case 'semestre': {
+                        const inicio = m - 5;
+                        return { desde: new Date(y, inicio, 1), hasta: new Date(y, m + 1, 0) };
+                    }
+                    case 'anual': {
+                        return { desde: new Date(y, 0, 1), hasta: new Date(y, 11, 31) };
+                    }
+                    case 'custom': {
+                        return {
+                            desde: fechaDesdeCustom ? new Date(fechaDesdeCustom + 'T00:00:00') : new Date(y, 0, 1),
+                            hasta: fechaHastaCustom ? new Date(fechaHastaCustom + 'T00:00:00') : new Date(y, 11, 31)
+                        };
+                    }
+                    default: return { desde: new Date(y, m, 1), hasta: new Date(y, m + 1, 0) };
+                }
+            };
+
+            const rango = calcularRango();
+
+            const estEnRango = (fechaStr, campo) => {
+                const d = new Date(fechaStr);
+                // Normalizar: comparar solo fecha sin hora
+                const desde = new Date(rango.desde.getFullYear(), rango.desde.getMonth(), rango.desde.getDate());
+                const hasta = new Date(rango.hasta.getFullYear(), rango.hasta.getMonth(), rango.hasta.getDate());
+                const valor = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                return valor >= desde && valor <= hasta;
+            };
+
+            // Datos filtrados por período
+            const facturasEmiAct = facturasEmitidas.filter(f => estEnRango(f.fecha_emision));
+            const facturasRecAct = facturasRecibidas.filter(f => estEnRango(f.fecha_emision));
+            const boletasAct = boletasHonorarios.filter(b => estEnRango(b.fecha));
+            const cajaAct = cajaChica.filter(c => estEnRango(c.fecha));
+
+            // Etiqueta del período
+            const periodoLabel = () => {
+                const fmt = (d) => d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' });
+                if (periodo === 'mes_actual') {
+                    return new Date().toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+                }
+                if (periodo === 'mes_anterior') {
+                    const mp = new Date().getMonth() === 0 ? 11 : new Date().getMonth() - 1;
+                    const yp = new Date().getMonth() === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear();
+                    return new Date(yp, mp, 1).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+                }
+                if (periodo === 'trimestre') return `Último trimestre (${fmt(rango.desde)} - ${fmt(rango.hasta)})`;
+                if (periodo === 'semestre') return `Último semestre (${fmt(rango.desde)} - ${fmt(rango.hasta)})`;
+                if (periodo === 'anual') return `Año ${new Date().getFullYear()}`;
+                if (periodo === 'custom') return `${fmt(rango.desde)} - ${fmt(rango.hasta)}`;
+                return '';
+            };
+
             const handleSave = async (data) => {
                 try {
                     const table = modalType === 'emitida' ? 'facturas_emitidas' : 
@@ -2169,16 +2243,44 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 onReload();
             };
             
-            // Calcular métricas
-            const totalEmitidas = facturasEmitidas.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
-            const totalRecibidas = facturasRecibidas.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
-            const totalBoletas = boletasHonorarios.reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || 0), 0);
-            const totalCajaChica = cajaChica.reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0);
+            // Calcular métricas del período
+            const totalEmitidas = facturasEmiAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+            const totalRecibidas = facturasRecAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+            const totalBoletas = boletasAct.reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || 0), 0);
+            const totalCajaChica = cajaAct.reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0);
             const margen = totalEmitidas - totalRecibidas - totalBoletas - (totalCajaChica / (ufActual || 38000));
             
             return (
                 <div className="space-y-6">
-                    <h2 className="text-2xl font-bold">💰 Contabilidad</h2>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <h2 className="text-2xl font-bold">💰 Contabilidad</h2>
+
+                        {/* Selector de período */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <select
+                                value={periodo}
+                                onChange={(e) => setPeriodo(e.target.value)}
+                                className="px-3 py-1.5 border rounded-lg text-sm font-medium bg-white"
+                            >
+                                <option value="mes_actual">Mes actual</option>
+                                <option value="mes_anterior">Mes anterior</option>
+                                <option value="trimestre">Último trimestre</option>
+                                <option value="semestre">Último semestre</option>
+                                <option value="anual">Año actual</option>
+                                <option value="custom">Rango personalizado</option>
+                            </select>
+                            {periodo === 'custom' && (
+                                <div className="flex items-center gap-1">
+                                    <input type="date" value={fechaDesdeCustom} onChange={e => setFechaDesdeCustom(e.target.value)} className="px-2 py-1.5 border rounded-lg text-sm" />
+                                    <span className="text-gray-400 text-sm">→</span>
+                                    <input type="date" value={fechaHastaCustom} onChange={e => setFechaHastaCustom(e.target.value)} className="px-2 py-1.5 border rounded-lg text-sm" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Etiqueta período activo */}
+                    <div className="text-sm text-gray-500 -mt-3 capitalize">{periodoLabel()}</div>
                     
                     {/* Métricas resumen */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -2216,77 +2318,75 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             {/* Dashboard de Contabilidad */}
                             {contaTab === 'dashboard' && (() => {
                                 const hoy = new Date();
-                                const mesActual = hoy.getMonth();
-                                const añoActual = hoy.getFullYear();
-                                const mesAnterior = mesActual === 0 ? 11 : mesActual - 1;
-                                const añoMesAnterior = mesActual === 0 ? añoActual - 1 : añoActual;
 
-                                // Filtrar por mes
-                                const filtrarPorMes = (arr, campo, mes, año) => arr.filter(item => {
-                                    const d = new Date(item[campo]);
-                                    return d.getMonth() === mes && d.getFullYear() === año;
-                                });
+                                // Usar los datos ya filtrados por período
+                                const emitidaActual = facturasEmiAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                const gastosActual = facturasRecAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                const honorariosActual = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0);
+                                const retenciones = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0);
+                                const cajaActual = cajaAct.reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000);
+                                const flujoNeto = emitidaActual - gastosActual - honorariosActual - cajaActual;
 
-                                // Datos mes actual
-                                const emitidaActual = filtrarPorMes(facturasEmitidas, 'fecha_emision', mesActual, añoActual)
-                                    .reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                const gastosActual = filtrarPorMes(facturasRecibidas, 'fecha_emision', mesActual, añoActual)
-                                    .reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                const honorariosActual = filtrarPorMes(boletasHonorarios, 'fecha', mesActual, añoActual)
-                                    .reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0);
-                                const retenciones = filtrarPorMes(boletasHonorarios, 'fecha', mesActual, añoActual)
-                                    .reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0);
-                                const cajaActual = filtrarPorMes(cajaChica, 'fecha', mesActual, añoActual)
-                                    .reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000);
-                                const flujoNetoPrev = emitidaActual - gastosActual - honorariosActual - cajaActual;
+                                // Período anterior (mismo largo de rango, un período atrás)
+                                const largo = rango.hasta - rango.desde;
+                                const prevHasta = new Date(rango.desde.getTime() - 1);
+                                const prevDesde = new Date(prevHasta.getTime() - largo);
+                                const estEnPrev = (fechaStr) => {
+                                    const d = new Date(fechaStr);
+                                    const v = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                                    const pd = new Date(prevDesde.getFullYear(), prevDesde.getMonth(), prevDesde.getDate());
+                                    const ph = new Date(prevHasta.getFullYear(), prevHasta.getMonth(), prevHasta.getDate());
+                                    return v >= pd && v <= ph;
+                                };
+                                const emitidaAnterior = facturasEmitidas.filter(f => estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                const gastosAnterior = facturasRecibidas.filter(f => estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
 
-                                // Datos mes anterior
-                                const emitidaAnterior = filtrarPorMes(facturasEmitidas, 'fecha_emision', mesAnterior, añoMesAnterior)
-                                    .reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                const gastosAnterior = filtrarPorMes(facturasRecibidas, 'fecha_emision', mesAnterior, añoMesAnterior)
-                                    .reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-
-                                // Pendientes
+                                // Pendientes (siempre globales, independientes del período)
                                 const porCobrar = facturasEmitidas.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
                                 const porPagar = facturasRecibidas.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
 
-                                // Datos para gráfico 6 meses
-                                const datos6Meses = [];
-                                for (let i = 5; i >= 0; i--) {
-                                    let m = mesActual - i;
-                                    let y = añoActual;
-                                    if (m < 0) { m += 12; y--; }
-                                    const label = new Date(y, m, 1).toLocaleDateString('es-CL', { month: 'short' });
-                                    const ing = filtrarPorMes(facturasEmitidas, 'fecha_emision', m, y).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                    const gas = filtrarPorMes(facturasRecibidas, 'fecha_emision', m, y).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                    const hon = filtrarPorMes(boletasHonorarios, 'fecha', m, y).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0);
-                                    const caj = filtrarPorMes(cajaChica, 'fecha', m, y).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000);
-                                    datos6Meses.push({ label, ingresos: Math.round(ing), gastos: Math.round(gas + hon + caj) });
-                                }
+                                // Gráfico de barras: meses dentro del rango seleccionado
+                                const datos6Meses = (() => {
+                                    const result = [];
+                                    // Determinar cuántos meses cubre el rango
+                                    const desde = rango.desde;
+                                    const hasta = rango.hasta;
+                                    let y = desde.getFullYear();
+                                    let m = desde.getMonth();
+                                    while (new Date(y, m, 1) <= hasta) {
+                                        const label = new Date(y, m, 1).toLocaleDateString('es-CL', { month: 'short' });
+                                        const mesDesde = new Date(y, m, 1);
+                                        const mesHasta = new Date(y, m + 1, 0);
+                                        const estEnMes = (fechaStr) => {
+                                            const d = new Date(fechaStr);
+                                            const v = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                                            return v >= mesDesde && v <= mesHasta;
+                                        };
+                                        const ing = facturasEmitidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                        const gas = facturasRecibidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                        const hon = boletasHonorarios.filter(b => estEnMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0);
+                                        const caj = cajaChica.filter(c => estEnMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000);
+                                        result.push({ label, ingresos: Math.round(ing), gastos: Math.round(gas + hon + caj) });
+                                        m++;
+                                        if (m > 11) { m = 0; y++; }
+                                    }
+                                    return result;
+                                })();
 
-                                // Datos para gráfico de composición gastos (donut)
                                 const totalGastosDonut = gastosActual + honorariosActual + cajaActual;
 
                                 // Alertas
                                 const alertas = [];
-                                if (flujoNetoPrev < 0) alertas.push({ tipo: 'danger', msg: `Flujo neto negativo este mes: ${Math.round(flujoNetoPrev)} UF` });
+                                if (flujoNeto < 0) alertas.push({ tipo: 'danger', msg: `Flujo neto negativo en el período: ${Math.round(flujoNeto)} UF` });
                                 if (porCobrar > 0) alertas.push({ tipo: 'warning', msg: `${Math.round(porCobrar)} UF por cobrar en facturas pendientes` });
                                 if (porPagar > 0) alertas.push({ tipo: 'info', msg: `${Math.round(porPagar)} UF por pagar en facturas recibidas` });
-                                if (retenciones > 0) alertas.push({ tipo: 'fiscal', msg: `${Math.round(retenciones)} UF en retenciones pendientes (15.25%)` });
+                                if (retenciones > 0) alertas.push({ tipo: 'fiscal', msg: `${Math.round(retenciones)} UF en retenciones del período (15.25%)` });
 
-                                // Cambio % vs mes anterior
                                 const cambioIngresos = emitidaAnterior > 0 ? ((emitidaActual - emitidaAnterior) / emitidaAnterior * 100) : 0;
                                 const cambioGastos = gastosAnterior > 0 ? ((gastosActual - gastosAnterior) / gastosAnterior * 100) : 0;
 
-                                const mesNombre = hoy.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
-
                                 return (
                                 <div className="space-y-6">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="font-bold text-lg">🏠 Dashboard Contabilidad</h3>
-                                        <span className="text-sm text-gray-500 capitalize">{mesNombre}</span>
-                                    </div>
-
                                     {/* Alertas */}
                                     {alertas.length > 0 && (
                                         <div className="space-y-2">
@@ -2310,14 +2410,14 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             <div className="text-xs text-gray-500 mb-1">💰 Ingresos</div>
                                             <div className="text-xl font-bold text-verde">{Math.round(emitidaActual)} UF</div>
                                             <div className={`text-xs mt-1 ${cambioIngresos >= 0 ? 'text-verde' : 'text-red-500'}`}>
-                                                {cambioIngresos >= 0 ? '↑' : '↓'} {Math.abs(Math.round(cambioIngresos))}% vs mes anterior
+                                                {cambioIngresos >= 0 ? '↑' : '↓'} {Math.abs(Math.round(cambioIngresos))}% vs período anterior
                                             </div>
                                         </div>
                                         <div className="bg-white border rounded-xl p-4">
                                             <div className="text-xs text-gray-500 mb-1">📥 Gastos Total</div>
                                             <div className="text-xl font-bold text-naranja">{Math.round(gastosActual + honorariosActual + cajaActual)} UF</div>
                                             <div className={`text-xs mt-1 ${cambioGastos >= 0 ? 'text-red-500' : 'text-verde'}`}>
-                                                {cambioGastos >= 0 ? '↑' : '↓'} {Math.abs(Math.round(cambioGastos))}% vs mes anterior
+                                                {cambioGastos >= 0 ? '↑' : '↓'} {Math.abs(Math.round(cambioGastos))}% vs período anterior
                                             </div>
                                         </div>
                                         <div className="bg-white border rounded-xl p-4">
@@ -2358,7 +2458,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                                         {/* Gráfico barras: Ingresos vs Gastos 6 meses */}
                                         <div className="lg:col-span-2 bg-white border rounded-xl p-4">
-                                            <h4 className="font-bold text-sm mb-3">📈 Ingresos vs Gastos (6 meses)</h4>
+                                            <h4 className="font-bold text-sm mb-3">📈 Ingresos vs Gastos ({datos6Meses.length} {datos6Meses.length === 1 ? 'mes' : 'meses'})</h4>
                                             <canvas id="chartIngGastos" height="220"></canvas>
                                         </div>
 
