@@ -2121,17 +2121,29 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 try {
                     const table = modalType === 'emitida' ? 'facturas_emitidas' : modalType === 'recibida' ? 'facturas_recibidas' : 'caja_chica';
                     
+                    console.log('Guardando en tabla:', table);
+                    console.log('Datos a guardar:', data);
+                    
+                    let result;
                     if (editing) {
-                        await supabase.from(table).update(data).eq('id', editing.id);
+                        result = await supabase.from(table).update(data).eq('id', editing.id);
                     } else {
-                        await supabase.from(table).insert([data]);
+                        result = await supabase.from(table).insert([data]);
                     }
                     
+                    console.log('Resultado:', result);
+                    
+                    if (result.error) {
+                        throw new Error(result.error.message);
+                    }
+                    
+                    alert('✅ Guardado exitosamente');
                     setShowModal(false);
                     setEditing(null);
                     onReload();
                 } catch (err) {
-                    alert('Error: ' + err.message);
+                    console.error('Error completo:', err);
+                    alert('❌ Error al guardar: ' + err.message);
                 }
             };
             
@@ -2385,54 +2397,193 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             {/* Estado de Resultados */}
                             {contaTab === 'pl' && (
                                 <div className="space-y-6">
-                                    <h3 className="font-bold text-lg">📊 Estado de Resultados (P&L)</h3>
-                                    
-                                    <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6">
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center border-b pb-3">
-                                                <span className="text-lg font-bold text-gray-700">💰 INGRESOS</span>
-                                                <span className="text-2xl font-bold text-verde">{Math.round(totalEmitidas)} UF</span>
-                                            </div>
-                                            
-                                            <div className="flex justify-between items-center border-b pb-3">
-                                                <span className="text-lg font-bold text-gray-700">📥 GASTOS</span>
-                                                <span className="text-2xl font-bold text-naranja">{Math.round(totalRecibidas + (totalCajaChica / ufActual))} UF</span>
-                                            </div>
-                                            
-                                            <div className="flex justify-between items-center pt-2">
-                                                <span className="text-xl font-bold text-gray-900">📊 RESULTADO</span>
-                                                <span className={`text-3xl font-bold ${margen >= 0 ? 'text-verde' : 'text-red-600'}`}>
-                                                    {margen >= 0 ? '+' : ''}{Math.round(margen)} UF
-                                                </span>
-                                            </div>
-                                            
-                                            <div className="text-sm text-gray-600 text-center mt-4 pt-4 border-t">
-                                                ≈ ${Math.round(margen * ufActual).toLocaleString('es-CL')} CLP
-                                            </div>
-                                        </div>
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-bold text-lg">📊 Estado de Resultados (P&L)</h3>
+                                        <button onClick={() => {
+                                            // Exportar a CSV
+                                            const data = generarDatosPL();
+                                            const csv = [
+                                                ['Mes', 'Facturas Emitidas', 'Facturas Recibidas', 'Boletas (Caja Chica)', 'Honorarios', 'Resultado'],
+                                                ...data.map(m => [m.mes, m.emitidas, m.recibidas, m.boletas, m.honorarios, m.resultado])
+                                            ].map(row => row.join(',')).join('\n');
+                                            const blob = new Blob([csv], { type: 'text/csv' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = 'estado-resultados.csv';
+                                            a.click();
+                                        }} className="px-4 py-2 bg-gray-100 rounded-lg text-sm">📥 Exportar CSV</button>
                                     </div>
                                     
-                                    {/* Desglose de gastos */}
-                                    <div>
-                                        <h4 className="font-bold mb-3">Gastos por Categoría</h4>
-                                        <div className="space-y-2">
-                                            {Object.entries(
-                                                facturasRecibidas.reduce((acc, f) => {
-                                                    acc[f.categoria] = (acc[f.categoria] || 0) + parseFloat(f.monto_uf || 0);
-                                                    return acc;
-                                                }, {})
-                                            ).map(([cat, val]) => (
-                                                <div key={cat} className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                                                    <span className="font-medium">{cat}</span>
-                                                    <span className="text-naranja font-bold">{Math.round(val)} UF</span>
+                                    {(() => {
+                                        // Generar datos mes a mes
+                                        const generarDatosPL = () => {
+                                            const hoy = new Date();
+                                            const meses = [];
+                                            
+                                            // Últimos 12 meses
+                                            for (let i = 11; i >= 0; i--) {
+                                                const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+                                                const mes = fecha.getMonth();
+                                                const año = fecha.getFullYear();
+                                                const mesNombre = fecha.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
+                                                
+                                                // Facturas Emitidas del mes
+                                                const emitidas = facturasEmitidas
+                                                    .filter(f => {
+                                                        const d = new Date(f.fecha_emision);
+                                                        return d.getMonth() === mes && d.getFullYear() === año;
+                                                    })
+                                                    .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+                                                
+                                                // Facturas Recibidas del mes
+                                                const recibidas = facturasRecibidas
+                                                    .filter(f => {
+                                                        const d = new Date(f.fecha_emision);
+                                                        return d.getMonth() === mes && d.getFullYear() === año;
+                                                    })
+                                                    .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+                                                
+                                                // Boletas (Caja Chica) del mes
+                                                const boletas = cajaChica
+                                                    .filter(c => {
+                                                        const d = new Date(c.fecha);
+                                                        return d.getMonth() === mes && d.getFullYear() === año;
+                                                    })
+                                                    .reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0);
+                                                const boletasUF = boletas / (ufActual || 38000);
+                                                
+                                                // Honorarios del mes (categoría específica en Facturas Recibidas)
+                                                const honorarios = facturasRecibidas
+                                                    .filter(f => {
+                                                        const d = new Date(f.fecha_emision);
+                                                        return d.getMonth() === mes && d.getFullYear() === año && f.categoria === 'Honorarios';
+                                                    })
+                                                    .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+                                                
+                                                const resultado = emitidas - recibidas - boletasUF;
+                                                
+                                                meses.push({
+                                                    mes: mesNombre,
+                                                    emitidas: Math.round(emitidas),
+                                                    recibidas: Math.round(recibidas),
+                                                    boletas: Math.round(boletasUF),
+                                                    honorarios: Math.round(honorarios),
+                                                    resultado: Math.round(resultado)
+                                                });
+                                            }
+                                            
+                                            return meses;
+                                        };
+                                        
+                                        const datosPL = generarDatosPL();
+                                        const totalEmitidas = datosPL.reduce((sum, m) => sum + m.emitidas, 0);
+                                        const totalRecibidas = datosPL.reduce((sum, m) => sum + m.recibidas, 0);
+                                        const totalBoletas = datosPL.reduce((sum, m) => sum + m.boletas, 0);
+                                        const totalHonorarios = datosPL.reduce((sum, m) => sum + m.honorarios, 0);
+                                        const totalResultado = totalEmitidas - totalRecibidas - totalBoletas;
+                                        
+                                        return (
+                                            <>
+                                                {/* Resumen anual */}
+                                                <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6">
+                                                    <h4 className="font-bold mb-4">Resumen Anual</h4>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div className="flex justify-between p-3 bg-white rounded">
+                                                            <span className="font-medium">💰 Facturas Emitidas:</span>
+                                                            <span className="font-bold text-verde">{totalEmitidas} UF</span>
+                                                        </div>
+                                                        <div className="flex justify-between p-3 bg-white rounded">
+                                                            <span className="font-medium">📥 Facturas Recibidas:</span>
+                                                            <span className="font-bold text-naranja">{totalRecibidas} UF</span>
+                                                        </div>
+                                                        <div className="flex justify-between p-3 bg-white rounded">
+                                                            <span className="font-medium">🧾 Boletas (Caja Chica):</span>
+                                                            <span className="font-bold text-azul">{totalBoletas} UF</span>
+                                                        </div>
+                                                        <div className="flex justify-between p-3 bg-white rounded">
+                                                            <span className="font-medium">👤 Honorarios:</span>
+                                                            <span className="font-bold text-fucsia">{totalHonorarios} UF</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex justify-between items-center p-4 bg-white rounded mt-4 border-2 border-naranja">
+                                                        <span className="text-xl font-bold">📊 RESULTADO TOTAL:</span>
+                                                        <span className={`text-2xl font-bold ${totalResultado >= 0 ? 'text-verde' : 'text-red-600'}`}>
+                                                            {totalResultado >= 0 ? '+' : ''}{totalResultado} UF
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            ))}
-                                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                                                <span className="font-medium">Caja Chica</span>
-                                                <span className="text-naranja font-bold">{Math.round(totalCajaChica / ufActual)} UF</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                                                
+                                                {/* Tabla mes a mes */}
+                                                <div>
+                                                    <h4 className="font-bold mb-3">Desglose Mensual</h4>
+                                                    
+                                                    {/* Desktop */}
+                                                    <div className="hidden md:block overflow-x-auto">
+                                                        <table className="min-w-full divide-y bg-white rounded-lg shadow">
+                                                            <thead className="bg-gray-50">
+                                                                <tr>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mes</th>
+                                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💰 Emitidas</th>
+                                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📥 Recibidas</th>
+                                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">🧾 Boletas</th>
+                                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">👤 Honorarios</th>
+                                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📊 Resultado</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y">
+                                                                {datosPL.map((m, idx) => (
+                                                                    <tr key={idx} className="hover:bg-gray-50">
+                                                                        <td className="px-4 py-3 text-sm font-medium">{m.mes}</td>
+                                                                        <td className="px-4 py-3 text-sm text-right text-verde font-medium">{m.emitidas} UF</td>
+                                                                        <td className="px-4 py-3 text-sm text-right text-naranja">{m.recibidas} UF</td>
+                                                                        <td className="px-4 py-3 text-sm text-right text-azul">{m.boletas} UF</td>
+                                                                        <td className="px-4 py-3 text-sm text-right text-gray-600">{m.honorarios} UF</td>
+                                                                        <td className={`px-4 py-3 text-sm text-right font-bold ${m.resultado >= 0 ? 'text-verde' : 'text-red-600'}`}>
+                                                                            {m.resultado >= 0 ? '+' : ''}{m.resultado} UF
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                    
+                                                    {/* Mobile */}
+                                                    <div className="md:hidden space-y-3">
+                                                        {datosPL.map((m, idx) => (
+                                                            <div key={idx} className="bg-white rounded-lg shadow p-4">
+                                                                <div className="font-bold text-lg mb-3 border-b pb-2">{m.mes}</div>
+                                                                <div className="space-y-2 text-sm">
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-gray-600">💰 Emitidas:</span>
+                                                                        <span className="font-medium text-verde">{m.emitidas} UF</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-gray-600">📥 Recibidas:</span>
+                                                                        <span className="font-medium text-naranja">{m.recibidas} UF</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-gray-600">🧾 Boletas:</span>
+                                                                        <span className="font-medium text-azul">{m.boletas} UF</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-gray-600">👤 Honorarios:</span>
+                                                                        <span className="font-medium">{m.honorarios} UF</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between pt-2 border-t">
+                                                                        <span className="font-bold">📊 Resultado:</span>
+                                                                        <span className={`font-bold ${m.resultado >= 0 ? 'text-verde' : 'text-red-600'}`}>
+                                                                            {m.resultado >= 0 ? '+' : ''}{m.resultado} UF
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             )}
                         </div>
@@ -2498,7 +2649,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             {type === 'recibida' && (<>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <InputField label="Proveedor" required value={form.proveedor} onChange={(e) => setForm({...form, proveedor: e.target.value})} />
-                                    <SelectField label="Categoría" required value={form.categoria} onChange={(e) => setForm({...form, categoria: e.target.value})} options={['Servicios', 'Oficina', 'Marketing', 'Tecnología', 'Sueldos', 'Otros']} />
+                                    <SelectField label="Categoría" required value={form.categoria} onChange={(e) => setForm({...form, categoria: e.target.value})} options={['Honorarios', 'Servicios', 'Oficina', 'Marketing', 'Tecnología', 'Sueldos', 'Otros']} />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <InputField label="Fecha Emisión" type="date" required value={form.fecha_emision} onChange={(e) => setForm({...form, fecha_emision: e.target.value})} />
