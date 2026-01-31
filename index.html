@@ -3194,37 +3194,51 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 }
             };
             
+            // Recalcular retención y líquido a partir de bruto + porcentaje
+            const recalcularBoleta = (brutoUF, porcentaje, ufDia) => {
+                const bruto = parseFloat(brutoUF) || 0;
+                const pct = parseFloat(porcentaje) || 0;
+                const uf = ufDia || ufActual;
+                const retencionUF = (bruto * pct / 100).toFixed(2);
+                const liquidoUF = (bruto - retencionUF).toFixed(2);
+                return {
+                    monto_retencion_uf: retencionUF,
+                    monto_retencion_clp: Math.round(retencionUF * uf),
+                    monto_liquido_uf: liquidoUF,
+                    monto_liquido_clp: Math.round(liquidoUF * uf)
+                };
+            };
+
             // Auto-calcular retención y líquido para boletas
             const handleBoletaMontoChange = (field, value) => {
                 const num = parseFloat(value) || 0;
-                const porcentaje = parseFloat(form.porcentaje_retencion) || 15.25;
+                const porcentaje = parseFloat(form.porcentaje_retencion) || 0;
                 
                 if (field === 'monto_bruto_uf') {
-                    const retencionUF = (num * porcentaje / 100).toFixed(2);
-                    const liquidoUF = (num - retencionUF).toFixed(2);
                     setForm({
                         ...form,
                         monto_bruto_uf: value,
                         monto_bruto_clp: Math.round(num * (form.uf_dia || ufActual)),
-                        monto_retencion_uf: retencionUF,
-                        monto_retencion_clp: Math.round(retencionUF * (form.uf_dia || ufActual)),
-                        monto_liquido_uf: liquidoUF,
-                        monto_liquido_clp: Math.round(liquidoUF * (form.uf_dia || ufActual))
+                        ...recalcularBoleta(value, porcentaje, form.uf_dia)
                     });
                 } else if (field === 'monto_bruto_clp') {
                     const brutoUF = (num / (form.uf_dia || ufActual)).toFixed(2);
-                    const retencionUF = (brutoUF * porcentaje / 100).toFixed(2);
-                    const liquidoUF = (brutoUF - retencionUF).toFixed(2);
                     setForm({
                         ...form,
                         monto_bruto_clp: value,
                         monto_bruto_uf: brutoUF,
-                        monto_retencion_uf: retencionUF,
-                        monto_retencion_clp: Math.round(retencionUF * (form.uf_dia || ufActual)),
-                        monto_liquido_uf: liquidoUF,
-                        monto_liquido_clp: Math.round(liquidoUF * (form.uf_dia || ufActual))
+                        ...recalcularBoleta(brutoUF, porcentaje, form.uf_dia)
                     });
                 }
+            };
+
+            // Cuando cambia el porcentaje, recalcular con el bruto que ya hay
+            const handlePorcentajeChange = (value) => {
+                setForm({
+                    ...form,
+                    porcentaje_retencion: value,
+                    ...recalcularBoleta(form.monto_bruto_uf, value, form.uf_dia)
+                });
             };
             
             return (
@@ -3309,6 +3323,44 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         <InputField label="Monto Bruto UF" type="number" step="0.01" required value={form.monto_bruto_uf} onChange={(e) => handleBoletaMontoChange('monto_bruto_uf', e.target.value)} />
                                         <InputField label="Monto Bruto CLP" type="number" required value={form.monto_bruto_clp} onChange={(e) => handleBoletaMontoChange('monto_bruto_clp', e.target.value)} />
                                         <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e) => setForm({...form, uf_dia: parseFloat(e.target.value)})} />
+                                    </div>
+
+                                    {/* Selector de retención */}
+                                    <div>
+                                        <label className="block text-xs font-medium text-blue-800 mb-1">% Retención</label>
+                                        <div className="flex gap-2 flex-wrap">
+                                            {[
+                                                { label: '13.75%', value: '13.75', año: '2024' },
+                                                { label: '14.50%', value: '14.50', año: '2025' },
+                                                { label: '15.25%', value: '15.25', año: '2026' },
+                                                { label: '16.00%', value: '16.00', año: '2027' },
+                                                { label: '0%', value: '0', año: 'Sin ret.' }
+                                            ].map(opt => (
+                                                <button
+                                                    type="button"
+                                                    key={opt.value}
+                                                    onClick={() => handlePorcentajeChange(opt.value)}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                                                        parseFloat(form.porcentaje_retencion) === parseFloat(opt.value)
+                                                            ? 'bg-blue-600 text-white'
+                                                            : 'bg-white border border-blue-200 text-blue-700 hover:bg-blue-100'
+                                                    }`}
+                                                >
+                                                    <div>{opt.label}</div>
+                                                    <div className="text-xs opacity-60">{opt.año}</div>
+                                                </button>
+                                            ))}
+                                            <input
+                                                type="number"
+                                                step="0.25"
+                                                min="0"
+                                                max="100"
+                                                value={form.porcentaje_retencion}
+                                                onChange={(e) => handlePorcentajeChange(e.target.value)}
+                                                className="w-20 px-2 py-1.5 border border-blue-200 rounded-lg text-xs text-center"
+                                                placeholder="%"
+                                            />
+                                        </div>
                                     </div>
                                     
                                     <div className="bg-white rounded p-3 space-y-2 text-sm">
