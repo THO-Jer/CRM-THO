@@ -2497,6 +2497,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 const añosDisponibles = [...new Set([
                                     ...facturasEmitidas.map(f => new Date(f.fecha_emision).getFullYear()),
                                     ...facturasRecibidas.map(f => new Date(f.fecha_emision).getFullYear()),
+                                    ...boletasHonorarios.map(b => new Date(b.fecha).getFullYear()),
                                     ...cajaChica.map(c => new Date(c.fecha).getFullYear())
                                 ])].sort((a, b) => b - a);
                                 
@@ -2512,7 +2513,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     for (let mes = 0; mes < 12; mes++) {
                                         const mesNombre = new Date(añoSeleccionado, mes, 1).toLocaleDateString('es-CL', { month: 'short' });
                                         
-                                        // Facturas Emitidas del mes
+                                        // Facturas Emitidas del mes (Ingresos - exentas de IVA)
                                         const emitidas = facturasEmitidas
                                             .filter(f => {
                                                 const d = new Date(f.fecha_emision);
@@ -2520,40 +2521,53 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             })
                                             .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
                                         
-                                        // Facturas Recibidas del mes
-                                        const recibidas = facturasRecibidas
+                                        // Facturas Recibidas del mes (Gastos operacionales con IVA incluido)
+                                        const gastos = facturasRecibidas
                                             .filter(f => {
                                                 const d = new Date(f.fecha_emision);
                                                 return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
                                             })
                                             .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
                                         
-                                        // Boletas (Caja Chica) del mes
-                                        const boletas = cajaChica
+                                        // Boletas de Honorarios del mes (bruto)
+                                        const honorarios = boletasHonorarios
+                                            .filter(b => {
+                                                const d = new Date(b.fecha);
+                                                return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
+                                            })
+                                            .reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || 0), 0);
+                                        
+                                        // Retenciones del mes (15.25%)
+                                        const retenciones = boletasHonorarios
+                                            .filter(b => {
+                                                const d = new Date(b.fecha);
+                                                return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
+                                            })
+                                            .reduce((sum, b) => sum + (parseFloat(b.monto_retencion_uf) || 0), 0);
+                                        
+                                        // Caja Chica del mes (boletas menores)
+                                        const cajaChicaCLP = cajaChica
                                             .filter(c => {
                                                 const d = new Date(c.fecha);
                                                 return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
                                             })
                                             .reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0);
-                                        const boletasUF = boletas / (ufActual || 38000);
+                                        const cajaChicaUF = cajaChicaCLP / (ufActual || 38000);
                                         
-                                        // Honorarios del mes
-                                        const honorarios = facturasRecibidas
-                                            .filter(f => {
-                                                const d = new Date(f.fecha_emision);
-                                                return d.getMonth() === mes && d.getFullYear() === añoSeleccionado && f.categoria === 'Honorarios';
-                                            })
-                                            .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
-                                        
-                                        const resultado = emitidas - recibidas - boletasUF;
+                                        // Cálculos
+                                        const totalGastos = gastos + honorarios + cajaChicaUF;
+                                        const utilidadOperacional = emitidas - totalGastos;
+                                        const utilidadNeta = utilidadOperacional; // Retenciones no son gasto, se pagan al SII
                                         
                                         meses.push({
                                             mes: mesNombre,
-                                            emitidas: Math.round(emitidas),
-                                            recibidas: Math.round(recibidas),
-                                            boletas: Math.round(boletasUF),
-                                            honorarios: Math.round(honorarios),
-                                            resultado: Math.round(resultado)
+                                            emitidas: Math.round(emitidas * 10) / 10,
+                                            gastos: Math.round(gastos * 10) / 10,
+                                            honorarios: Math.round(honorarios * 10) / 10,
+                                            cajaChica: Math.round(cajaChicaUF * 10) / 10,
+                                            retenciones: Math.round(retenciones * 10) / 10,
+                                            utilidadOperacional: Math.round(utilidadOperacional * 10) / 10,
+                                            utilidadNeta: Math.round(utilidadNeta * 10) / 10
                                         });
                                     }
                                     
@@ -2562,10 +2576,17 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 
                                 const datosPL = generarDatosPL();
                                 const totalEmitidas = datosPL.reduce((sum, m) => sum + m.emitidas, 0);
-                                const totalRecibidas = datosPL.reduce((sum, m) => sum + m.recibidas, 0);
-                                const totalBoletas = datosPL.reduce((sum, m) => sum + m.boletas, 0);
+                                const totalGastos = datosPL.reduce((sum, m) => sum + m.gastos, 0);
                                 const totalHonorarios = datosPL.reduce((sum, m) => sum + m.honorarios, 0);
-                                const totalResultado = totalEmitidas - totalRecibidas - totalBoletas;
+                                const totalCajaChica = datosPL.reduce((sum, m) => sum + m.cajaChica, 0);
+                                const totalRetenciones = datosPL.reduce((sum, m) => sum + m.retenciones, 0);
+                                const totalGastosConsolidado = totalGastos + totalHonorarios + totalCajaChica;
+                                const utilidadOperacional = totalEmitidas - totalGastosConsolidado;
+                                const utilidadNeta = utilidadOperacional;
+                                
+                                // Proyección de impuestos (estimado 20% para sociedades)
+                                const impuestosEstimados = Math.max(0, utilidadNeta * 0.20);
+                                const utilidadDespuesImpuestos = utilidadNeta - impuestosEstimados;
                                 
                                 return (
                                 <div className="space-y-6">
@@ -2586,8 +2607,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             // Exportar a CSV
                                             const data = generarDatosPL();
                                             const csv = [
-                                                ['Mes', 'Facturas Emitidas', 'Facturas Recibidas', 'Boletas (Caja Chica)', 'Honorarios', 'Resultado'],
-                                                ...data.map(m => [m.mes, m.emitidas, m.recibidas, m.boletas, m.honorarios, m.resultado])
+                                                ['Mes', 'Ingresos', 'Gastos Operacionales', 'Honorarios', 'Caja Chica', 'Retenciones', 'Utilidad Operacional', 'Utilidad Neta'],
+                                                ...data.map(m => [m.mes, m.emitidas, m.gastos, m.honorarios, m.cajaChica, m.retenciones, m.utilidadOperacional, m.utilidadNeta])
                                             ].map(row => row.join(',')).join('\n');
                                             const blob = new Blob([csv], { type: 'text/csv' });
                                             const url = window.URL.createObjectURL(blob);
@@ -2600,35 +2621,82 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     
                                     {/* Resumen anual */}
                                     <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6">
-                                        <h4 className="font-bold mb-4">Resumen {añoSeleccionado}</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div className="flex justify-between p-3 bg-white rounded">
-                                                            <span className="font-medium">💰 Facturas Emitidas:</span>
-                                                            <span className="font-bold text-verde">{totalEmitidas} UF</span>
-                                                        </div>
-                                                        <div className="flex justify-between p-3 bg-white rounded">
-                                                            <span className="font-medium">📥 Facturas Recibidas:</span>
-                                                            <span className="font-bold text-naranja">{totalRecibidas} UF</span>
-                                                        </div>
-                                                        <div className="flex justify-between p-3 bg-white rounded">
-                                                            <span className="font-medium">🧾 Boletas (Caja Chica):</span>
-                                                            <span className="font-bold text-azul">{totalBoletas} UF</span>
-                                                        </div>
-                                                        <div className="flex justify-between p-3 bg-white rounded">
-                                                            <span className="font-medium">👤 Honorarios:</span>
-                                                            <span className="font-bold text-fucsia">{totalHonorarios} UF</span>
+                                        <h4 className="font-bold mb-4 text-lg">📊 Resumen {añoSeleccionado}</h4>
+                                        
+                                        {/* INGRESOS */}
+                                        <div className="mb-4">
+                                            <div className="text-sm font-bold text-gray-600 mb-2">💰 INGRESOS</div>
+                                            <div className="flex justify-between p-3 bg-white rounded">
+                                                <span className="font-medium">Facturas Emitidas (exentas):</span>
+                                                <span className="font-bold text-verde">{Math.round(totalEmitidas * 10) / 10} UF</span>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* GASTOS */}
+                                        <div className="mb-4">
+                                            <div className="text-sm font-bold text-gray-600 mb-2">📥 GASTOS</div>
+                                            <div className="grid grid-cols-1 gap-2">
+                                                <div className="flex justify-between p-3 bg-white rounded">
+                                                    <span className="font-medium">Gastos Operacionales (+ IVA):</span>
+                                                    <span className="font-bold text-naranja">{Math.round(totalGastos * 10) / 10} UF</span>
+                                                </div>
+                                                <div className="flex justify-between p-3 bg-white rounded">
+                                                    <span className="font-medium">Honorarios (bruto):</span>
+                                                    <span className="font-bold text-azul">{Math.round(totalHonorarios * 10) / 10} UF</span>
+                                                </div>
+                                                <div className="flex justify-between p-3 bg-white rounded">
+                                                    <span className="font-medium">Caja Chica (boletas):</span>
+                                                    <span className="font-bold text-fucsia">{Math.round(totalCajaChica * 10) / 10} UF</span>
+                                                </div>
+                                                <div className="flex justify-between p-3 bg-gray-100 rounded font-bold">
+                                                    <span>TOTAL GASTOS:</span>
+                                                    <span className="text-naranja">{Math.round(totalGastosConsolidado * 10) / 10} UF</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* UTILIDAD OPERACIONAL */}
+                                        <div className="flex justify-between items-center p-4 bg-white rounded mb-4 border-2">
+                                            <span className="text-lg font-bold">📊 UTILIDAD OPERACIONAL:</span>
+                                            <span className={`text-2xl font-bold ${utilidadOperacional >= 0 ? 'text-verde' : 'text-red-600'}`}>
+                                                {utilidadOperacional >= 0 ? '+' : ''}{Math.round(utilidadOperacional * 10) / 10} UF
+                                            </span>
+                                        </div>
+                                        
+                                        {/* OBLIGACIONES FISCALES */}
+                                        <div className="mb-4">
+                                            <div className="text-sm font-bold text-gray-600 mb-2">💸 OBLIGACIONES FISCALES</div>
+                                            <div className="grid grid-cols-1 gap-2">
+                                                <div className="flex justify-between p-3 bg-orange-50 rounded">
+                                                    <span className="font-medium">Retenciones por pagar (15.25%):</span>
+                                                    <span className="font-bold text-orange-600">{Math.round(totalRetenciones * 10) / 10} UF</span>
+                                                </div>
+                                                <div className="flex justify-between p-3 bg-purple-50 rounded">
+                                                    <span className="font-medium">Impuesto estimado (20%):</span>
+                                                    <span className="font-bold text-purple-600">{Math.round(impuestosEstimados * 10) / 10} UF</span>
+                                                </div>
+                                                <div className="flex justify-between p-3 bg-gray-100 rounded font-bold">
+                                                    <span>TOTAL FISCAL:</span>
+                                                    <span className="text-orange-600">{Math.round((totalRetenciones + impuestosEstimados) * 10) / 10} UF</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* UTILIDAD NETA */}
+                                        <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-blue-100 rounded border-2 border-verde">
+                                            <span className="text-lg font-bold">🎯 UTILIDAD NETA (después impuestos):</span>
+                                            <span className={`text-2xl font-bold ${utilidadDespuesImpuestos >= 0 ? 'text-verde' : 'text-red-600'}`}>
+                                                {utilidadDespuesImpuestos >= 0 ? '+' : ''}{Math.round(utilidadDespuesImpuestos * 10) / 10} UF
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="text-xs text-gray-600 mt-4 text-center">
+                                            ℹ️ Impuesto estimado al 20% (consultar con contador para cálculo exacto considerando tramos, gastos rechazados y créditos)
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center p-4 bg-white rounded mt-4 border-2 border-naranja">
-                                        <span className="text-xl font-bold">📊 RESULTADO TOTAL:</span>
-                                        <span className={`text-2xl font-bold ${totalResultado >= 0 ? 'text-verde' : 'text-red-600'}`}>
-                                            {totalResultado >= 0 ? '+' : ''}{totalResultado} UF
-                                        </span>
-                                    </div>
-                                </div>
-                                
-                                {/* Tabla mes a mes */}
-                                <div>
+                                    
+                                    {/* Tabla mes a mes */}
+                                    <div>
                                     <h4 className="font-bold mb-3">Desglose Mensual</h4>
                                     
                                     {/* Desktop */}
@@ -2637,11 +2705,12 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             <thead className="bg-gray-50">
                                                 <tr>
                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mes</th>
-                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💰 Emitidas</th>
-                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📥 Recibidas</th>
-                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">🧾 Boletas</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💰 Ingresos</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📥 Gastos</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">👤 Honorarios</th>
-                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📊 Resultado</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💵 Caja</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">🔶 Retenc.</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📊 Utilidad</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y">
@@ -2649,11 +2718,12 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                     <tr key={idx} className="hover:bg-gray-50">
                                                         <td className="px-4 py-3 text-sm font-medium">{m.mes}</td>
                                                         <td className="px-4 py-3 text-sm text-right text-verde font-medium">{m.emitidas} UF</td>
-                                                        <td className="px-4 py-3 text-sm text-right text-naranja">{m.recibidas} UF</td>
-                                                        <td className="px-4 py-3 text-sm text-right text-azul">{m.boletas} UF</td>
-                                                        <td className="px-4 py-3 text-sm text-right text-gray-600">{m.honorarios} UF</td>
-                                                        <td className={`px-4 py-3 text-sm text-right font-bold ${m.resultado >= 0 ? 'text-verde' : 'text-red-600'}`}>
-                                                            {m.resultado >= 0 ? '+' : ''}{m.resultado} UF
+                                                        <td className="px-4 py-3 text-sm text-right text-naranja">{m.gastos} UF</td>
+                                                        <td className="px-4 py-3 text-sm text-right text-azul">{m.honorarios} UF</td>
+                                                        <td className="px-4 py-3 text-sm text-right text-fucsia">{m.cajaChica} UF</td>
+                                                        <td className="px-4 py-3 text-sm text-right text-orange-600">{m.retenciones} UF</td>
+                                                        <td className={`px-4 py-3 text-sm text-right font-bold ${m.utilidadNeta >= 0 ? 'text-verde' : 'text-red-600'}`}>
+                                                            {m.utilidadNeta >= 0 ? '+' : ''}{m.utilidadNeta} UF
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -2668,25 +2738,29 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                 <div className="font-bold text-lg mb-3 border-b pb-2">{m.mes}</div>
                                                 <div className="space-y-2 text-sm">
                                                     <div className="flex justify-between">
-                                                        <span className="text-gray-600">💰 Emitidas:</span>
+                                                        <span className="text-gray-600">💰 Ingresos:</span>
                                                         <span className="font-medium text-verde">{m.emitidas} UF</span>
                                                     </div>
                                                     <div className="flex justify-between">
-                                                        <span className="text-gray-600">📥 Recibidas:</span>
-                                                        <span className="font-medium text-naranja">{m.recibidas} UF</span>
-                                                    </div>
-                                                    <div className="flex justify-between">
-                                                        <span className="text-gray-600">🧾 Boletas:</span>
-                                                        <span className="font-medium text-azul">{m.boletas} UF</span>
+                                                        <span className="text-gray-600">📥 Gastos:</span>
+                                                        <span className="font-medium text-naranja">{m.gastos} UF</span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="text-gray-600">👤 Honorarios:</span>
-                                                        <span className="font-medium">{m.honorarios} UF</span>
+                                                        <span className="font-medium text-azul">{m.honorarios} UF</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-600">💵 Caja Chica:</span>
+                                                        <span className="font-medium text-fucsia">{m.cajaChica} UF</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-600">🔶 Retenciones:</span>
+                                                        <span className="font-medium text-orange-600">{m.retenciones} UF</span>
                                                     </div>
                                                     <div className="flex justify-between pt-2 border-t">
-                                                        <span className="font-bold">📊 Resultado:</span>
-                                                        <span className={`font-bold ${m.resultado >= 0 ? 'text-verde' : 'text-red-600'}`}>
-                                                            {m.resultado >= 0 ? '+' : ''}{m.resultado} UF
+                                                        <span className="font-bold">📊 Utilidad:</span>
+                                                        <span className={`font-bold ${m.utilidadNeta >= 0 ? 'text-verde' : 'text-red-600'}`}>
+                                                            {m.utilidadNeta >= 0 ? '+' : ''}{m.utilidadNeta} UF
                                                         </span>
                                                     </div>
                                                 </div>
