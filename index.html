@@ -245,51 +245,119 @@ window.addEventListener('unhandledrejection', (e) => {
                         console.warn('No se pudo cargar actividad:', error);
                         setActividadReciente([]);
                     } else {
-                        // Procesar eventos para hacerlos más descriptivos
                         const procesados = (data || []).map(evento => {
-                            let detalleTexto = evento.title || 'Actividad';
-                            
-                            // Mejorar descripción basándose en el payload
-                            if (evento.payload) {
-                                const { old: antes, new: despues } = evento.payload;
-                                
-                                // Detectar cambios específicos
-                                if (antes && despues) {
-                                    const cambios = [];
-                                    
-                                    // Cambio de contacto
-                                    if (antes.contacto !== despues.contacto) {
-                                        cambios.push(`contacto: ${antes.contacto || '(vacío)'} → ${despues.contacto}`);
-                                    }
-                                    
-                                    // Cambio de estado
-                                    if (antes.estado !== despues.estado) {
-                                        cambios.push(`estado: ${antes.estado} → ${despues.estado}`);
-                                    }
-                                    
-                                    // Cambio de fase
-                                    if (antes.fase_actual !== despues.fase_actual) {
-                                        cambios.push(`fase: ${antes.fase_actual} → ${despues.fase_actual}`);
-                                    }
-                                    
-                                    // Cambio de valor
-                                    if (antes.valor !== despues.valor) {
-                                        cambios.push(`valor: ${antes.valor} → ${despues.valor} UF`);
-                                    }
-                                    
-                                    if (cambios.length > 0) {
-                                        detalleTexto = `${despues.organizacion || evento.entity_type}: ${cambios[0]}`;
-                                    }
-                                } else if (despues && evento.event_type === 'insert') {
-                                    // Creación nueva
-                                    detalleTexto = `${despues.organizacion || evento.entity_type} creado`;
+                            const payload = evento.payload || {};
+                            const antes = payload.old || {};
+                            const despues = payload.new || {};
+                            const tipo = evento.entity_type;
+                            const org = despues.organizacion || antes.organizacion || '';
+                            const ticket = despues.ticket || antes.ticket || '';
+                            const servicio = despues.servicio || antes.servicio || '';
+                            const nombre = tipo === 'tickets' ? ticket : tipo === 'key_accounts' ? servicio : org;
+                            const contextual = org && nombre && nombre !== org ? `${org} · ${nombre}` : (org || nombre || '');
+
+                            let texto = '';
+                            let icono = '📌';
+
+                            if (evento.event_type === 'insert') {
+                                // Creación
+                                if (tipo === 'prospectos') {
+                                    const valor = despues.valor ? ` por ${despues.valor} UF` : '';
+                                    texto = `Nuevo prospecto: ${org}${valor}`;
+                                    icono = '🆕';
+                                } else if (tipo === 'tickets') {
+                                    const valor = despues.valor_monto ? ` · ${despues.valor_monto} ${despues.valor_moneda || 'UF'}` : '';
+                                    texto = `Nuevo ticket: ${ticket} en ${org}${valor}`;
+                                    icono = '🎫';
+                                } else if (tipo === 'key_accounts') {
+                                    texto = `Nuevo key account: ${org} · ${servicio} (${despues.uf_mes || 0} UF/mes)`;
+                                    icono = '⭐';
+                                } else if (tipo === 'facturas_emitidas') {
+                                    texto = `Factura emitida a ${despues.cliente || org}: ${despues.monto_uf || 0} UF`;
+                                    icono = '📤';
+                                } else if (tipo === 'facturas_recibidas') {
+                                    texto = `Factura recibida de ${despues.proveedor || org}: ${despues.monto_uf || 0} UF`;
+                                    icono = '📥';
+                                } else if (tipo === 'boletas_honorarios') {
+                                    texto = `Boleta de honorarios: ${despues.prestador || ''} por ${despues.monto_bruto_uf || 0} UF bruto`;
+                                    icono = '👤';
+                                } else if (tipo === 'caja_chica') {
+                                    texto = `Gasto caja chica: ${despues.descripcion || despues.categoria || 'Sin descripción'}`;
+                                    icono = '💵';
+                                } else {
+                                    texto = contextual ? `Se creó: ${contextual}` : evento.title || 'Nuevo registro';
+                                    icono = '🆕';
                                 }
+                            } else if (evento.event_type === 'update') {
+                                // Actualización — narrar el cambio más relevante
+                                if (tipo === 'prospectos') {
+                                    if (antes.estado !== despues.estado) {
+                                        texto = `${org} avanzó de "${antes.estado}" a "${despues.estado}"`;
+                                        icono = despues.estado === 'Ganado' ? '🏆' : '📈';
+                                    } else if (antes.valor !== despues.valor) {
+                                        texto = `${org}: valor actualizado de ${antes.valor || 0} a ${despues.valor} UF`;
+                                        icono = '💰';
+                                    } else if (antes.contacto !== despues.contacto) {
+                                        texto = `${org}: contacto cambiado a ${despues.contacto}`;
+                                        icono = '👤';
+                                    } else {
+                                        texto = `Se actualizó prospecto: ${org}`;
+                                        icono = '✏️';
+                                    }
+                                } else if (tipo === 'tickets') {
+                                    if (antes.fase_actual !== despues.fase_actual) {
+                                        texto = `${ticket} en ${org}: avanzó de "${antes.fase_actual}" a "${despues.fase_actual}"`;
+                                        icono = '📈';
+                                    } else if (antes.porcentaje_avance !== despues.porcentaje_avance) {
+                                        texto = `${ticket} en ${org}: avance ${antes.porcentaje_avance || 0}% → ${despues.porcentaje_avance}%`;
+                                        icono = '📊';
+                                    } else if (antes.ticket !== despues.ticket) {
+                                        texto = `Ticket renombrado en ${org}: "${antes.ticket}" → "${despues.ticket}"`;
+                                        icono = '✏️';
+                                    } else {
+                                        texto = `Se actualizó ticket: ${ticket} en ${org}`;
+                                        icono = '✏️';
+                                    }
+                                } else if (tipo === 'key_accounts') {
+                                    if (antes.renovacion !== despues.renovacion) {
+                                        texto = `${org} · ${servicio}: renovación marcada como "${despues.renovacion}"`;
+                                        icono = '🔄';
+                                    } else if (antes.salud !== despues.salud) {
+                                        texto = `${org} · ${servicio}: salud cambió de "${antes.salud}" a "${despues.salud}"`;
+                                        icono = despues.salud === 'Crítico' || despues.salud === 'Riesgo' ? '⚠️' : '💚';
+                                    } else {
+                                        texto = `Se actualizó key account: ${org} · ${servicio}`;
+                                        icono = '✏️';
+                                    }
+                                } else if (tipo === 'facturas_emitidas') {
+                                    if (antes.estado !== despues.estado) {
+                                        texto = `Factura a ${despues.cliente || org}: estado cambió a "${despues.estado}"`;
+                                        icono = despues.estado === 'Pagada' ? '✅' : '📋';
+                                    } else {
+                                        texto = `Se actualizó factura a ${despues.cliente || org}`;
+                                        icono = '✏️';
+                                    }
+                                } else if (tipo === 'facturas_recibidas') {
+                                    if (antes.estado !== despues.estado) {
+                                        texto = `Factura de ${despues.proveedor || org}: estado cambió a "${despues.estado}"`;
+                                        icono = despues.estado === 'Pagada' ? '✅' : '📋';
+                                    } else {
+                                        texto = `Se actualizó factura de ${despues.proveedor || org}`;
+                                        icono = '✏️';
+                                    }
+                                } else {
+                                    texto = contextual ? `Se actualizó: ${contextual}` : evento.title || 'Registro actualizado';
+                                    icono = '✏️';
+                                }
+                            } else if (evento.event_type === 'delete') {
+                                texto = contextual ? `Se eliminó: ${contextual}` : evento.title || 'Registro eliminado';
+                                icono = '🗑️';
+                            } else {
+                                texto = evento.title || 'Actividad';
+                                icono = '📌';
                             }
-                            
-                            return {
-                                ...evento,
-                                titulo_mejorado: detalleTexto
-                            };
+
+                            return { ...evento, titulo_mejorado: texto, icono_mejorado: icono };
                         });
                         
                         setActividadReciente(procesados);
@@ -1834,12 +1902,12 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             ) : (
                                 <div className="space-y-3 max-h-64 overflow-y-auto">
                                     {actividadReciente.map((act, idx) => (
-                                        <div key={idx} className="flex items-start space-x-2 text-sm border-b border-gray-100 pb-2 last:border-0">
-                                            <span className="text-lg">{getEventIcon(act.event_type)}</span>
+                                        <div key={idx} className="flex items-start space-x-3 text-sm border-b border-gray-100 pb-2.5 last:border-0">
+                                            <span className="text-lg leading-tight mt-0.5">{act.icono_mejorado || getEventIcon(act.event_type)}</span>
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-gray-800 font-medium truncate">{act.titulo_mejorado || act.title || 'Actividad'}</div>
-                                                <div className="text-xs text-gray-500">
-                                                    {act.created_by_email || 'Sistema'} · {formatTimeAgo(act.created_at)}
+                                                <div className="text-gray-800 font-medium leading-snug">{act.titulo_mejorado || act.title || 'Actividad'}</div>
+                                                <div className="text-xs text-gray-400 mt-0.5">
+                                                    {formatTimeAgo(act.created_at)}
                                                 </div>
                                             </div>
                                         </div>
@@ -2099,22 +2167,51 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     
                     {/* Script optimizado para gráficos */}
                     <script dangerouslySetInnerHTML={{__html: `
-                        (function() {
+                        setTimeout(function() {
                             if (typeof Chart === 'undefined') return;
                             const createChart = (id, type, data, color, opts = {}) => {
                                 const canvas = document.getElementById(id);
                                 if (!canvas) return;
                                 if (canvas.chart) canvas.chart.destroy();
+                                const isBar = type === 'bar';
                                 canvas.chart = new Chart(canvas, {
                                     type,
-                                    data: { labels: data.labels, datasets: [{ label: opts.label || '', data: data.data, borderColor: color, backgroundColor: color.replace('rgb', 'rgba').replace(')', ', 0.1)'), tension: 0.3, fill: true, ...opts.dataset }] },
-                                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ...opts.yAxis } } }
+                                    data: {
+                                        labels: data.labels,
+                                        datasets: [{
+                                            label: opts.label || '',
+                                            data: data.data,
+                                            borderColor: color,
+                                            backgroundColor: isBar ? (opts.dataset && opts.dataset.backgroundColor ? opts.dataset.backgroundColor : color) : color.replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                                            tension: 0.3,
+                                            fill: !isBar,
+                                            borderWidth: isBar ? 0 : 2,
+                                            borderRadius: isBar ? 4 : 0,
+                                            ...(opts.dataset || {})
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { display: true, position: 'bottom' },
+                                            tooltip: {
+                                                callbacks: {
+                                                    label: function(c) { return ' ' + c.dataset.label + ': ' + c.parsed.y + (opts.suffix || ' UF'); }
+                                                }
+                                            }
+                                        },
+                                        scales: {
+                                            y: { beginAtZero: true, ...(opts.yAxis || {}), ticks: { callback: function(v) { return v + (opts.suffix || ' UF'); }, ...(opts.yAxis && opts.yAxis.ticks ? opts.yAxis.ticks : {}) } },
+                                            x: { ticks: { font: { size: 11 } } }
+                                        }
+                                    }
                                 });
                             };
-                            createChart('chartIngresos', 'line', ${JSON.stringify(datosIngresos)}, 'rgb(34, 197, 94)', { label: 'Ingresos (UF)' });
-                            createChart('chartPipeline', 'bar', ${JSON.stringify(datosPipeline)}, '', { label: 'Valor (UF)', dataset: { backgroundColor: ['#60A5FA', '#FBBF24', '#F97316', '#10B981'] } });
-                            createChart('chartConversion', 'line', ${JSON.stringify(datosConversion)}, 'rgb(249, 115, 22)', { label: 'Conversión (%)', yAxis: { max: 100, ticks: { callback: v => v + '%' } } });
-                        })();
+                            createChart('chartIngresos', 'line', ${JSON.stringify(datosIngresos)}, 'rgb(34, 197, 94)', { label: 'Ingresos' });
+                            createChart('chartPipeline', 'bar', ${JSON.stringify(datosPipeline)}, '', { label: 'Valor', dataset: { backgroundColor: ['#60A5FA', '#FBBF24', '#F97316', '#10B981'] } });
+                            createChart('chartConversion', 'line', ${JSON.stringify(datosConversion)}, 'rgb(249, 115, 22)', { label: 'Conversión', suffix: '%', yAxis: { max: 100 } });
+                        }, 100);
                     `}} />
                 </div>
             );
@@ -3767,7 +3864,22 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 {type === 'ticket' && (<>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <InputField label="Organización" required value={formData.organizacion} onChange={(e) => setFormData({...formData, organizacion: e.target.value})} />
-                                        <SelectField label="Ticket" required value={formData.ticket} onChange={(e) => setFormData({...formData, ticket: e.target.value})} options={['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG']} />
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Ticket *</label>
+                                            <input
+                                                list="ticket-sugerencias"
+                                                required
+                                                value={formData.ticket}
+                                                onChange={(e) => setFormData({...formData, ticket: e.target.value})}
+                                                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-naranja"
+                                                placeholder="Nombre del ticket..."
+                                            />
+                                            <datalist id="ticket-sugerencias">
+                                                <option value="Ticket RC Express" />
+                                                <option value="Ticket Diag Org" />
+                                                <option value="Ticket ESG" />
+                                            </datalist>
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <InputField label="Fecha Inicio" type="date" required value={formData.fecha_inicio} onChange={(e) => setFormData({...formData, fecha_inicio: e.target.value})} />
