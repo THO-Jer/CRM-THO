@@ -1478,7 +1478,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} actividadReciente={actividadReciente} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
-                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); }} />}
+                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); }} onFiles={openFilesModal} />}
                         {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                         {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                         {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
@@ -2112,10 +2112,11 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             );
         }
 
-        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, tickets, keyAccounts, ufActual, contaTab, setContaTab, onReload }) {
+        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, tickets, keyAccounts, ufActual, contaTab, setContaTab, onReload, onFiles }) {
             const [showModal, setShowModal] = useState(false);
             const [modalType, setModalType] = useState(null);
             const [editing, setEditing] = useState(null);
+            const [añoSeleccionado, setAñoSeleccionado] = useState(new Date().getFullYear());
             
             const handleSave = async (data) => {
                 try {
@@ -2227,6 +2228,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                         <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Vencida' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado}</span></td>
                                                         <td className="px-4 py-3 text-right space-x-2">
                                                             <button onClick={() => { setEditing(f); setModalType('emitida'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
+                                                            <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura}`)} className="text-gray-700 text-sm">📎</button>
                                                             <button onClick={() => handleDelete(f.id, 'emitida')} className="text-red-600 text-sm">Eliminar</button>
                                                         </td>
                                                     </tr>
@@ -2254,6 +2256,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                 </div>
                                                 <div className="flex gap-2 pt-2 border-t">
                                                     <button onClick={() => { setEditing(f); setModalType('emitida'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                                    <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
                                                     <button onClick={() => handleDelete(f.id, 'emitida')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
                                                 </div>
                                             </div>
@@ -2294,6 +2297,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                         <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado}</span></td>
                                                         <td className="px-4 py-3 text-right space-x-2">
                                                             <button onClick={() => { setEditing(f); setModalType('recibida'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
+                                                            <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor} - ${f.categoria}`)} className="text-gray-700 text-sm">📎</button>
                                                             <button onClick={() => handleDelete(f.id, 'recibida')} className="text-red-600 text-sm">Eliminar</button>
                                                         </td>
                                                     </tr>
@@ -2320,6 +2324,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                 </div>
                                                 <div className="flex gap-2 pt-2 border-t">
                                                     <button onClick={() => { setEditing(f); setModalType('recibida'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                                    <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor} - ${f.categoria}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
                                                     <button onClick={() => handleDelete(f.id, 'recibida')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
                                                 </div>
                                             </div>
@@ -2360,6 +2365,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                         <td className="px-4 py-3 text-sm">{c.responsable}</td>
                                                         <td className="px-4 py-3 text-right space-x-2">
                                                             <button onClick={() => { setEditing(c); setModalType('caja'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
+                                                            <button onClick={() => onFiles('caja_chica', c.id, c.concepto)} className="text-gray-700 text-sm">📎</button>
                                                             <button onClick={() => handleDelete(c.id, 'caja')} className="text-red-600 text-sm">Eliminar</button>
                                                         </td>
                                                     </tr>
@@ -2386,6 +2392,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                 </div>
                                                 <div className="flex gap-2 pt-2 border-t">
                                                     <button onClick={() => { setEditing(c); setModalType('caja'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                                    <button onClick={() => onFiles('caja_chica', c.id, c.concepto)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
                                                     <button onClick={() => handleDelete(c.id, 'caja')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
                                                 </div>
                                             </div>
@@ -2397,8 +2404,19 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             {/* Estado de Resultados */}
                             {contaTab === 'pl' && (
                                 <div className="space-y-6">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="font-bold text-lg">📊 Estado de Resultados (P&L)</h3>
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <h3 className="font-bold text-lg">📊 Estado de Resultados</h3>
+                                            <select 
+                                                value={añoSeleccionado} 
+                                                onChange={(e) => setAñoSeleccionado(parseInt(e.target.value))}
+                                                className="px-3 py-2 border rounded-lg text-sm font-medium"
+                                            >
+                                                {añosDisponibles.map(año => (
+                                                    <option key={año} value={año}>{año}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                         <button onClick={() => {
                                             // Exportar a CSV
                                             const data = generarDatosPL();
@@ -2410,29 +2428,36 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             const url = window.URL.createObjectURL(blob);
                                             const a = document.createElement('a');
                                             a.href = url;
-                                            a.download = 'estado-resultados.csv';
+                                            a.download = `estado-resultados-${añoSeleccionado}.csv`;
                                             a.click();
-                                        }} className="px-4 py-2 bg-gray-100 rounded-lg text-sm">📥 Exportar CSV</button>
+                                        }} className="px-4 py-2 bg-gray-100 rounded-lg text-sm whitespace-nowrap">📥 Exportar {añoSeleccionado}</button>
                                     </div>
                                     
                                     {(() => {
-                                        // Generar datos mes a mes
+                                        // Obtener años disponibles de los datos
+                                        const añosDisponibles = [...new Set([
+                                            ...facturasEmitidas.map(f => new Date(f.fecha_emision).getFullYear()),
+                                            ...facturasRecibidas.map(f => new Date(f.fecha_emision).getFullYear()),
+                                            ...cajaChica.map(c => new Date(c.fecha).getFullYear())
+                                        ])].sort((a, b) => b - a);
+                                        
+                                        if (añosDisponibles.length === 0) {
+                                            añosDisponibles.push(new Date().getFullYear());
+                                        }
+                                        
+                                        // Generar datos mes a mes del AÑO COMPLETO seleccionado
                                         const generarDatosPL = () => {
-                                            const hoy = new Date();
                                             const meses = [];
                                             
-                                            // Últimos 12 meses
-                                            for (let i = 11; i >= 0; i--) {
-                                                const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
-                                                const mes = fecha.getMonth();
-                                                const año = fecha.getFullYear();
-                                                const mesNombre = fecha.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
+                                            // Enero a Diciembre del año seleccionado
+                                            for (let mes = 0; mes < 12; mes++) {
+                                                const mesNombre = new Date(añoSeleccionado, mes, 1).toLocaleDateString('es-CL', { month: 'short' });
                                                 
                                                 // Facturas Emitidas del mes
                                                 const emitidas = facturasEmitidas
                                                     .filter(f => {
                                                         const d = new Date(f.fecha_emision);
-                                                        return d.getMonth() === mes && d.getFullYear() === año;
+                                                        return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
                                                     })
                                                     .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
                                                 
@@ -2440,7 +2465,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                 const recibidas = facturasRecibidas
                                                     .filter(f => {
                                                         const d = new Date(f.fecha_emision);
-                                                        return d.getMonth() === mes && d.getFullYear() === año;
+                                                        return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
                                                     })
                                                     .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
                                                 
@@ -2448,16 +2473,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                 const boletas = cajaChica
                                                     .filter(c => {
                                                         const d = new Date(c.fecha);
-                                                        return d.getMonth() === mes && d.getFullYear() === año;
+                                                        return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
                                                     })
                                                     .reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0);
                                                 const boletasUF = boletas / (ufActual || 38000);
                                                 
-                                                // Honorarios del mes (categoría específica en Facturas Recibidas)
+                                                // Honorarios del mes
                                                 const honorarios = facturasRecibidas
                                                     .filter(f => {
                                                         const d = new Date(f.fecha_emision);
-                                                        return d.getMonth() === mes && d.getFullYear() === año && f.categoria === 'Honorarios';
+                                                        return d.getMonth() === mes && d.getFullYear() === añoSeleccionado && f.categoria === 'Honorarios';
                                                     })
                                                     .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
                                                 
@@ -2487,7 +2512,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             <>
                                                 {/* Resumen anual */}
                                                 <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6">
-                                                    <h4 className="font-bold mb-4">Resumen Anual</h4>
+                                                    <h4 className="font-bold mb-4">Resumen {añoSeleccionado}</h4>
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                         <div className="flex justify-between p-3 bg-white rounded">
                                                             <span className="font-medium">💰 Facturas Emitidas:</span>
