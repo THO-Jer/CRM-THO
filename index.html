@@ -158,6 +158,7 @@ window.addEventListener('unhandledrejection', (e) => {
             const [facturasEmitidas, setFacturasEmitidas] = useState([]);
             const [facturasRecibidas, setFacturasRecibidas] = useState([]);
             const [cajaChica, setCajaChica] = useState([]);
+            const [boletasHonorarios, setBoletasHonorarios] = useState([]);
             const [contaTab, setContaTab] = useState('emitidas'); // Sub-tab activa
 
             const [historyOpen, setHistoryOpen] = useState(false);
@@ -227,7 +228,8 @@ window.addEventListener('unhandledrejection', (e) => {
                     loadActividad(),
                     loadFacturasEmitidas(),
                     loadFacturasRecibidas(),
-                    loadCajaChica()
+                    loadCajaChica(),
+                    loadBoletasHonorarios()
                 ]);
             };
 
@@ -354,6 +356,12 @@ window.addEventListener('unhandledrejection', (e) => {
                 const { data, error } = await supabase.from('caja_chica').select('*').order('fecha', { ascending: false });
                 if (error) console.error('Error loading caja chica:', error);
                 else setCajaChica(data || []);
+            };
+
+            const loadBoletasHonorarios = async () => {
+                const { data, error } = await supabase.from('boletas_honorarios').select('*').order('fecha', { ascending: false });
+                if (error) console.error('Error loading boletas honorarios:', error);
+                else setBoletasHonorarios(data || []);
             };
 
             // ===== MÉTRICAS AVANZADAS =====
@@ -1478,7 +1486,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} actividadReciente={actividadReciente} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
-                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); }} onFiles={openFilesModal} />}
+                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} boletasHonorarios={boletasHonorarios} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); loadBoletasHonorarios(); }} onFiles={openFilesModal} />}
                         {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                         {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                         {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
@@ -2112,7 +2120,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             );
         }
 
-        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, tickets, keyAccounts, ufActual, contaTab, setContaTab, onReload, onFiles }) {
+        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, tickets, keyAccounts, ufActual, contaTab, setContaTab, onReload, onFiles }) {
             const [showModal, setShowModal] = useState(false);
             const [modalType, setModalType] = useState(null);
             const [editing, setEditing] = useState(null);
@@ -2120,7 +2128,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             
             const handleSave = async (data) => {
                 try {
-                    const table = modalType === 'emitida' ? 'facturas_emitidas' : modalType === 'recibida' ? 'facturas_recibidas' : 'caja_chica';
+                    const table = modalType === 'emitida' ? 'facturas_emitidas' : 
+                                 modalType === 'recibida' ? 'facturas_recibidas' : 
+                                 modalType === 'boleta' ? 'boletas_honorarios' :
+                                 'caja_chica';
                     
                     console.log('Guardando en tabla:', table);
                     console.log('Datos a guardar:', data);
@@ -2150,7 +2161,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             
             const handleDelete = async (id, type) => {
                 if (!confirm('¿Eliminar este registro?')) return;
-                const table = type === 'emitida' ? 'facturas_emitidas' : type === 'recibida' ? 'facturas_recibidas' : 'caja_chica';
+                const table = type === 'emitida' ? 'facturas_emitidas' : 
+                             type === 'recibida' ? 'facturas_recibidas' : 
+                             type === 'boleta' ? 'boletas_honorarios' :
+                             'caja_chica';
                 await supabase.from(table).delete().eq('id', id);
                 onReload();
             };
@@ -2158,18 +2172,20 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             // Calcular métricas
             const totalEmitidas = facturasEmitidas.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
             const totalRecibidas = facturasRecibidas.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
+            const totalBoletas = boletasHonorarios.reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || 0), 0);
             const totalCajaChica = cajaChica.reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0);
-            const margen = totalEmitidas - totalRecibidas - (totalCajaChica / (ufActual || 38000));
+            const margen = totalEmitidas - totalRecibidas - totalBoletas - (totalCajaChica / (ufActual || 38000));
             
             return (
                 <div className="space-y-6">
                     <h2 className="text-2xl font-bold">💰 Contabilidad</h2>
                     
                     {/* Métricas resumen */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                         <MetricCard title="💵 Emitidas" value={`${Math.round(totalEmitidas)} UF`} subtitle={`$${Math.round(totalEmitidas * ufActual).toLocaleString('es-CL')}`} color="verde" />
                         <MetricCard title="📥 Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * ufActual).toLocaleString('es-CL')}`} color="naranja" />
-                        <MetricCard title="💵 Caja Chica" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / ufActual)} UF`} color="azul" />
+                        <MetricCard title="👤 Honorarios" value={`${Math.round(totalBoletas)} UF`} subtitle={`Bruto (15.25% ret.)`} color="azul" />
+                        <MetricCard title="💵 Caja Chica" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / ufActual)} UF`} color="fucsia" />
                         <MetricCard title="📊 Margen" value={`${Math.round(margen)} UF`} subtitle={margen >= 0 ? '🟢 Positivo' : '🔴 Negativo'} color={margen >= 0 ? 'verde' : 'naranja'} />
                     </div>
                     
@@ -2180,6 +2196,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 {[
                                     { id: 'emitidas', nombre: '📤 Facturas Emitidas' },
                                     { id: 'recibidas', nombre: '📥 Facturas Recibidas' },
+                                    { id: 'boletas', nombre: '👤 Boletas Honorarios' },
                                     { id: 'caja', nombre: '💵 Caja Chica' },
                                     { id: 'pl', nombre: '📊 Estado de Resultados' }
                                 ].map(tab => (
@@ -2394,6 +2411,79 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                     <button onClick={() => { setEditing(c); setModalType('caja'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
                                                     <button onClick={() => onFiles('caja_chica', c.id, c.concepto)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
                                                     <button onClick={() => handleDelete(c.id, 'caja')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Boletas de Honorarios */}
+                            {contaTab === 'boletas' && (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-bold">Boletas de Honorarios</h3>
+                                        <button onClick={() => { setEditing(null); setModalType('boleta'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Boleta</button>
+                                    </div>
+                                    
+                                    {/* Desktop */}
+                                    <div className="hidden md:block overflow-x-auto">
+                                        <table className="min-w-full divide-y">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Prestador</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Mes Servicio</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Fecha</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Bruto</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Retención</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Líquido</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {boletasHonorarios.length === 0 ? (
+                                                    <tr><td colSpan="7" className="px-4 py-4 text-center text-sm text-gray-500">Sin boletas de honorarios</td></tr>
+                                                ) : boletasHonorarios.map(b => (
+                                                    <tr key={b.id} className="hover:bg-gray-50">
+                                                        <td className="px-4 py-3 text-sm font-medium">{b.prestador}</td>
+                                                        <td className="px-4 py-3 text-sm">{b.mes_servicio}</td>
+                                                        <td className="px-4 py-3 text-sm">{b.fecha}</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{b.monto_bruto_uf} UF</td>
+                                                        <td className="px-4 py-3 text-sm text-naranja">-{b.monto_retencion_uf} UF ({b.porcentaje_retencion}%)</td>
+                                                        <td className="px-4 py-3 text-sm font-medium text-verde">{b.monto_liquido_uf} UF</td>
+                                                        <td className="px-4 py-3 text-right space-x-2">
+                                                            <button onClick={() => { setEditing(b); setModalType('boleta'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
+                                                            <button onClick={() => onFiles('boletas_honorarios', b.id, `${b.prestador} - ${b.mes_servicio}`)} className="text-gray-700 text-sm">📎</button>
+                                                            <button onClick={() => handleDelete(b.id, 'boleta')} className="text-red-600 text-sm">Eliminar</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    {/* Mobile */}
+                                    <div className="md:hidden space-y-3">
+                                        {boletasHonorarios.length === 0 ? (
+                                            <div className="text-center text-sm text-gray-500 py-4">Sin boletas de honorarios</div>
+                                        ) : boletasHonorarios.map(b => (
+                                            <div key={b.id} className="border rounded-lg p-4">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <div className="font-bold">{b.prestador}</div>
+                                                        <div className="text-sm text-gray-600">{b.mes_servicio}</div>
+                                                    </div>
+                                                    <span className="text-sm font-medium text-verde">{b.monto_liquido_uf} UF</span>
+                                                </div>
+                                                <div className="text-sm space-y-1 mb-3">
+                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{b.fecha}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Bruto:</span><span className="font-medium">{b.monto_bruto_uf} UF</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Retención:</span><span className="text-naranja">-{b.monto_retencion_uf} UF ({b.porcentaje_retencion}%)</span></div>
+                                                </div>
+                                                <div className="flex gap-2 pt-2 border-t">
+                                                    <button onClick={() => { setEditing(b); setModalType('boleta'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                                    <button onClick={() => onFiles('boletas_honorarios', b.id, `${b.prestador} - ${b.mes_servicio}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
+                                                    <button onClick={() => handleDelete(b.id, 'boleta')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
                                                 </div>
                                             </div>
                                         ))}
@@ -2621,12 +2711,13 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             const getDefault = () => {
                 if (type === 'emitida') return { numero_factura: '', cliente: '', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, ticket_id: null, key_account_id: null };
                 if (type === 'recibida') return { numero_factura: '', proveedor: '', categoria: 'Servicios', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null };
+                if (type === 'boleta') return { fecha: new Date().toISOString().split('T')[0], prestador: '', rut: '', monto_bruto_uf: '', monto_bruto_clp: '', uf_dia: ufActual, porcentaje_retencion: 15.25, monto_retencion_uf: '', monto_retencion_clp: '', monto_liquido_uf: '', monto_liquido_clp: '', descripcion: '', mes_servicio: '', proyecto: '' };
                 if (type === 'caja') return { fecha: new Date().toISOString().split('T')[0], concepto: '', monto_clp: '', categoria: 'Otros', responsable: '', comprobante: '' };
             };
             
             const [form, setForm] = useState(item || getDefault());
             
-            // Auto-calcular UF o CLP
+            // Auto-calcular UF o CLP para facturas
             const handleMontoChange = (field, value) => {
                 const num = parseFloat(value) || 0;
                 if (field === 'monto_uf') {
@@ -2636,12 +2727,50 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 }
             };
             
+            // Auto-calcular retención y líquido para boletas
+            const handleBoletaMontoChange = (field, value) => {
+                const num = parseFloat(value) || 0;
+                const porcentaje = parseFloat(form.porcentaje_retencion) || 15.25;
+                
+                if (field === 'monto_bruto_uf') {
+                    const retencionUF = (num * porcentaje / 100).toFixed(2);
+                    const liquidoUF = (num - retencionUF).toFixed(2);
+                    setForm({
+                        ...form,
+                        monto_bruto_uf: value,
+                        monto_bruto_clp: Math.round(num * (form.uf_dia || ufActual)),
+                        monto_retencion_uf: retencionUF,
+                        monto_retencion_clp: Math.round(retencionUF * (form.uf_dia || ufActual)),
+                        monto_liquido_uf: liquidoUF,
+                        monto_liquido_clp: Math.round(liquidoUF * (form.uf_dia || ufActual))
+                    });
+                } else if (field === 'monto_bruto_clp') {
+                    const brutoUF = (num / (form.uf_dia || ufActual)).toFixed(2);
+                    const retencionUF = (brutoUF * porcentaje / 100).toFixed(2);
+                    const liquidoUF = (brutoUF - retencionUF).toFixed(2);
+                    setForm({
+                        ...form,
+                        monto_bruto_clp: value,
+                        monto_bruto_uf: brutoUF,
+                        monto_retencion_uf: retencionUF,
+                        monto_retencion_clp: Math.round(retencionUF * (form.uf_dia || ufActual)),
+                        monto_liquido_uf: liquidoUF,
+                        monto_liquido_clp: Math.round(liquidoUF * (form.uf_dia || ufActual))
+                    });
+                }
+            };
+            
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
                     <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6">
                         <div className="flex justify-between mb-4">
                             <h3 className="text-xl font-bold">
-                                {item ? 'Editar' : 'Nueva'} {type === 'emitida' ? 'Factura Emitida' : type === 'recibida' ? 'Factura Recibida' : 'Gasto Caja Chica'}
+                                {item ? 'Editar' : 'Nueva'} {
+                                    type === 'emitida' ? 'Factura Emitida' : 
+                                    type === 'recibida' ? 'Factura Recibida' : 
+                                    type === 'boleta' ? 'Boleta de Honorarios' :
+                                    'Gasto Caja Chica'
+                                }
                             </h3>
                             <button onClick={onClose} className="text-2xl">×</button>
                         </div>
@@ -2695,6 +2824,44 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     <InputField label="Responsable" value={form.responsable || ''} onChange={(e) => setForm({...form, responsable: e.target.value})} />
                                 </div>
                                 <InputField label="Comprobante (opcional)" value={form.comprobante || ''} onChange={(e) => setForm({...form, comprobante: e.target.value})} />
+                            </>)}
+                            
+                            {type === 'boleta' && (<>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <InputField label="Prestador" required value={form.prestador} onChange={(e) => setForm({...form, prestador: e.target.value})} placeholder="Seba, Max, Patxi..." />
+                                    <InputField label="Mes Servicio" required value={form.mes_servicio} onChange={(e) => setForm({...form, mes_servicio: e.target.value})} placeholder="Enero 2026" />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <InputField label="Fecha" type="date" required value={form.fecha} onChange={(e) => setForm({...form, fecha: e.target.value})} />
+                                    <InputField label="RUT (opcional)" value={form.rut || ''} onChange={(e) => setForm({...form, rut: e.target.value})} placeholder="12.345.678-9" />
+                                </div>
+                                
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                                    <h4 className="font-bold text-sm text-blue-900">💰 Cálculo de Honorarios</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <InputField label="Monto Bruto UF" type="number" step="0.01" required value={form.monto_bruto_uf} onChange={(e) => handleBoletaMontoChange('monto_bruto_uf', e.target.value)} />
+                                        <InputField label="Monto Bruto CLP" type="number" required value={form.monto_bruto_clp} onChange={(e) => handleBoletaMontoChange('monto_bruto_clp', e.target.value)} />
+                                        <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e) => setForm({...form, uf_dia: parseFloat(e.target.value)})} />
+                                    </div>
+                                    
+                                    <div className="bg-white rounded p-3 space-y-2 text-sm">
+                                        <div className="flex justify-between">
+                                            <span>Retención ({form.porcentaje_retencion}%):</span>
+                                            <span className="font-medium text-naranja">-{form.monto_retencion_uf} UF (${Math.round(form.monto_retencion_clp || 0).toLocaleString('es-CL')})</span>
+                                        </div>
+                                        <div className="flex justify-between pt-2 border-t font-bold">
+                                            <span>LÍQUIDO A PAGAR:</span>
+                                            <span className="text-verde">{form.monto_liquido_uf} UF (${Math.round(form.monto_liquido_clp || 0).toLocaleString('es-CL')})</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="text-xs text-blue-700">
+                                        ℹ️ La retención de {form.monto_retencion_uf} UF debe ser pagada al SII como parte de tus impuestos
+                                    </div>
+                                </div>
+                                
+                                <TextAreaField label="Descripción del servicio" value={form.descripcion || ''} onChange={(e) => setForm({...form, descripcion: e.target.value})} />
+                                <InputField label="Proyecto (opcional)" value={form.proyecto || ''} onChange={(e) => setForm({...form, proyecto: e.target.value})} placeholder="CChC, Club34, etc." />
                             </>)}
                             
                             <div className="flex gap-3 pt-4">
