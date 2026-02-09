@@ -144,6 +144,7 @@ window.addEventListener('unhandledrejection', (e) => {
             const [searchTerm, setSearchTerm] = useState('');
             const [filterTipo, setFilterTipo] = useState('todos');
             const [ufActual, setUfActual] = useState(38000); // Valor UF del día
+            const [monedaPreferida, setMonedaPreferida] = useState('UF'); // Toggle global UF/CLP
             const [actividadReciente, setActividadReciente] = useState([]);
 
             // Modal de archivos
@@ -1576,7 +1577,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     )}
 
                     <main className="max-w-7xl mx-auto px-4 py-8">
-                        {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} actividadReciente={actividadReciente} />}
+                        {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
                         {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} boletasHonorarios={boletasHonorarios} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} monedaPreferida={monedaPreferida} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); loadBoletasHonorarios(); }} onFiles={openFilesModal} />}
@@ -1822,9 +1823,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
         }
 
         // [COMPONENTES IGUALES - Dashboard, MetricCard, KanbanBoard, etc.]
-        function Dashboard({ metrics, prospectos, cerrados, tickets, keyAccounts, user, ufActual, actividadReciente }) {
+        function Dashboard({ metrics, prospectos, cerrados, tickets, keyAccounts, user, ufActual, monedaPreferida, setMonedaPreferida, actividadReciente }) {
             const [showAlertas, setShowAlertas] = useState(true);
-            const [monedaPreferida, setMonedaPreferida] = useState('UF');
             const UF_APROX = ufActual || 38000;
             const totalAlertas = (metrics.prospectosVencidos || 0) + (metrics.prospectosSinActividad || 0) + (metrics.keyAccountsPorRenovar || 0);
             
