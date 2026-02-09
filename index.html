@@ -1485,7 +1485,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     <div className="flex items-center space-x-2">
                                         <p className="text-sm text-gray-600">The Human Org</p>
                                         <span className="text-xs text-gray-400">•</span>
-                                        <p className="text-xs text-gray-500">UF: ${ufActual.toLocaleString('es-CL')}</p>
+                                        <p className="text-xs text-gray-500">UF: ${(ufActual || 38000).toLocaleString('es-CL')}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-4">
@@ -2136,7 +2136,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     {/* Gráfico 1: Ingresos Mensuales */}
                     <div className="bg-white rounded-lg shadow p-6">
                         <h3 className="text-lg font-bold text-gray-800 mb-4">💰 Ingresos Mensuales (MRR + Tickets)</h3>
-                        <div className="h-64">
+                        <div style={{height: '256px', position: 'relative'}}>
                             <canvas id="chartIngresos"></canvas>
                         </div>
                         <div className="text-xs text-gray-500 mt-2 text-center">
@@ -2147,7 +2147,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     {/* Gráfico 2: Pipeline por Etapa */}
                     <div className="bg-white rounded-lg shadow p-6">
                         <h3 className="text-lg font-bold text-gray-800 mb-4">🎯 Pipeline por Etapa</h3>
-                        <div className="h-64">
+                        <div style={{height: '256px', position: 'relative'}}>
                             <canvas id="chartPipeline"></canvas>
                         </div>
                         <div className="text-xs text-gray-500 mt-2 text-center">
@@ -2158,7 +2158,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     {/* Gráfico 3: Tasa de Conversión */}
                     <div className="bg-white rounded-lg shadow p-6">
                         <h3 className="text-lg font-bold text-gray-800 mb-4">📊 Tasa de Conversión Histórica</h3>
-                        <div className="h-64">
+                        <div style={{height: '256px', position: 'relative'}}>
                             <canvas id="chartConversion"></canvas>
                         </div>
                         <div className="text-xs text-gray-500 mt-2 text-center">
@@ -2166,14 +2166,18 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         </div>
                     </div>
                     
-                    {/* Script optimizado para gráficos */}
-                    <script dangerouslySetInnerHTML={{__html: `
-                        setTimeout(function() {
-                            if (typeof Chart === 'undefined') return;
+                    {/* useEffect para renderizar gráficos */}
+                    {React.useEffect(() => {
+                        if (typeof Chart === 'undefined') return;
+                        
+                        const timeout = setTimeout(() => {
                             const createChart = (id, type, data, color, opts = {}) => {
                                 const canvas = document.getElementById(id);
                                 if (!canvas) return;
-                                if (canvas.chart) canvas.chart.destroy();
+                                if (canvas.chart) {
+                                    canvas.chart.destroy();
+                                    canvas.chart = null;
+                                }
                                 const isBar = type === 'bar';
                                 canvas.chart = new Chart(canvas, {
                                     type,
@@ -2209,13 +2213,51 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     }
                                 });
                             };
-                            createChart('chartIngresos', 'line', ${JSON.stringify(datosIngresos)}, 'rgb(34, 197, 94)', { label: 'Ingresos' });
-                            createChart('chartPipeline', 'bar', ${JSON.stringify(datosPipeline)}, '', { label: 'Valor', dataset: { backgroundColor: ['#60A5FA', '#FBBF24', '#F97316', '#10B981'] } });
-                            createChart('chartConversion', 'line', ${JSON.stringify(datosConversion)}, 'rgb(249, 115, 22)', { label: 'Conversión', suffix: '%', yAxis: { max: 100 } });
-                        }, 100);
-                    `}} />
+                            
+                            createChart('chartIngresos', 'line', datosIngresos, 'rgb(34, 197, 94)', { label: 'Ingresos' });
+                            createChart('chartPipeline', 'bar', datosPipeline, '', { label: 'Valor', dataset: { backgroundColor: ['#60A5FA', '#FBBF24', '#F97316', '#10B981'] } });
+                            createChart('chartConversion', 'line', datosConversion, 'rgb(249, 115, 22)', { label: 'Conversión', suffix: '%', yAxis: { max: 100 } });
+                        }, 10);
+                        
+                        return () => {
+                            clearTimeout(timeout);
+                            const canvasIngresos = document.getElementById('chartIngresos');
+                            const canvasPipeline = document.getElementById('chartPipeline');
+                            const canvasConversion = document.getElementById('chartConversion');
+                            if (canvasIngresos?.chart) {
+                                canvasIngresos.chart.destroy();
+                                canvasIngresos.chart = null;
+                            }
+                            if (canvasPipeline?.chart) {
+                                canvasPipeline.chart.destroy();
+                                canvasPipeline.chart = null;
+                            }
+                            if (canvasConversion?.chart) {
+                                canvasConversion.chart.destroy();
+                                canvasConversion.chart = null;
+                            }
+                        };
+                    }, [datosIngresos, datosPipeline, datosConversion])}
+                    {null /* useEffect no retorna nada visible */}
                 </div>
             );
+        }
+
+        function DashboardContabilidad({ facturasEmitidas, facturasRecibidas, boletasHonorarios, cajaChica, facturasEmiAct, facturasRecAct, boletasAct, cajaAct, ufActual, rango }) {
+            const hoy = new Date();
+
+            // Usar los datos ya filtrados por período
+            const emitidaActual = facturasEmiAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+            const gastosActual = facturasRecAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+            const honorariosActual = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0);
+            const retenciones = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0);
+            const cajaActual = cajaAct.reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000);
+            const flujoNeto = emitidaActual - gastosActual - honorariosActual - cajaActual;
+
+            // Resto del código del dashboard...
+            // [copiaré el resto en el siguiente paso]
+            
+            return <div>Dashboard placeholder</div>;
         }
 
         function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, tickets, keyAccounts, ufActual, contaTab, setContaTab, onReload, onFiles }) {
@@ -2266,7 +2308,9 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             const rango = calcularRango();
 
             const estEnRango = (fechaStr, campo) => {
+                if (!fechaStr) return false;
                 const d = new Date(fechaStr);
+                if (isNaN(d.getTime())) return false;
                 // Normalizar: comparar solo fecha sin hora
                 const desde = new Date(rango.desde.getFullYear(), rango.desde.getMonth(), rango.desde.getDate());
                 const hasta = new Date(rango.hasta.getFullYear(), rango.hasta.getMonth(), rango.hasta.getDate());
@@ -2275,10 +2319,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             };
 
             // Datos filtrados por período
-            const facturasEmiAct = facturasEmitidas.filter(f => estEnRango(f.fecha_emision));
-            const facturasRecAct = facturasRecibidas.filter(f => estEnRango(f.fecha_emision));
-            const boletasAct = boletasHonorarios.filter(b => estEnRango(b.fecha));
-            const cajaAct = cajaChica.filter(c => estEnRango(c.fecha));
+            const facturasEmiAct = facturasEmitidas.filter(f => f.fecha_emision && estEnRango(f.fecha_emision));
+            const facturasRecAct = facturasRecibidas.filter(f => f.fecha_emision && estEnRango(f.fecha_emision));
+            const boletasAct = boletasHonorarios.filter(b => b.fecha && estEnRango(b.fecha));
+            const cajaAct = cajaChica.filter(c => c.fecha && estEnRango(c.fecha));
 
             // Etiqueta del período
             const periodoLabel = () => {
@@ -2382,10 +2426,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     
                     {/* Métricas resumen */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                        <MetricCard title="💵 Emitidas" value={`${Math.round(totalEmitidas)} UF`} subtitle={`$${Math.round(totalEmitidas * ufActual).toLocaleString('es-CL')}`} color="verde" />
-                        <MetricCard title="📥 Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * ufActual).toLocaleString('es-CL')}`} color="naranja" />
+                        <MetricCard title="💵 Emitidas" value={`${Math.round(totalEmitidas)} UF`} subtitle={`$${Math.round(totalEmitidas * (ufActual || 38000)).toLocaleString('es-CL')}`} color="verde" />
+                        <MetricCard title="📥 Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * (ufActual || 38000)).toLocaleString('es-CL')}`} color="naranja" />
                         <MetricCard title="👤 Honorarios" value={`${Math.round(totalBoletas)} UF`} subtitle={`Bruto (15.25% ret.)`} color="azul" />
-                        <MetricCard title="💵 Caja Chica" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / ufActual)} UF`} color="fucsia" />
+                        <MetricCard title="💵 Caja Chica" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / (ufActual || 38000))} UF`} color="fucsia" />
                         <MetricCard title="📊 Margen" value={`${Math.round(margen)} UF`} subtitle={margen >= 0 ? '🟢 Positivo' : '🔴 Negativo'} color={margen >= 0 ? 'verde' : 'naranja'} />
                     </div>
                     
@@ -2414,8 +2458,20 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         
                         <div className="p-6">
                             {/* Dashboard de Contabilidad */}
-                            {contaTab === 'dashboard' && (() => {
-                                const hoy = new Date();
+                            {contaTab === 'dashboard' && (
+                                <DashboardContabilidad 
+                                    facturasEmitidas={facturasEmitidas}
+                                    facturasRecibidas={facturasRecibidas}
+                                    boletasHonorarios={boletasHonorarios}
+                                    cajaChica={cajaChica}
+                                    facturasEmiAct={facturasEmiAct}
+                                    facturasRecAct={facturasRecAct}
+                                    boletasAct={boletasAct}
+                                    cajaAct={cajaAct}
+                                    ufActual={ufActual}
+                                    rango={rango}
+                                />
+                            )}
 
                                 // Usar los datos ya filtrados por período
                                 const emitidaActual = facturasEmiAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
@@ -2430,14 +2486,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 const prevHasta = new Date(rango.desde.getTime() - 1);
                                 const prevDesde = new Date(prevHasta.getTime() - largo);
                                 const estEnPrev = (fechaStr) => {
+                                    if (!fechaStr) return false;
                                     const d = new Date(fechaStr);
+                                    if (isNaN(d.getTime())) return false;
                                     const v = new Date(d.getFullYear(), d.getMonth(), d.getDate());
                                     const pd = new Date(prevDesde.getFullYear(), prevDesde.getMonth(), prevDesde.getDate());
                                     const ph = new Date(prevHasta.getFullYear(), prevHasta.getMonth(), prevHasta.getDate());
                                     return v >= pd && v <= ph;
                                 };
-                                const emitidaAnterior = facturasEmitidas.filter(f => estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                const gastosAnterior = facturasRecibidas.filter(f => estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                const emitidaAnterior = facturasEmitidas.filter(f => f.fecha_emision && estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                const gastosAnterior = facturasRecibidas.filter(f => f.fecha_emision && estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
 
                                 // Pendientes (siempre globales, independientes del período)
                                 const porCobrar = facturasEmitidas.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
@@ -2456,14 +2514,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         const mesDesde = new Date(y, m, 1);
                                         const mesHasta = new Date(y, m + 1, 0);
                                         const estEnMes = (fechaStr) => {
+                                            if (!fechaStr) return false;
                                             const d = new Date(fechaStr);
+                                            if (isNaN(d.getTime())) return false;
                                             const v = new Date(d.getFullYear(), d.getMonth(), d.getDate());
                                             return v >= mesDesde && v <= mesHasta;
                                         };
-                                        const ing = facturasEmitidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                        const gas = facturasRecibidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                        const hon = boletasHonorarios.filter(b => estEnMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0);
-                                        const caj = cajaChica.filter(c => estEnMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000);
+                                        const ing = facturasEmitidas.filter(f => f.fecha_emision && estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                        const gas = facturasRecibidas.filter(f => f.fecha_emision && estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                        const hon = boletasHonorarios.filter(b => b.fecha && estEnMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0);
+                                        const caj = cajaChica.filter(c => c.fecha && estEnMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000);
                                         result.push({ label, ingresos: Math.round(ing), gastos: Math.round(gas + hon + caj) });
                                         m++;
                                         if (m > 11) { m = 0; y++; }
@@ -2557,13 +2617,17 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         {/* Gráfico barras: Ingresos vs Gastos 6 meses */}
                                         <div className="lg:col-span-2 bg-white border rounded-xl p-4">
                                             <h4 className="font-bold text-sm mb-3">📈 Ingresos vs Gastos ({datos6Meses.length} {datos6Meses.length === 1 ? 'mes' : 'meses'})</h4>
-                                            <canvas id="chartIngGastos" height="220"></canvas>
+                                            <div style={{height: '220px', position: 'relative'}}>
+                                                <canvas id="chartIngGastos"></canvas>
+                                            </div>
                                         </div>
 
                                         {/* Gráfico donut: Composición de gastos */}
                                         <div className="bg-white border rounded-xl p-4">
                                             <h4 className="font-bold text-sm mb-3">🥧 Composición Gastos</h4>
-                                            <canvas id="chartDonut" height="220"></canvas>
+                                            <div style={{height: '220px', position: 'relative'}}>
+                                                <canvas id="chartDonut"></canvas>
+                                            </div>
                                             <div className="mt-3 space-y-1 text-xs">
                                                 <div className="flex justify-between items-center">
                                                     <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-orange-400"></span> Operacionales</div>
@@ -2604,26 +2668,30 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         </div>
                                     </div>
 
-                                    {/* Script gráficos Dashboard Contabilidad */}
-                                    <script dangerouslySetInnerHTML={{__html: `
-                                        (function() {
-                                            if (typeof Chart === 'undefined') return;
-                                            
-                                            // Datos 6 meses
-                                            const datos6 = ${JSON.stringify(datos6Meses)};
-                                            
+                                    {/* useEffect para renderizar gráficos */}
+                                    {React.useEffect(() => {
+                                        if (typeof Chart === 'undefined') return;
+                                        
+                                        // Pequeño delay para asegurar que los canvas estén en el DOM
+                                        const timeout = setTimeout(() => {
                                             // Gráfico barras: Ingresos vs Gastos
                                             const canvasIG = document.getElementById('chartIngGastos');
                                             if (canvasIG) {
-                                                if (canvasIG.chart) canvasIG.chart.destroy();
+                                                // Destruir gráfico anterior si existe
+                                                if (canvasIG.chart) {
+                                                    canvasIG.chart.destroy();
+                                                    canvasIG.chart = null;
+                                                }
+                                                
+                                                // Crear nuevo gráfico
                                                 canvasIG.chart = new Chart(canvasIG, {
                                                     type: 'bar',
                                                     data: {
-                                                        labels: datos6.map(d => d.label),
+                                                        labels: datos6Meses.map(d => d.label),
                                                         datasets: [
                                                             {
                                                                 label: 'Ingresos',
-                                                                data: datos6.map(d => d.ingresos),
+                                                                data: datos6Meses.map(d => d.ingresos),
                                                                 backgroundColor: 'rgba(34, 197, 94, 0.7)',
                                                                 borderColor: 'rgb(34, 197, 94)',
                                                                 borderWidth: 1,
@@ -2631,7 +2699,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                             },
                                                             {
                                                                 label: 'Gastos',
-                                                                data: datos6.map(d => d.gastos),
+                                                                data: datos6Meses.map(d => d.gastos),
                                                                 backgroundColor: 'rgba(249, 115, 22, 0.7)',
                                                                 borderColor: 'rgb(249, 115, 22)',
                                                                 borderWidth: 1,
@@ -2663,20 +2731,24 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             // Gráfico Donut: Composición de gastos
                                             const canvasD = document.getElementById('chartDonut');
                                             if (canvasD) {
-                                                if (canvasD.chart) canvasD.chart.destroy();
-                                                const gOperacionales = ${gastosActual};
-                                                const gHonorarios = ${honorariosActual};
-                                                const gCaja = ${cajaActual};
-                                                const totalG = gOperacionales + gHonorarios + gCaja;
+                                                // Destruir gráfico anterior si existe
+                                                if (canvasD.chart) {
+                                                    canvasD.chart.destroy();
+                                                    canvasD.chart = null;
+                                                }
+                                                
+                                                const totalG = gastosActual + honorariosActual + cajaActual;
+                                                
+                                                // Crear nuevo gráfico
                                                 canvasD.chart = new Chart(canvasD, {
                                                     type: 'doughnut',
                                                     data: {
                                                         labels: ['Operacionales', 'Honorarios', 'Caja Chica'],
                                                         datasets: [{
                                                             data: [
-                                                                totalG > 0 ? Math.round(gOperacionales) : 0,
-                                                                totalG > 0 ? Math.round(gHonorarios) : 0,
-                                                                totalG > 0 ? Math.round(gCaja) : 0
+                                                                totalG > 0 ? Math.round(gastosActual) : 0,
+                                                                totalG > 0 ? Math.round(honorariosActual) : 0,
+                                                                totalG > 0 ? Math.round(cajaActual) : 0
                                                             ],
                                                             backgroundColor: ['rgba(249, 115, 22, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(168, 85, 247, 0.7)'],
                                                             borderColor: ['rgb(249, 115, 22)', 'rgb(59, 130, 246)', 'rgb(168, 85, 247)'],
@@ -2697,14 +2769,25 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                     }
                                                 });
                                             }
-                                        })();
-                                    `}} />
-                                </div>
-                                );
-                            })()}
+                                        }, 10);
+
+                                        // Cleanup al desmontar
+                                        return () => {
+                                            clearTimeout(timeout);
+                                            const canvasIG = document.getElementById('chartIngGastos');
+                                            const canvasD = document.getElementById('chartDonut');
+                                            if (canvasIG?.chart) {
+                                                canvasIG.chart.destroy();
+                                                canvasIG.chart = null;
+                                            }
+                                            if (canvasD?.chart) {
+                                                canvasD.chart.destroy();
+                                                canvasD.chart = null;
+                                            }
+                                        };
 
                             {/* Facturas Emitidas */}
-                            {contaTab === 'emitidas' && (
+                            {contaTab === 'emitidas' && facturasEmitidas && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <h3 className="font-bold">Facturas Emitidas</h3>
@@ -2729,14 +2812,14 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                     <tr><td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">Sin facturas emitidas</td></tr>
                                                 ) : facturasEmitidas.map(f => (
                                                     <tr key={f.id} className="hover:bg-gray-50">
-                                                        <td className="px-4 py-3 text-sm font-medium">{f.numero_factura}</td>
-                                                        <td className="px-4 py-3 text-sm">{f.cliente}</td>
-                                                        <td className="px-4 py-3 text-sm">{f.fecha_emision}</td>
-                                                        <td className="px-4 py-3 text-sm font-medium">{f.monto_uf} UF</td>
-                                                        <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Vencida' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado}</span></td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{f.numero_factura || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm">{f.cliente || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm">{f.fecha_emision || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{f.monto_uf || 0} UF</td>
+                                                        <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Vencida' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado || 'Pendiente'}</span></td>
                                                         <td className="px-4 py-3 text-right space-x-2">
                                                             <button onClick={() => { setEditing(f); setModalType('emitida'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
-                                                            <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura}`)} className="text-gray-700 text-sm">📎</button>
+                                                            <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura || 'Sin número'}`)} className="text-gray-700 text-sm">📎</button>
                                                             <button onClick={() => handleDelete(f.id, 'emitida')} className="text-red-600 text-sm">Eliminar</button>
                                                         </td>
                                                     </tr>
@@ -2753,18 +2836,18 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             <div key={f.id} className="border rounded-lg p-4">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div>
-                                                        <div className="font-bold">{f.numero_factura}</div>
-                                                        <div className="text-sm text-gray-600">{f.cliente}</div>
+                                                        <div className="font-bold">{f.numero_factura || 'Sin número'}</div>
+                                                        <div className="text-sm text-gray-600">{f.cliente || '-'}</div>
                                                     </div>
-                                                    <span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Vencida' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado}</span>
+                                                    <span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Vencida' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado || 'Pendiente'}</span>
                                                 </div>
                                                 <div className="text-sm space-y-1 mb-3">
-                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{f.fecha_emision}</span></div>
-                                                    <div className="flex justify-between"><span className="text-gray-600">Monto:</span><span className="font-medium">{f.monto_uf} UF</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{f.fecha_emision || '-'}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Monto:</span><span className="font-medium">{f.monto_uf || 0} UF</span></div>
                                                 </div>
                                                 <div className="flex gap-2 pt-2 border-t">
                                                     <button onClick={() => { setEditing(f); setModalType('emitida'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                                    <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
+                                                    <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura || 'Sin número'}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
                                                     <button onClick={() => handleDelete(f.id, 'emitida')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
                                                 </div>
                                             </div>
@@ -2774,7 +2857,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             )}
                             
                             {/* Facturas Recibidas */}
-                            {contaTab === 'recibidas' && (
+                            {contaTab === 'recibidas' && facturasRecibidas && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <h3 className="font-bold">Facturas Recibidas (Gastos)</h3>
@@ -2798,14 +2881,14 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                     <tr><td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">Sin facturas recibidas</td></tr>
                                                 ) : facturasRecibidas.map(f => (
                                                     <tr key={f.id} className="hover:bg-gray-50">
-                                                        <td className="px-4 py-3 text-sm font-medium">{f.proveedor}</td>
-                                                        <td className="px-4 py-3 text-sm">{f.categoria}</td>
-                                                        <td className="px-4 py-3 text-sm">{f.fecha_emision}</td>
-                                                        <td className="px-4 py-3 text-sm font-medium">{f.monto_uf} UF</td>
-                                                        <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado}</span></td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{f.proveedor || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm">{f.categoria || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm">{f.fecha_emision || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{f.monto_uf || 0} UF</td>
+                                                        <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado || 'Pendiente'}</span></td>
                                                         <td className="px-4 py-3 text-right space-x-2">
                                                             <button onClick={() => { setEditing(f); setModalType('recibida'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
-                                                            <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor} - ${f.categoria}`)} className="text-gray-700 text-sm">📎</button>
+                                                            <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor || 'Proveedor'} - ${f.categoria || 'Sin categoría'}`)} className="text-gray-700 text-sm">📎</button>
                                                             <button onClick={() => handleDelete(f.id, 'recibida')} className="text-red-600 text-sm">Eliminar</button>
                                                         </td>
                                                     </tr>
@@ -2821,18 +2904,18 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             <div key={f.id} className="border rounded-lg p-4">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div>
-                                                        <div className="font-bold">{f.proveedor}</div>
-                                                        <div className="text-sm text-gray-600">{f.categoria}</div>
+                                                        <div className="font-bold">{f.proveedor || 'Sin proveedor'}</div>
+                                                        <div className="text-sm text-gray-600">{f.categoria || '-'}</div>
                                                     </div>
-                                                    <span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado}</span>
+                                                    <span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado || 'Pendiente'}</span>
                                                 </div>
                                                 <div className="text-sm space-y-1 mb-3">
-                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{f.fecha_emision}</span></div>
-                                                    <div className="flex justify-between"><span className="text-gray-600">Monto:</span><span className="font-medium">{f.monto_uf} UF</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{f.fecha_emision || '-'}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Monto:</span><span className="font-medium">{f.monto_uf || 0} UF</span></div>
                                                 </div>
                                                 <div className="flex gap-2 pt-2 border-t">
                                                     <button onClick={() => { setEditing(f); setModalType('recibida'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                                    <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor} - ${f.categoria}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
+                                                    <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor || 'Proveedor'} - ${f.categoria || 'Sin categoría'}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
                                                     <button onClick={() => handleDelete(f.id, 'recibida')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
                                                 </div>
                                             </div>
@@ -2842,7 +2925,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             )}
                             
                             {/* Caja Chica */}
-                            {contaTab === 'caja' && (
+                            {contaTab === 'caja' && cajaChica && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <h3 className="font-bold">Caja Chica</h3>
@@ -2866,14 +2949,14 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                     <tr><td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">Sin gastos de caja chica</td></tr>
                                                 ) : cajaChica.map(c => (
                                                     <tr key={c.id} className="hover:bg-gray-50">
-                                                        <td className="px-4 py-3 text-sm">{c.fecha}</td>
-                                                        <td className="px-4 py-3 text-sm font-medium">{c.concepto}</td>
-                                                        <td className="px-4 py-3 text-sm">{c.categoria}</td>
-                                                        <td className="px-4 py-3 text-sm font-medium">${Math.round(c.monto_clp).toLocaleString('es-CL')}</td>
-                                                        <td className="px-4 py-3 text-sm">{c.responsable}</td>
+                                                        <td className="px-4 py-3 text-sm">{c.fecha || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{c.concepto || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm">{c.categoria || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">${Math.round(c.monto_clp || 0).toLocaleString('es-CL')}</td>
+                                                        <td className="px-4 py-3 text-sm">{c.responsable || '-'}</td>
                                                         <td className="px-4 py-3 text-right space-x-2">
                                                             <button onClick={() => { setEditing(c); setModalType('caja'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
-                                                            <button onClick={() => onFiles('caja_chica', c.id, c.concepto)} className="text-gray-700 text-sm">📎</button>
+                                                            <button onClick={() => onFiles('caja_chica', c.id, c.concepto || 'Sin concepto')} className="text-gray-700 text-sm">📎</button>
                                                             <button onClick={() => handleDelete(c.id, 'caja')} className="text-red-600 text-sm">Eliminar</button>
                                                         </td>
                                                     </tr>
@@ -2889,18 +2972,18 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             <div key={c.id} className="border rounded-lg p-4">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div>
-                                                        <div className="font-bold">{c.concepto}</div>
-                                                        <div className="text-sm text-gray-600">{c.categoria}</div>
+                                                        <div className="font-bold">{c.concepto || 'Sin concepto'}</div>
+                                                        <div className="text-sm text-gray-600">{c.categoria || '-'}</div>
                                                     </div>
-                                                    <span className="font-medium text-verde">${Math.round(c.monto_clp).toLocaleString('es-CL')}</span>
+                                                    <span className="font-medium text-verde">${Math.round(c.monto_clp || 0).toLocaleString('es-CL')}</span>
                                                 </div>
                                                 <div className="text-sm space-y-1 mb-3">
-                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{c.fecha}</span></div>
-                                                    <div className="flex justify-between"><span className="text-gray-600">Responsable:</span><span>{c.responsable}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{c.fecha || '-'}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Responsable:</span><span>{c.responsable || '-'}</span></div>
                                                 </div>
                                                 <div className="flex gap-2 pt-2 border-t">
                                                     <button onClick={() => { setEditing(c); setModalType('caja'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                                    <button onClick={() => onFiles('caja_chica', c.id, c.concepto)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
+                                                    <button onClick={() => onFiles('caja_chica', c.id, c.concepto || 'Sin concepto')} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
                                                     <button onClick={() => handleDelete(c.id, 'caja')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
                                                 </div>
                                             </div>
@@ -2910,7 +2993,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             )}
                             
                             {/* Boletas de Honorarios */}
-                            {contaTab === 'boletas' && (
+                            {contaTab === 'boletas' && boletasHonorarios && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <h3 className="font-bold">Boletas de Honorarios</h3>
@@ -2936,15 +3019,15 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                     <tr><td colSpan="7" className="px-4 py-4 text-center text-sm text-gray-500">Sin boletas de honorarios</td></tr>
                                                 ) : boletasHonorarios.map(b => (
                                                     <tr key={b.id} className="hover:bg-gray-50">
-                                                        <td className="px-4 py-3 text-sm font-medium">{b.prestador}</td>
-                                                        <td className="px-4 py-3 text-sm">{b.mes_servicio}</td>
-                                                        <td className="px-4 py-3 text-sm">{b.fecha}</td>
-                                                        <td className="px-4 py-3 text-sm font-medium">{b.monto_bruto_uf} UF</td>
-                                                        <td className="px-4 py-3 text-sm text-naranja">-{b.monto_retencion_uf} UF ({b.porcentaje_retencion}%)</td>
-                                                        <td className="px-4 py-3 text-sm font-medium text-verde">{b.monto_liquido_uf} UF</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{b.prestador || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm">{b.mes_servicio || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm">{b.fecha || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm font-medium">{b.monto_bruto_uf || 0} UF</td>
+                                                        <td className="px-4 py-3 text-sm text-naranja">-{b.monto_retencion_uf || 0} UF ({b.porcentaje_retencion || 0}%)</td>
+                                                        <td className="px-4 py-3 text-sm font-medium text-verde">{b.monto_liquido_uf || 0} UF</td>
                                                         <td className="px-4 py-3 text-right space-x-2">
                                                             <button onClick={() => { setEditing(b); setModalType('boleta'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
-                                                            <button onClick={() => onFiles('boletas_honorarios', b.id, `${b.prestador} - ${b.mes_servicio}`)} className="text-gray-700 text-sm">📎</button>
+                                                            <button onClick={() => onFiles('boletas_honorarios', b.id, `${b.prestador || 'Prestador'} - ${b.mes_servicio || 'Sin mes'}`)} className="text-gray-700 text-sm">📎</button>
                                                             <button onClick={() => handleDelete(b.id, 'boleta')} className="text-red-600 text-sm">Eliminar</button>
                                                         </td>
                                                     </tr>
@@ -2961,19 +3044,19 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             <div key={b.id} className="border rounded-lg p-4">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div>
-                                                        <div className="font-bold">{b.prestador}</div>
-                                                        <div className="text-sm text-gray-600">{b.mes_servicio}</div>
+                                                        <div className="font-bold">{b.prestador || 'Sin prestador'}</div>
+                                                        <div className="text-sm text-gray-600">{b.mes_servicio || '-'}</div>
                                                     </div>
-                                                    <span className="text-sm font-medium text-verde">{b.monto_liquido_uf} UF</span>
+                                                    <span className="text-sm font-medium text-verde">{b.monto_liquido_uf || 0} UF</span>
                                                 </div>
                                                 <div className="text-sm space-y-1 mb-3">
-                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{b.fecha}</span></div>
-                                                    <div className="flex justify-between"><span className="text-gray-600">Bruto:</span><span className="font-medium">{b.monto_bruto_uf} UF</span></div>
-                                                    <div className="flex justify-between"><span className="text-gray-600">Retención:</span><span className="text-naranja">-{b.monto_retencion_uf} UF ({b.porcentaje_retencion}%)</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{b.fecha || '-'}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Bruto:</span><span className="font-medium">{b.monto_bruto_uf || 0} UF</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Retención:</span><span className="text-naranja">-{b.monto_retencion_uf || 0} UF ({b.porcentaje_retencion || 0}%)</span></div>
                                                 </div>
                                                 <div className="flex gap-2 pt-2 border-t">
                                                     <button onClick={() => { setEditing(b); setModalType('boleta'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                                    <button onClick={() => onFiles('boletas_honorarios', b.id, `${b.prestador} - ${b.mes_servicio}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
+                                                    <button onClick={() => onFiles('boletas_honorarios', b.id, `${b.prestador || 'Prestador'} - ${b.mes_servicio || 'Sin mes'}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
                                                     <button onClick={() => handleDelete(b.id, 'boleta')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
                                                 </div>
                                             </div>
@@ -2984,13 +3067,13 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             
                             {/* Estado de Resultados */}
                             {contaTab === 'pl' && (() => {
-                                // Obtener años disponibles de los datos
+                                // Obtener años disponibles de los datos (con validación de fechas)
                                 const añosDisponibles = [...new Set([
-                                    ...facturasEmitidas.map(f => new Date(f.fecha_emision).getFullYear()),
-                                    ...facturasRecibidas.map(f => new Date(f.fecha_emision).getFullYear()),
-                                    ...boletasHonorarios.map(b => new Date(b.fecha).getFullYear()),
-                                    ...cajaChica.map(c => new Date(c.fecha).getFullYear())
-                                ])].sort((a, b) => b - a);
+                                    ...facturasEmitidas.filter(f => f.fecha_emision).map(f => new Date(f.fecha_emision).getFullYear()),
+                                    ...facturasRecibidas.filter(f => f.fecha_emision).map(f => new Date(f.fecha_emision).getFullYear()),
+                                    ...boletasHonorarios.filter(b => b.fecha).map(b => new Date(b.fecha).getFullYear()),
+                                    ...cajaChica.filter(c => c.fecha).map(c => new Date(c.fecha).getFullYear())
+                                ])].filter(y => !isNaN(y)).sort((a, b) => b - a);
                                 
                                 if (añosDisponibles.length === 0) {
                                     añosDisponibles.push(new Date().getFullYear());
