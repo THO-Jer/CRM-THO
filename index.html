@@ -2291,7 +2291,9 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             const rango = calcularRango();
 
             const estEnRango = (fechaStr, campo) => {
+                if (!fechaStr) return false;
                 const d = new Date(fechaStr);
+                if (isNaN(d.getTime())) return false;
                 // Normalizar: comparar solo fecha sin hora
                 const desde = new Date(rango.desde.getFullYear(), rango.desde.getMonth(), rango.desde.getDate());
                 const hasta = new Date(rango.hasta.getFullYear(), rango.hasta.getMonth(), rango.hasta.getDate());
@@ -2300,10 +2302,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             };
 
             // Datos filtrados por período
-            const facturasEmiAct = facturasEmitidas.filter(f => estEnRango(f.fecha_emision));
-            const facturasRecAct = facturasRecibidas.filter(f => estEnRango(f.fecha_emision));
-            const boletasAct = boletasHonorarios.filter(b => estEnRango(b.fecha));
-            const cajaAct = cajaChica.filter(c => estEnRango(c.fecha));
+            const facturasEmiAct = facturasEmitidas.filter(f => f.fecha_emision && estEnRango(f.fecha_emision));
+            const facturasRecAct = facturasRecibidas.filter(f => f.fecha_emision && estEnRango(f.fecha_emision));
+            const boletasAct = boletasHonorarios.filter(b => b.fecha && estEnRango(b.fecha));
+            const cajaAct = cajaChica.filter(c => c.fecha && estEnRango(c.fecha));
 
             // Etiqueta del período
             const periodoLabel = () => {
@@ -2455,14 +2457,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 const prevHasta = new Date(rango.desde.getTime() - 1);
                                 const prevDesde = new Date(prevHasta.getTime() - largo);
                                 const estEnPrev = (fechaStr) => {
+                                    if (!fechaStr) return false;
                                     const d = new Date(fechaStr);
+                                    if (isNaN(d.getTime())) return false;
                                     const v = new Date(d.getFullYear(), d.getMonth(), d.getDate());
                                     const pd = new Date(prevDesde.getFullYear(), prevDesde.getMonth(), prevDesde.getDate());
                                     const ph = new Date(prevHasta.getFullYear(), prevHasta.getMonth(), prevHasta.getDate());
                                     return v >= pd && v <= ph;
                                 };
-                                const emitidaAnterior = facturasEmitidas.filter(f => estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                const gastosAnterior = facturasRecibidas.filter(f => estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                const emitidaAnterior = facturasEmitidas.filter(f => f.fecha_emision && estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                const gastosAnterior = facturasRecibidas.filter(f => f.fecha_emision && estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
 
                                 // Pendientes (siempre globales, independientes del período)
                                 const porCobrar = facturasEmitidas.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
@@ -2481,14 +2485,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         const mesDesde = new Date(y, m, 1);
                                         const mesHasta = new Date(y, m + 1, 0);
                                         const estEnMes = (fechaStr) => {
+                                            if (!fechaStr) return false;
                                             const d = new Date(fechaStr);
+                                            if (isNaN(d.getTime())) return false;
                                             const v = new Date(d.getFullYear(), d.getMonth(), d.getDate());
                                             return v >= mesDesde && v <= mesHasta;
                                         };
-                                        const ing = facturasEmitidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                        const gas = facturasRecibidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-                                        const hon = boletasHonorarios.filter(b => estEnMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0);
-                                        const caj = cajaChica.filter(c => estEnMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000);
+                                        const ing = facturasEmitidas.filter(f => f.fecha_emision && estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                        const gas = facturasRecibidas.filter(f => f.fecha_emision && estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
+                                        const hon = boletasHonorarios.filter(b => b.fecha && estEnMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0);
+                                        const caj = cajaChica.filter(c => c.fecha && estEnMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000);
                                         result.push({ label, ingresos: Math.round(ing), gastos: Math.round(gas + hon + caj) });
                                         m++;
                                         if (m > 11) { m = 0; y++; }
