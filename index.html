@@ -2664,9 +2664,9 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             const canvasD = document.getElementById('chartDonut');
                                             if (canvasD) {
                                                 if (canvasD.chart) canvasD.chart.destroy();
-                                                const gOperacionales = ${gastosActual};
-                                                const gHonorarios = ${honorariosActual};
-                                                const gCaja = ${cajaActual};
+                                                const gOperacionales = ${Math.round(gastosActual)};
+                                                const gHonorarios = ${Math.round(honorariosActual)};
+                                                const gCaja = ${Math.round(cajaActual)};
                                                 const totalG = gOperacionales + gHonorarios + gCaja;
                                                 canvasD.chart = new Chart(canvasD, {
                                                     type: 'doughnut',
