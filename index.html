@@ -161,7 +161,10 @@ window.addEventListener('unhandledrejection', (e) => {
             const [facturasRecibidas, setFacturasRecibidas] = useState([]);
             const [cajaChica, setCajaChica] = useState([]);
             const [boletasHonorarios, setBoletasHonorarios] = useState([]);
-            const [contaTab, setContaTab] = useState('dashboard'); // Sub-tab activa
+            const [contaTab, setContaTab] = useState('dashboard');
+            
+            // Alertas de validación de datos
+            const [alertasValidacion, setAlertasValidacion] = useState([]); // Sub-tab activa
 
             const [historyOpen, setHistoryOpen] = useState(false);
             const [historyLoading, setHistoryLoading] = useState(false);
@@ -413,13 +416,91 @@ window.addEventListener('unhandledrejection', (e) => {
             const loadFacturasEmitidas = async () => {
                 const { data, error } = await supabase.from('facturas_emitidas').select('*').order('fecha_emision', { ascending: false });
                 if (error) console.error('Error loading facturas emitidas:', error);
-                else setFacturasEmitidas(data || []);
+                else {
+                    setFacturasEmitidas(data || []);
+                    validarFacturas(data || [], 'emitidas');
+                }
+            };
+            
+            // Validar anomalías en facturas
+            const validarFacturas = (facturas, tipo) => {
+                const alertas = [];
+                const tipoLabel = tipo === 'emitidas' ? 'Emitidas' : 'Recibidas';
+                
+                // Filtrar solo facturas activas (no anuladas)
+                const activas = facturas.filter(f => f.estado !== 'Reclamado' && f.estado !== 'Reclamada');
+                
+                // 1. Detectar saltos de numeración sospechosos (solo en emitidas)
+                if (tipo === 'emitidas' && activas.length > 1) {
+                    const numeros = activas
+                        .map(f => parseInt(f.numero_factura))
+                        .filter(n => !isNaN(n))
+                        .sort((a, b) => a - b);
+                    
+                    for (let i = 1; i < numeros.length; i++) {
+                        const salto = numeros[i] - numeros[i-1];
+                        if (salto > 10) {
+                            alertas.push({
+                                tipo: 'warning',
+                                mensaje: `⚠️ Salto de numeración sospechoso: de factura #${numeros[i-1]} a #${numeros[i]} (salto de ${salto})`
+                            });
+                        }
+                    }
+                }
+                
+                // 2. Detectar facturas duplicadas (mismo número)
+                if (tipo === 'emitidas') {
+                    const numerosConteo = {};
+                    activas.forEach(f => {
+                        const num = f.numero_factura;
+                        numerosConteo[num] = (numerosConteo[num] || 0) + 1;
+                    });
+                    
+                    Object.entries(numerosConteo).forEach(([num, count]) => {
+                        if (count > 1) {
+                            alertas.push({
+                                tipo: 'error',
+                                mensaje: `🔴 Factura duplicada: #${num} aparece ${count} veces`
+                            });
+                        }
+                    });
+                }
+                
+                // 3. Detectar montos anormalmente altos (>1000 UF)
+                const montosAltos = activas.filter(f => parseFloat(f.monto_uf) > 1000);
+                if (montosAltos.length > 0) {
+                    montosAltos.forEach(f => {
+                        alertas.push({
+                            tipo: 'info',
+                            mensaje: `💰 Monto inusualmente alto: ${tipo === 'emitidas' ? `Factura #${f.numero_factura}` : f.proveedor} - ${Math.round(f.monto_uf)} UF`
+                        });
+                    });
+                }
+                
+                // 4. Detectar facturas con fecha futura
+                const hoy = new Date();
+                const futuras = activas.filter(f => new Date(f.fecha_emision) > hoy);
+                if (futuras.length > 0) {
+                    alertas.push({
+                        tipo: 'warning',
+                        mensaje: `📅 ${futuras.length} factura(s) ${tipoLabel.toLowerCase()} con fecha futura`
+                    });
+                }
+                
+                // Actualizar alertas globales
+                setAlertasValidacion(prev => {
+                    const sinTipo = prev.filter(a => !a.mensaje.includes(tipoLabel));
+                    return [...sinTipo, ...alertas];
+                });
             };
 
             const loadFacturasRecibidas = async () => {
                 const { data, error } = await supabase.from('facturas_recibidas').select('*').order('fecha_emision', { ascending: false });
                 if (error) console.error('Error loading facturas recibidas:', error);
-                else setFacturasRecibidas(data || []);
+                else {
+                    setFacturasRecibidas(data || []);
+                    validarFacturas(data || [], 'recibidas');
+                }
             };
 
             const loadCajaChica = async () => {
@@ -1580,7 +1661,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
-                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} boletasHonorarios={boletasHonorarios} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} monedaPreferida={monedaPreferida} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); loadBoletasHonorarios(); }} onFiles={openFilesModal} />}
+                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} boletasHonorarios={boletasHonorarios} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} monedaPreferida={monedaPreferida} alertasValidacion={alertasValidacion} setAlertasValidacion={setAlertasValidacion} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); loadBoletasHonorarios(); }} onFiles={openFilesModal} />}
                         {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                         {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                         {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
@@ -2313,7 +2394,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             );
         }
 
-        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, tickets, keyAccounts, ufActual, contaTab, setContaTab, monedaPreferida, onReload, onFiles }) {
+        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, tickets, keyAccounts, ufActual, contaTab, setContaTab, monedaPreferida, alertasValidacion, setAlertasValidacion, onReload, onFiles }) {
             const [showModal, setShowModal] = useState(false);
             const [modalType, setModalType] = useState(null);
             const [editing, setEditing] = useState(null);
@@ -2745,6 +2826,35 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             <span className="text-3xl opacity-30">📋</span>
                                         </div>
                                     </div>
+                                    
+                                    {/* Alertas de Validación */}
+                                    {alertasValidacion.length > 0 && (
+                                        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                                            <div className="flex items-start justify-between mb-2">
+                                                <h4 className="font-bold text-yellow-800">⚠️ Alertas de Validación</h4>
+                                                <button 
+                                                    onClick={() => setAlertasValidacion([])} 
+                                                    className="text-yellow-600 hover:text-yellow-800 text-sm"
+                                                >
+                                                    ✕ Cerrar
+                                                </button>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {alertasValidacion.map((alerta, idx) => (
+                                                    <div 
+                                                        key={idx} 
+                                                        className={`text-sm p-2 rounded ${
+                                                            alerta.tipo === 'error' ? 'bg-red-100 text-red-800' :
+                                                            alerta.tipo === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                                                            'bg-blue-100 text-blue-800'
+                                                        }`}
+                                                    >
+                                                        {alerta.mensaje}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Gráficos */}
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -2861,6 +2971,22 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                             'bg-yellow-100 text-yellow-800'
                                                         }`}>{f.estado === 'Reclamado' || f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span></td>
                                                         <td className="px-4 py-3 text-right space-x-2">
+                                                            {f.estado !== 'Reclamado' && f.estado !== 'Reclamada' && (
+                                                                <button 
+                                                                    onClick={async () => {
+                                                                        if (confirm(`¿Anular factura #${f.numero_factura}? Esta acción la excluirá de los cálculos.`)) {
+                                                                            const result = await supabase
+                                                                                .from('facturas_emitidas')
+                                                                                .update({ estado: 'Reclamada' })
+                                                                                .eq('id', f.id);
+                                                                            if (!result.error) onReload();
+                                                                        }
+                                                                    }}
+                                                                    className="text-gray-500 text-sm hover:text-red-600"
+                                                                >
+                                                                    ❌
+                                                                </button>
+                                                            )}
                                                             <button onClick={() => { setEditing(f); setModalType('emitida'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
                                                             <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura}`)} className="text-gray-700 text-sm">📎</button>
                                                             <button onClick={() => handleDelete(f.id, 'emitida')} className="text-red-600 text-sm">Eliminar</button>
@@ -2955,6 +3081,22 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                             'bg-yellow-100 text-yellow-800'
                                                         }`}>{f.estado === 'Reclamado' || f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span></td>
                                                         <td className="px-4 py-3 text-right space-x-2">
+                                                            {f.estado !== 'Reclamado' && f.estado !== 'Reclamada' && (
+                                                                <button 
+                                                                    onClick={async () => {
+                                                                        if (confirm(`¿Anular factura de ${f.proveedor}? Esta acción la excluirá de los cálculos.`)) {
+                                                                            const result = await supabase
+                                                                                .from('facturas_recibidas')
+                                                                                .update({ estado: 'Reclamada' })
+                                                                                .eq('id', f.id);
+                                                                            if (!result.error) onReload();
+                                                                        }
+                                                                    }}
+                                                                    className="text-gray-500 text-sm hover:text-red-600"
+                                                                >
+                                                                    ❌
+                                                                </button>
+                                                            )}
                                                             <button onClick={() => { setEditing(f); setModalType('recibida'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
                                                             <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor} - ${f.categoria}`)} className="text-gray-700 text-sm">📎</button>
                                                             <button onClick={() => handleDelete(f.id, 'recibida')} className="text-red-600 text-sm">Eliminar</button>
