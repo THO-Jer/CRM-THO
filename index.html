@@ -1485,7 +1485,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     <div className="flex items-center space-x-2">
                                         <p className="text-sm text-gray-600">The Human Org</p>
                                         <span className="text-xs text-gray-400">•</span>
-                                        <p className="text-xs text-gray-500">UF: ${ufActual.toLocaleString('es-CL')}</p>
+                                        <p className="text-xs text-gray-500">UF: ${(ufActual || 38000).toLocaleString('es-CL')}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-4">
@@ -2409,10 +2409,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     
                     {/* Métricas resumen */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                        <MetricCard title="💵 Emitidas" value={`${Math.round(totalEmitidas)} UF`} subtitle={`$${Math.round(totalEmitidas * ufActual).toLocaleString('es-CL')}`} color="verde" />
-                        <MetricCard title="📥 Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * ufActual).toLocaleString('es-CL')}`} color="naranja" />
+                        <MetricCard title="💵 Emitidas" value={`${Math.round(totalEmitidas)} UF`} subtitle={`$${Math.round(totalEmitidas * (ufActual || 38000)).toLocaleString('es-CL')}`} color="verde" />
+                        <MetricCard title="📥 Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * (ufActual || 38000)).toLocaleString('es-CL')}`} color="naranja" />
                         <MetricCard title="👤 Honorarios" value={`${Math.round(totalBoletas)} UF`} subtitle={`Bruto (15.25% ret.)`} color="azul" />
-                        <MetricCard title="💵 Caja Chica" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / ufActual)} UF`} color="fucsia" />
+                        <MetricCard title="💵 Caja Chica" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / (ufActual || 38000))} UF`} color="fucsia" />
                         <MetricCard title="📊 Margen" value={`${Math.round(margen)} UF`} subtitle={margen >= 0 ? '🟢 Positivo' : '🔴 Negativo'} color={margen >= 0 ? 'verde' : 'naranja'} />
                     </div>
                     
@@ -2442,6 +2442,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         <div className="p-6">
                             {/* Dashboard de Contabilidad */}
                             {contaTab === 'dashboard' && (() => {
+                                try {
                                 const hoy = new Date();
 
                                 // Usar los datos ya filtrados por período
@@ -2760,6 +2761,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     {null /* useEffect no retorna nada visible */}
                                 </div>
                                 );
+                                } catch (error) {
+                                    console.error('Error en dashboard de contabilidad:', error);
+                                    return <div className="p-4 text-red-600">Error al cargar el dashboard. Por favor recarga la página.</div>;
+                                }
                             })()}
 
                             {/* Facturas Emitidas */}
