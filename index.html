@@ -2243,23 +2243,6 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             );
         }
 
-        function DashboardContabilidad({ facturasEmitidas, facturasRecibidas, boletasHonorarios, cajaChica, facturasEmiAct, facturasRecAct, boletasAct, cajaAct, ufActual, rango }) {
-            const hoy = new Date();
-
-            // Usar los datos ya filtrados por período
-            const emitidaActual = facturasEmiAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-            const gastosActual = facturasRecAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
-            const honorariosActual = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0);
-            const retenciones = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0);
-            const cajaActual = cajaAct.reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000);
-            const flujoNeto = emitidaActual - gastosActual - honorariosActual - cajaActual;
-
-            // Resto del código del dashboard...
-            // [copiaré el resto en el siguiente paso]
-            
-            return <div>Dashboard placeholder</div>;
-        }
-
         function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, tickets, keyAccounts, ufActual, contaTab, setContaTab, onReload, onFiles }) {
             const [showModal, setShowModal] = useState(false);
             const [modalType, setModalType] = useState(null);
@@ -2458,20 +2441,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         
                         <div className="p-6">
                             {/* Dashboard de Contabilidad */}
-                            {contaTab === 'dashboard' && (
-                                <DashboardContabilidad 
-                                    facturasEmitidas={facturasEmitidas}
-                                    facturasRecibidas={facturasRecibidas}
-                                    boletasHonorarios={boletasHonorarios}
-                                    cajaChica={cajaChica}
-                                    facturasEmiAct={facturasEmiAct}
-                                    facturasRecAct={facturasRecAct}
-                                    boletasAct={boletasAct}
-                                    cajaAct={cajaAct}
-                                    ufActual={ufActual}
-                                    rango={rango}
-                                />
-                            )}
+                            {contaTab === 'dashboard' && (() => {
+                                const hoy = new Date();
 
                                 // Usar los datos ya filtrados por período
                                 const emitidaActual = facturasEmiAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
@@ -2785,6 +2756,11 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                 canvasD.chart = null;
                                             }
                                         };
+                                    }, [datos6Meses, gastosActual, honorariosActual, cajaActual])}
+                                    {null /* useEffect no retorna nada visible */}
+                                </div>
+                                );
+                            })()}
 
                             {/* Facturas Emitidas */}
                             {contaTab === 'emitidas' && facturasEmitidas && (
