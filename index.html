@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CRM THO - The Human Org</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -2253,6 +2253,107 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             const [periodo, setPeriodo] = useState('mes_actual');
             const [fechaDesdeCustom, setFechaDesdeCustom] = useState('');
             const [fechaHastaCustom, setFechaHastaCustom] = useState('');
+            
+            // useEffect para los gráficos del dashboard
+            React.useEffect(() => {
+                if (contaTab !== 'dashboard' || typeof Chart === 'undefined') return;
+                
+                const timeout = setTimeout(() => {
+                    const canvasIG = document.getElementById('chartIngGastos');
+                    const canvasD = document.getElementById('chartDonut');
+                    
+                    if (canvasIG && window.dashboardData) {
+                        if (canvasIG.chart) {
+                            canvasIG.chart.destroy();
+                            canvasIG.chart = null;
+                        }
+                        canvasIG.chart = new Chart(canvasIG, {
+                            type: 'bar',
+                            data: {
+                                labels: window.dashboardData.datos6Meses.map(d => d.label),
+                                datasets: [
+                                    {
+                                        label: 'Ingresos',
+                                        data: window.dashboardData.datos6Meses.map(d => d.ingresos),
+                                        backgroundColor: 'rgba(34, 197, 94, 0.7)',
+                                        borderColor: 'rgb(34, 197, 94)',
+                                        borderWidth: 1,
+                                        borderRadius: 4
+                                    },
+                                    {
+                                        label: 'Gastos',
+                                        data: window.dashboardData.datos6Meses.map(d => d.gastos),
+                                        backgroundColor: 'rgba(249, 115, 22, 0.7)',
+                                        borderColor: 'rgb(249, 115, 22)',
+                                        borderWidth: 1,
+                                        borderRadius: 4
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: true, position: 'bottom', labels: { font: { size: 11 }, padding: 12, usePointStyle: true } },
+                                    tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + c.parsed.y + ' UF'; } } }
+                                },
+                                scales: {
+                                    y: { beginAtZero: true, ticks: { callback: v => v + ' UF', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                                    x: { ticks: { font: { size: 10 } }, grid: { display: false } }
+                                }
+                            }
+                        });
+                    }
+
+                    if (canvasD && window.dashboardData) {
+                        if (canvasD.chart) {
+                            canvasD.chart.destroy();
+                            canvasD.chart = null;
+                        }
+                        const totalG = window.dashboardData.gastosActual + window.dashboardData.honorariosActual + window.dashboardData.cajaActual;
+                        canvasD.chart = new Chart(canvasD, {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['Operacionales', 'Honorarios', 'Caja Chica'],
+                                datasets: [{
+                                    data: [
+                                        totalG > 0 ? Math.round(window.dashboardData.gastosActual) : 0,
+                                        totalG > 0 ? Math.round(window.dashboardData.honorariosActual) : 0,
+                                        totalG > 0 ? Math.round(window.dashboardData.cajaActual) : 0
+                                    ],
+                                    backgroundColor: ['rgba(249, 115, 22, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(168, 85, 247, 0.7)'],
+                                    borderColor: ['rgb(249, 115, 22)', 'rgb(59, 130, 246)', 'rgb(168, 85, 247)'],
+                                    borderWidth: 2,
+                                    hoverOffset: 6
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: '65%',
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed + ' UF'; } } }
+                                }
+                            }
+                        });
+                    }
+                }, 100);
+                
+                return () => {
+                    clearTimeout(timeout);
+                    const canvasIG = document.getElementById('chartIngGastos');
+                    const canvasD = document.getElementById('chartDonut');
+                    if (canvasIG?.chart) {
+                        canvasIG.chart.destroy();
+                        canvasIG.chart = null;
+                    }
+                    if (canvasD?.chart) {
+                        canvasD.chart.destroy();
+                        canvasD.chart = null;
+                    }
+                };
+            }, [contaTab]);
 
             const calcularRango = () => {
                 const hoy = new Date();
@@ -2633,108 +2734,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         </div>
                                     </div>
 
-                                    {/* useEffect para renderizar gráficos */}
-                                    {React.useEffect(() => {
-                                        if (typeof Chart === 'undefined') return;
-                                        
-                                        const timeout = setTimeout(() => {
-                                            // Gráfico barras
-                                            const canvasIG = document.getElementById('chartIngGastos');
-                                            if (canvasIG) {
-                                                if (canvasIG.chart) {
-                                                    canvasIG.chart.destroy();
-                                                    canvasIG.chart = null;
-                                                }
-                                                canvasIG.chart = new Chart(canvasIG, {
-                                                    type: 'bar',
-                                                    data: {
-                                                        labels: datos6Meses.map(d => d.label),
-                                                        datasets: [
-                                                            {
-                                                                label: 'Ingresos',
-                                                                data: datos6Meses.map(d => d.ingresos),
-                                                                backgroundColor: 'rgba(34, 197, 94, 0.7)',
-                                                                borderColor: 'rgb(34, 197, 94)',
-                                                                borderWidth: 1,
-                                                                borderRadius: 4
-                                                            },
-                                                            {
-                                                                label: 'Gastos',
-                                                                data: datos6Meses.map(d => d.gastos),
-                                                                backgroundColor: 'rgba(249, 115, 22, 0.7)',
-                                                                borderColor: 'rgb(249, 115, 22)',
-                                                                borderWidth: 1,
-                                                                borderRadius: 4
-                                                            }
-                                                        ]
-                                                    },
-                                                    options: {
-                                                        responsive: true,
-                                                        maintainAspectRatio: false,
-                                                        plugins: {
-                                                            legend: { display: true, position: 'bottom', labels: { font: { size: 11 }, padding: 12, usePointStyle: true } },
-                                                            tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + c.parsed.y + ' UF'; } } }
-                                                        },
-                                                        scales: {
-                                                            y: { beginAtZero: true, ticks: { callback: v => v + ' UF', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
-                                                            x: { ticks: { font: { size: 10 } }, grid: { display: false } }
-                                                        }
-                                                    }
-                                                });
-                                            }
-
-                                            // Gráfico donut
-                                            const canvasD = document.getElementById('chartDonut');
-                                            if (canvasD) {
-                                                if (canvasD.chart) {
-                                                    canvasD.chart.destroy();
-                                                    canvasD.chart = null;
-                                                }
-                                                const totalG = gastosActual + honorariosActual + cajaActual;
-                                                canvasD.chart = new Chart(canvasD, {
-                                                    type: 'doughnut',
-                                                    data: {
-                                                        labels: ['Operacionales', 'Honorarios', 'Caja Chica'],
-                                                        datasets: [{
-                                                            data: [
-                                                                totalG > 0 ? Math.round(gastosActual) : 0,
-                                                                totalG > 0 ? Math.round(honorariosActual) : 0,
-                                                                totalG > 0 ? Math.round(cajaActual) : 0
-                                                            ],
-                                                            backgroundColor: ['rgba(249, 115, 22, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(168, 85, 247, 0.7)'],
-                                                            borderColor: ['rgb(249, 115, 22)', 'rgb(59, 130, 246)', 'rgb(168, 85, 247)'],
-                                                            borderWidth: 2,
-                                                            hoverOffset: 6
-                                                        }]
-                                                    },
-                                                    options: {
-                                                        responsive: true,
-                                                        maintainAspectRatio: false,
-                                                        cutout: '65%',
-                                                        plugins: {
-                                                            legend: { display: false },
-                                                            tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed + ' UF'; } } }
-                                                        }
-                                                    }
-                                                });
-                                            }
-                                        }, 10);
-                                        
-                                        return () => {
-                                            clearTimeout(timeout);
-                                            const canvasIG = document.getElementById('chartIngGastos');
-                                            const canvasD = document.getElementById('chartDonut');
-                                            if (canvasIG?.chart) {
-                                                canvasIG.chart.destroy();
-                                                canvasIG.chart = null;
-                                            }
-                                            if (canvasD?.chart) {
-                                                canvasD.chart.destroy();
-                                                canvasD.chart = null;
-                                            }
-                                        };
-                                    }, [datos6Meses, gastosActual, honorariosActual, cajaActual])}
-                                    {null /* useEffect no retorna nada visible */}
+                                    {/* Guardar datos para gráficos */}
+                                    {(window.dashboardData = { datos6Meses, gastosActual, honorariosActual, cajaActual }, null)}
                                 </div>
                                 );
                             })()}
