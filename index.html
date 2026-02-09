@@ -514,6 +514,101 @@ window.addEventListener('unhandledrejection', (e) => {
                 if (error) console.error('Error loading boletas honorarios:', error);
                 else setBoletasHonorarios(data || []);
             };
+            
+            // Sincronizar Boletas de Honorarios desde SimpleAPI
+            const sincronizarBoletasSII = async () => {
+                const apiKey = prompt('Ingresa tu API Key de SimpleAPI:');
+                if (!apiKey) return;
+                
+                const año = prompt('¿Qué año deseas sincronizar? (ejemplo: 2025)');
+                if (!año) return;
+                
+                const mes = prompt('¿Qué mes? (1-12)');
+                if (!mes || parseInt(mes) < 1 || parseInt(mes) > 12) {
+                    alert('Mes inválido');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`https://api.simpleapi.cl/api/boletas_honorarios_emitidas/${año}/${mes}`, {
+                        headers: { 'apikey': apiKey }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Error ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const result = await response.json();
+                    const boletas = result.data || [];
+                    
+                    if (boletas.length === 0) {
+                        alert(`No se encontraron boletas para ${mes}/${año}`);
+                        return;
+                    }
+                    
+                    let insertadas = 0;
+                    let duplicadas = 0;
+                    
+                    // Obtener boletas existentes para detectar duplicados
+                    const { data: existentes } = await supabase.from('boletas_honorarios').select('*');
+                    const existentesMap = new Set(
+                        (existentes || []).map(b => `${b.prestador}-${b.fecha}-${b.monto_bruto_clp}`)
+                    );
+                    
+                    for (const boleta of boletas) {
+                        // Detectar duplicados
+                        const key = `${boleta.razon_social_receptor || 'Sin nombre'}-${boleta.fecha_emision}-${boleta.monto_bruto}`;
+                        if (existentesMap.has(key)) {
+                            duplicadas++;
+                            continue;
+                        }
+                        
+                        // Mapear datos del SII a estructura interna
+                        const montoBruto = parseFloat(boleta.monto_bruto) || 0;
+                        const retencion = parseFloat(boleta.retencion) || 0;
+                        const liquido = parseFloat(boleta.monto_liquido) || 0;
+                        const ufDia = parseFloat(boleta.valor_uf) || ufActual;
+                        
+                        const nuevaBoleta = {
+                            fecha: boleta.fecha_emision,
+                            prestador: boleta.razon_social_receptor || 'Sin nombre',
+                            rut: boleta.rut_receptor || '',
+                            monto_bruto_clp: montoBruto,
+                            monto_bruto_uf: (montoBruto / ufDia).toFixed(2),
+                            monto_retencion_clp: retencion,
+                            monto_retencion_uf: (retencion / ufDia).toFixed(2),
+                            monto_liquido_clp: liquido,
+                            monto_liquido_uf: (liquido / ufDia).toFixed(2),
+                            porcentaje_retencion: retencion > 0 ? ((retencion / montoBruto) * 100).toFixed(2) : 0,
+                            uf_dia: ufDia,
+                            descripcion: boleta.detalle_servicio || '',
+                            mes_servicio: `${getNombreMes(parseInt(mes))} ${año}`,
+                            proyecto: ''
+                        };
+                        
+                        const { error: insertError } = await supabase
+                            .from('boletas_honorarios')
+                            .insert([nuevaBoleta]);
+                        
+                        if (!insertError) {
+                            insertadas++;
+                        }
+                    }
+                    
+                    alert(`✅ Sincronización completada:\n- ${insertadas} boletas nuevas insertadas\n- ${duplicadas} duplicadas omitidas`);
+                    loadBoletasHonorarios();
+                    
+                } catch (error) {
+                    console.error('Error sincronizando:', error);
+                    alert(`❌ Error al sincronizar: ${error.message}`);
+                }
+            };
+            
+            const getNombreMes = (num) => {
+                const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                              'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                return meses[num - 1] || '';
+            };
 
             // ===== MÉTRICAS AVANZADAS =====
             const hoy = new Date();
@@ -3211,7 +3306,15 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <h3 className="font-bold">Boletas de Honorarios</h3>
-                                        <button onClick={() => { setEditing(null); setModalType('boleta'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Boleta</button>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={sincronizarBoletasSII} 
+                                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                                            >
+                                                🔄 Sincronizar SII
+                                            </button>
+                                            <button onClick={() => { setEditing(null); setModalType('boleta'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Boleta</button>
+                                        </div>
                                     </div>
                                     
                                     {/* Desktop */}
