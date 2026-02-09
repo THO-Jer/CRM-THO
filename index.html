@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CRM THO - The Human Org</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -2442,7 +2442,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         <div className="p-6">
                             {/* Dashboard de Contabilidad */}
                             {contaTab === 'dashboard' && (() => {
-                                const hoy = new Date();
+                                try {
+                                    const hoy = new Date();
 
                                 // Usar los datos ya filtrados por período
                                 const emitidaActual = facturasEmiAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0);
@@ -2760,6 +2761,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     {null /* useEffect no retorna nada visible */}
                                 </div>
                                 );
+                                } catch (err) {
+                                    console.error('Error en Dashboard:', err);
+                                    return (
+                                        <div className="p-8 bg-red-50 rounded-lg border border-red-200">
+                                            <h3 className="text-red-800 font-bold mb-2">Error al cargar Dashboard</h3>
+                                            <p className="text-red-600 text-sm">{err.message}</p>
+                                            <button onClick={onReload} className="mt-4 px-4 py-2 bg-red-600 text-white rounded">Recargar datos</button>
+                                        </div>
+                                    );
+                                }
                             })()}
 
                             {/* Facturas Emitidas */}
