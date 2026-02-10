@@ -2737,14 +2737,24 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                  modalType === 'sueldo' ? 'sueldos_socios' :
                                  'caja_chica';
                     
+                    // Limpiar campos vacíos (convertir "" a null para campos numéricos)
+                    const cleanedData = {};
+                    for (const [key, value] of Object.entries(data)) {
+                        if (value === '' && (key.includes('monto') || key.includes('uf_dia') || key.includes('numero'))) {
+                            cleanedData[key] = null;
+                        } else {
+                            cleanedData[key] = value;
+                        }
+                    }
+                    
                     console.log('Guardando en tabla:', table);
-                    console.log('Datos a guardar:', data);
+                    console.log('Datos limpios a guardar:', cleanedData);
                     
                     let result;
                     if (editing) {
-                        result = await supabase.from(table).update(data).eq('id', editing.id);
+                        result = await supabase.from(table).update(cleanedData).eq('id', editing.id);
                     } else {
-                        result = await supabase.from(table).insert([data]);
+                        result = await supabase.from(table).insert([cleanedData]);
                     }
                     
                     console.log('Resultado:', result);
@@ -4056,12 +4066,14 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 <div className="flex items-center gap-4 p-3 bg-gray-50 rounded">
                                     <span className="text-sm font-medium">Moneda principal:</span>
                                     <button 
+                                        type="button"
                                         onClick={() => setMonedaPrincipal('UF')} 
                                         className={`px-3 py-1 rounded text-sm ${monedaPrincipal === 'UF' ? 'bg-verde text-white' : 'bg-gray-200'}`}
                                     >
                                         UF
                                     </button>
                                     <button 
+                                        type="button"
                                         onClick={() => setMonedaPrincipal('CLP')} 
                                         className={`px-3 py-1 rounded text-sm ${monedaPrincipal === 'CLP' ? 'bg-verde text-white' : 'bg-gray-200'}`}
                                     >
@@ -4075,8 +4087,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         <input 
                                             type="number" 
                                             step="0.01"
-                                            value={monedaPrincipal === 'UF' ? form.monto_uf : form.monto_clp} 
-                                            onChange={handleMontoChange}
+                                            value={monedaPrincipal === 'UF' ? (form.monto_uf || '') : (form.monto_clp || '')} 
+                                            onChange={(e) => handleMontoChange(monedaPrincipal === 'UF' ? 'monto_uf' : 'monto_clp', e.target.value)}
                                             className="w-full border rounded p-2" 
                                         />
                                     </div>
@@ -4085,7 +4097,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         <input 
                                             type="number" 
                                             step="0.01"
-                                            value={monedaPrincipal === 'UF' ? form.monto_clp : form.monto_uf}
+                                            value={monedaPrincipal === 'UF' ? (form.monto_clp || '') : (form.monto_uf || '')}
                                             disabled
                                             className="w-full border rounded p-2 bg-gray-100" 
                                         />
