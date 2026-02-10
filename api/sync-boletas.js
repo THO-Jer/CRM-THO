@@ -21,27 +21,58 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { apiKey, año, mes } = req.body;
+    const { apiKey, año, mes, rutUsuario, passwordSII } = req.body;
 
-    // Validar
-    if (!apiKey || !año || !mes) {
+    // Log de lo que recibimos
+    console.log('=== REQUEST BODY ===');
+    console.log('apiKey:', apiKey ? 'presente' : 'FALTA');
+    console.log('rutUsuario:', rutUsuario ? 'presente' : 'FALTA');
+    console.log('passwordSII:', passwordSII ? 'presente' : 'FALTA');
+    console.log('año:', año);
+    console.log('mes:', mes);
+
+    // Validar parámetros requeridos
+    if (!apiKey || !año || !rutUsuario || !passwordSII) {
       return res.status(400).json({ 
-        error: 'Faltan parámetros requeridos: apiKey, año, mes'
+        error: 'Faltan parámetros requeridos: apiKey, año, rutUsuario, passwordSII',
+        received: { 
+          apiKey: !!apiKey, 
+          año: !!año, 
+          rutUsuario: !!rutUsuario, 
+          passwordSII: !!passwordSII, 
+          mes: mes 
+        }
       });
     }
 
-    const mesNum = parseInt(mes);
-    if (mesNum < 1 || mesNum > 12) {
-      return res.status(400).json({ error: 'Mes inválido (debe ser 1-12)' });
+    // Determinar si pedir mes específico o todo el año
+    let urlPath;
+    if (mes && mes !== '' && mes !== 'null' && mes !== 'undefined') {
+      const mesPad = String(mes).padStart(2, '0');
+      urlPath = `/api/bhe/listado/recibidas/${mesPad}/${año}`;
+    } else {
+      urlPath = `/api/bhe/listado/recibidas/${año}`;
     }
-
-    // Llamar a SimpleAPI
+    
+    console.log('=== DEBUG INFO ===');
+    console.log('Año:', año);
+    console.log('Mes válido:', mes && mes !== '' ? mes : 'NO (traer todo el año)');
+    console.log('URL completa:', `https://servicios.simpleapi.cl${urlPath}`);
+    
+    // Preparar body para SimpleAPI
+    const postData = JSON.stringify({
+      RutUsuario: rutUsuario,
+      PasswordSII: passwordSII
+    });
+    
     const options = {
-      hostname: 'api.simpleapi.cl',
-      path: `/api/boletas_honorarios_emitidas/${año}/${mes}`,
-      method: 'GET',
+      hostname: 'servicios.simpleapi.cl',
+      path: urlPath,
+      method: 'POST',
       headers: {
-        'apikey': apiKey
+        'apikey': apiKey,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
       }
     };
 
@@ -49,11 +80,15 @@ export default async function handler(req, res) {
       const request = https.request(options, (response) => {
         let data = '';
         
+        console.log('Response status code:', response.statusCode);
+        
         response.on('data', (chunk) => {
           data += chunk;
         });
         
         response.on('end', () => {
+          console.log('Response body (primeros 500 chars):', data.substring(0, 500));
+          
           try {
             const parsed = JSON.parse(data);
             resolve({
@@ -71,9 +106,12 @@ export default async function handler(req, res) {
       });
 
       request.on('error', (e) => {
+        console.error('Request error:', e);
         reject(e);
       });
 
+      // Enviar el body
+      request.write(postData);
       request.end();
     });
 
