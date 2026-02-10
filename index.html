@@ -161,6 +161,7 @@ window.addEventListener('unhandledrejection', (e) => {
             const [facturasRecibidas, setFacturasRecibidas] = useState([]);
             const [cajaChica, setCajaChica] = useState([]);
             const [boletasHonorarios, setBoletasHonorarios] = useState([]);
+            const [sueldosSocios, setSueldosSocios] = useState([]);
             const [contaTab, setContaTab] = useState('dashboard');
             
             // Alertas de validación de datos
@@ -234,7 +235,8 @@ window.addEventListener('unhandledrejection', (e) => {
                     loadFacturasEmitidas(),
                     loadFacturasRecibidas(),
                     loadCajaChica(),
-                    loadBoletasHonorarios()
+                    loadBoletasHonorarios(),
+                    loadSueldosSocios()
                 ]);
             };
 
@@ -513,6 +515,12 @@ window.addEventListener('unhandledrejection', (e) => {
                 const { data, error } = await supabase.from('boletas_honorarios').select('*').order('fecha', { ascending: false });
                 if (error) console.error('Error loading boletas honorarios:', error);
                 else setBoletasHonorarios(data || []);
+            };
+            
+            const loadSueldosSocios = async () => {
+                const { data, error } = await supabase.from('sueldos_socios').select('*').order('fecha', { ascending: false });
+                if (error) console.error('Error loading sueldos socios:', error);
+                else setSueldosSocios(data || []);
             };
             
             // Sincronizar Boletas de Honorarios desde SimpleAPI
@@ -1807,7 +1815,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
-                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} boletasHonorarios={boletasHonorarios} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} monedaPreferida={monedaPreferida} alertasValidacion={alertasValidacion} setAlertasValidacion={setAlertasValidacion} sincronizarBoletasSII={sincronizarBoletasSII} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); loadBoletasHonorarios(); }} onFiles={openFilesModal} />}
+                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} boletasHonorarios={boletasHonorarios} sueldosSocios={sueldosSocios} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} monedaPreferida={monedaPreferida} alertasValidacion={alertasValidacion} setAlertasValidacion={setAlertasValidacion} sincronizarBoletasSII={sincronizarBoletasSII} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); loadBoletasHonorarios(); loadSueldosSocios(); }} onFiles={openFilesModal} />}
                         {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                         {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                         {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
@@ -2540,7 +2548,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             );
         }
 
-        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, tickets, keyAccounts, ufActual, contaTab, setContaTab, monedaPreferida, alertasValidacion, setAlertasValidacion, sincronizarBoletasSII, onReload, onFiles }) {
+        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, sueldosSocios, tickets, keyAccounts, ufActual, contaTab, setContaTab, monedaPreferida, alertasValidacion, setAlertasValidacion, sincronizarBoletasSII, onReload, onFiles }) {
             const [showModal, setShowModal] = useState(false);
             const [modalType, setModalType] = useState(null);
             const [editing, setEditing] = useState(null);
@@ -2726,6 +2734,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     const table = modalType === 'emitida' ? 'facturas_emitidas' : 
                                  modalType === 'recibida' ? 'facturas_recibidas' : 
                                  modalType === 'boleta' ? 'boletas_honorarios' :
+                                 modalType === 'sueldo' ? 'sueldos_socios' :
                                  'caja_chica';
                     
                     console.log('Guardando en tabla:', table);
@@ -2821,6 +2830,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     { id: 'emitidas', nombre: '📤 Facturas Emitidas' },
                                     { id: 'recibidas', nombre: '📥 Facturas Recibidas' },
                                     { id: 'boletas', nombre: '👤 Boletas Honorarios' },
+                                    { id: 'sueldos', nombre: '💼 Sueldos Socios' },
                                     { id: 'caja', nombre: '💵 Caja Chica' },
                                     { id: 'pl', nombre: '📊 Estado de Resultados' }
                                 ].map(tab => (
@@ -3284,6 +3294,86 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 </div>
                             )}
                             
+                            
+                            {/* Sueldos Socios */}
+                            {contaTab === 'sueldos' && (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-bold">Sueldos Socios</h3>
+                                        <button onClick={() => { setEditing(null); setModalType('sueldo'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Sueldo</button>
+                                    </div>
+                                    
+                                    {/* Desktop */}
+                                    <div className="hidden md:block overflow-x-auto">
+                                        <table className="min-w-full divide-y">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Socio</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Mes Servicio</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Fecha</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Monto</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Concepto</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {sueldosSocios.length === 0 ? (
+                                                    <tr><td colSpan="6" className="text-center text-sm text-gray-500 py-4">Sin sueldos registrados</td></tr>
+                                                ) : sueldosSocios.map(s => (
+                                                    <tr key={s.id} className="hover:bg-gray-50">
+                                                        <td className="px-4 py-3 text-sm font-medium">{s.socio}</td>
+                                                        <td className="px-4 py-3 text-sm">{s.mes_servicio}</td>
+                                                        <td className="px-4 py-3 text-sm">{s.fecha}</td>
+                                                        <td className="px-4 py-3"><DualCurrency amountUF={s.monto_uf} amountCLP={s.monto_clp} ufValue={s.uf_dia || ufActual} size="sm" primary={monedaPreferida} /></td>
+                                                        <td className="px-4 py-3 text-sm">{s.concepto}</td>
+                                                        <td className="px-4 py-3 text-right space-x-2">
+                                                            <button onClick={() => { setEditing(s); setModalType('sueldo'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
+                                                            <button onClick={() => onFiles('sueldos_socios', s.id, `Sueldo ${s.socio} ${s.mes_servicio}`)} className="text-gray-700 text-sm">📎</button>
+                                                            <button onClick={async () => {
+                                                                if (confirm('¿Eliminar este sueldo?')) {
+                                                                    await supabase.from('sueldos_socios').delete().eq('id', s.id);
+                                                                    onReload();
+                                                                }
+                                                            }} className="text-red-600 text-sm">Eliminar</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    {/* Mobile */}
+                                    <div className="md:hidden space-y-3">
+                                        {sueldosSocios.length === 0 ? (
+                                            <div className="text-center text-sm text-gray-500 py-4">Sin sueldos registrados</div>
+                                        ) : sueldosSocios.map(s => (
+                                            <div key={s.id} className="border rounded-lg p-4">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <div className="font-bold">{s.socio}</div>
+                                                        <div className="text-sm text-gray-600">{s.mes_servicio}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-sm space-y-1 mb-3">
+                                                    <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{s.fecha}</span></div>
+                                                    <div className="flex justify-between items-center"><span className="text-gray-600">Monto:</span><DualCurrency amountUF={s.monto_uf} amountCLP={s.monto_clp} ufValue={s.uf_dia || ufActual} size="sm" primary="UF" /></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Concepto:</span><span>{s.concepto}</span></div>
+                                                </div>
+                                                <div className="flex gap-2 pt-2 border-t">
+                                                    <button onClick={() => { setEditing(s); setModalType('sueldo'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                                    <button onClick={() => onFiles('sueldos_socios', s.id, `Sueldo ${s.socio} ${s.mes_servicio}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
+                                                    <button onClick={async () => {
+                                                        if (confirm('¿Eliminar este sueldo?')) {
+                                                            await supabase.from('sueldos_socios').delete().eq('id', s.id);
+                                                            onReload();
+                                                        }
+                                                    }} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             {/* Caja Chica */}
                             {contaTab === 'caja' && (
                                 <div className="space-y-4">
@@ -3483,6 +3573,14 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             })
                                             .reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || 0), 0);
                                         
+                                        // Sueldos Socios del mes
+                                        const sueldos = sueldosSocios
+                                            .filter(s => {
+                                                const d = new Date(s.fecha);
+                                                return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
+                                            })
+                                            .reduce((sum, s) => sum + (parseFloat(s.monto_uf) || 0), 0);
+                                        
                                         // Retenciones del mes (15.25%)
                                         const retenciones = boletasHonorarios
                                             .filter(b => {
@@ -3501,7 +3599,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         const cajaChicaUF = cajaChicaCLP / (ufActual || 38000);
                                         
                                         // Cálculos
-                                        const totalGastos = gastos + honorarios + cajaChicaUF;
+                                        const totalGastos = gastos + honorarios + sueldos + cajaChicaUF;
                                         const utilidadOperacional = emitidas - totalGastos;
                                         const utilidadNeta = utilidadOperacional; // Retenciones no son gasto, se pagan al SII
                                         
@@ -3510,6 +3608,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                             emitidas: Math.round(emitidas * 10) / 10,
                                             gastos: Math.round(gastos * 10) / 10,
                                             honorarios: Math.round(honorarios * 10) / 10,
+                                            sueldos: Math.round(sueldos * 10) / 10,
                                             cajaChica: Math.round(cajaChicaUF * 10) / 10,
                                             retenciones: Math.round(retenciones * 10) / 10,
                                             utilidadOperacional: Math.round(utilidadOperacional * 10) / 10,
@@ -3524,9 +3623,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 const totalEmitidas = datosPL.reduce((sum, m) => sum + m.emitidas, 0);
                                 const totalGastos = datosPL.reduce((sum, m) => sum + m.gastos, 0);
                                 const totalHonorarios = datosPL.reduce((sum, m) => sum + m.honorarios, 0);
+                                const totalSueldos = datosPL.reduce((sum, m) => sum + m.sueldos, 0);
                                 const totalCajaChica = datosPL.reduce((sum, m) => sum + m.cajaChica, 0);
                                 const totalRetenciones = datosPL.reduce((sum, m) => sum + m.retenciones, 0);
-                                const totalGastosConsolidado = totalGastos + totalHonorarios + totalCajaChica;
+                                const totalGastosConsolidado = totalGastos + totalHonorarios + totalSueldos + totalCajaChica;
                                 const utilidadOperacional = totalEmitidas - totalGastosConsolidado;
                                 const utilidadNeta = utilidadOperacional;
                                 
@@ -3654,6 +3754,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💰 Ingresos</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📥 Gastos</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">👤 Honorarios</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💼 Sueldos</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💵 Caja</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">🔶 Retenc.</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📊 Utilidad</th>
@@ -3666,6 +3767,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                         <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.emitidas} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
                                                         <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.gastos} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
                                                         <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.honorarios} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
+                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.sueldos} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
                                                         <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.cajaChica} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
                                                         <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.retenciones} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
                                                         <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.utilidadNeta} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
@@ -3692,6 +3794,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                     <div className="flex justify-between">
                                                         <span className="text-gray-600">👤 Honorarios:</span>
                                                         <span className="font-medium text-azul">{m.honorarios} UF</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-600">💼 Sueldos:</span>
+                                                        <span className="font-medium text-purple-600">{m.sueldos} UF</span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="text-gray-600">💵 Caja Chica:</span>
@@ -3730,6 +3836,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 if (type === 'emitida') return { numero_factura: '', cliente: '', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, ticket_id: null, key_account_id: null, moneda_principal: 'UF' };
                 if (type === 'recibida') return { numero_factura: '', proveedor: '', categoria: 'Servicios', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, moneda_principal: 'UF' };
                 if (type === 'boleta') return { fecha: new Date().toISOString().split('T')[0], prestador: '', rut: '', monto_bruto_uf: '', monto_bruto_clp: '', uf_dia: ufActual, porcentaje_retencion: 15.25, monto_retencion_uf: '', monto_retencion_clp: '', monto_liquido_uf: '', monto_liquido_clp: '', descripcion: '', mes_servicio: '', proyecto: '', moneda_principal: 'UF' };
+                if (type === 'sueldo') return { fecha: new Date().toISOString().split('T')[0], socio: 'Jere', monto_uf: '', monto_clp: '', uf_dia: ufActual, concepto: '', mes_servicio: '', moneda_principal: 'UF' };
                 if (type === 'caja') return { fecha: new Date().toISOString().split('T')[0], concepto: '', monto_clp: '', categoria: 'Otros', responsable: '', comprobante: '' };
             };
             
@@ -3802,6 +3909,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                     type === 'emitida' ? 'Factura Emitida' : 
                                     type === 'recibida' ? 'Factura Recibida' : 
                                     type === 'boleta' ? 'Boleta de Honorarios' :
+                                    type === 'sueldo' ? 'Sueldo Socio' :
                                     'Gasto Caja Chica'
                                 }
                             </h3>
@@ -3926,6 +4034,82 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 <TextAreaField label="Descripción" value={form.descripcion || ''} onChange={(e) => setForm({...form, descripcion: e.target.value})} />
                             </>)}
                             
+
+                            {type === 'sueldo' && (<>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Socio</label>
+                                        <input type="text" value={form.socio || ''} onChange={(e) => setForm({...form, socio: e.target.value})} className="w-full border rounded p-2" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Fecha</label>
+                                        <input type="date" value={form.fecha} onChange={(e) => setForm({...form, fecha: e.target.value})} className="w-full border rounded p-2" />
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Mes de Servicio</label>
+                                    <input type="text" value={form.mes_servicio || ''} onChange={(e) => setForm({...form, mes_servicio: e.target.value})} className="w-full border rounded p-2" placeholder="Enero 2026" />
+                                </div>
+                                
+                                {/* Selector de moneda */}
+                                <div className="flex items-center gap-4 p-3 bg-gray-50 rounded">
+                                    <span className="text-sm font-medium">Moneda principal:</span>
+                                    <button 
+                                        onClick={() => setMonedaPrincipal('UF')} 
+                                        className={`px-3 py-1 rounded text-sm ${monedaPrincipal === 'UF' ? 'bg-verde text-white' : 'bg-gray-200'}`}
+                                    >
+                                        UF
+                                    </button>
+                                    <button 
+                                        onClick={() => setMonedaPrincipal('CLP')} 
+                                        className={`px-3 py-1 rounded text-sm ${monedaPrincipal === 'CLP' ? 'bg-verde text-white' : 'bg-gray-200'}`}
+                                    >
+                                        CLP
+                                    </button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Monto {monedaPrincipal === 'UF' ? 'UF' : 'CLP'}</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            value={monedaPrincipal === 'UF' ? form.monto_uf : form.monto_clp} 
+                                            onChange={handleMontoChange}
+                                            className="w-full border rounded p-2" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Equivalente {monedaPrincipal === 'UF' ? 'CLP' : 'UF'}</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            value={monedaPrincipal === 'UF' ? form.monto_clp : form.monto_uf}
+                                            disabled
+                                            className="w-full border rounded p-2 bg-gray-100" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">UF del día</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            value={form.uf_dia} 
+                                            onChange={(e) => {
+                                                const nuevoUF = parseFloat(e.target.value) || ufActual;
+                                                setForm({...form, uf_dia: nuevoUF});
+                                            }}
+                                            className="w-full border rounded p-2" 
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Concepto</label>
+                                    <input type="text" value={form.concepto || ''} onChange={(e) => setForm({...form, concepto: e.target.value})} className="w-full border rounded p-2" placeholder="Sueldo mensual" />
+                                </div>
+                            </>)}
                             {type === 'caja' && (<>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <InputField label="Fecha" type="date" required value={form.fecha} onChange={(e) => setForm({...form, fecha: e.target.value})} />
