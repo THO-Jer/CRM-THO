@@ -4077,10 +4077,43 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                         )}
                                                         
                                                         {/* Acciones */}
-                                                        <div className="flex gap-2 pt-2 border-t">
+                                                        <div className="flex gap-2 pt-2 border-t flex-wrap">
+                                                            {/* Para salidas: siempre permitir crear gasto o factura recibida */}
+                                                            {mov.tipo === 'salida' && (
+                                                                <>
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            const categoria = resultado.sugerenciaCategoria || 'Otros';
+                                                                            if (confirm(`¿Crear gasto en Caja Chica como "${categoria}"?`)) {
+                                                                                crearGastoCajaChica(mov, categoria);
+                                                                            }
+                                                                        }}
+                                                                        className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200"
+                                                                    >
+                                                                        + Gasto
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => alert('Próximamente: crear factura recibida')}
+                                                                        className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+                                                                    >
+                                                                        + Factura Recibida
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            
+                                                            {/* Para entradas: siempre permitir crear factura emitida */}
+                                                            {mov.tipo === 'entrada' && (
+                                                                <button 
+                                                                    onClick={() => alert('Próximamente: crear factura emitida')}
+                                                                    className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
+                                                                >
+                                                                    + Factura Emitida
+                                                                </button>
+                                                            )}
+                                                            
                                                             <button 
                                                                 onClick={() => ignorarMovimiento(mov.id)}
-                                                                className="text-sm text-gray-600 hover:text-gray-800"
+                                                                className="text-xs px-2 py-1 text-gray-600 hover:text-gray-800"
                                                             >
                                                                 Ignorar
                                                             </button>
