@@ -520,6 +520,12 @@ window.addEventListener('unhandledrejection', (e) => {
                 const apiKey = prompt('Ingresa tu API Key de SimpleAPI:');
                 if (!apiKey) return;
                 
+                const rutUsuario = prompt('Ingresa tu RUT (con guión, ej: 12345678-9):');
+                if (!rutUsuario) return;
+                
+                const passwordSII = prompt('Ingresa tu contraseña del SII:');
+                if (!passwordSII) return;
+                
                 const año = prompt('¿Qué año deseas sincronizar? (ejemplo: 2025)');
                 if (!año) return;
                 
@@ -542,6 +548,8 @@ window.addEventListener('unhandledrejection', (e) => {
                     // Usar Vercel Serverless Function (sin problemas de CORS)
                     const payload = {
                         apiKey: apiKey,
+                        rutUsuario: rutUsuario,
+                        passwordSII: passwordSII,
                         año: año
                     };
                     
