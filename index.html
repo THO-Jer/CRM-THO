@@ -540,16 +540,22 @@ window.addEventListener('unhandledrejection', (e) => {
                     console.log('Intentando sincronizar:', año, mes || 'TODO EL AÑO');
                     
                     // Usar Vercel Serverless Function (sin problemas de CORS)
+                    const payload = {
+                        apiKey: apiKey,
+                        año: año
+                    };
+                    
+                    // Solo incluir mes si se especificó
+                    if (mes) {
+                        payload.mes = mes;
+                    }
+                    
                     const response = await fetch('/api/sync-boletas', {
                         method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({
-                            apiKey: apiKey,
-                            año: año,
-                            mes: mes || null
-                        })
+                        body: JSON.stringify(payload)
                     });
                     
                     console.log('Response status:', response.status);
