@@ -70,7 +70,7 @@ export default async function handler(req, res) {
       path: urlPath,
       method: 'POST',
       headers: {
-        'apikey': apiKey,
+        'Authorization': apiKey,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData)
       }
