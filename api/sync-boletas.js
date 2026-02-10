@@ -1,3 +1,6 @@
+// Vercel Serverless Function para sincronizar Boletas de Honorarios
+// IMPORTANTE: Esta función requiere Node.js 18+ para usar fetch nativo
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -29,34 +32,60 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const response = await fetch(
-      `https://api.simpleapi.cl/api/boletas_honorarios_emitidas/${año}/${mes}`,
-      {
+    // Usar https module nativo en lugar de fetch
+    const https = require('https');
+    
+    const url = `https://api.simpleapi.cl/api/boletas_honorarios_emitidas/${año}/${mes}`;
+    
+    const response = await new Promise((resolve, reject) => {
+      const options = {
         method: 'GET',
         headers: {
           'apikey': apiKey,
           'Content-Type': 'application/json'
         }
-      }
-    );
+      };
+
+      const request = https.get(url, options, (response) => {
+        let data = '';
+        
+        response.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        response.on('end', () => {
+          resolve({
+            ok: response.statusCode >= 200 && response.statusCode < 300,
+            status: response.statusCode,
+            data: data
+          });
+        });
+      });
+
+      request.on('error', (error) => {
+        reject(error);
+      });
+
+      request.end();
+    });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Error from SimpleAPI:', errorText);
+      console.error('Error from SimpleAPI:', response.data);
       return res.status(response.status).json({
         error: `Error ${response.status} desde SimpleAPI`,
-        details: errorText
+        details: response.data
       });
     }
 
-    const data = await response.json();
+    const data = JSON.parse(response.data);
     return res.status(200).json(data);
 
   } catch (error) {
     console.error('Error en sync-boletas:', error);
     return res.status(500).json({
       error: 'Error al conectar con SimpleAPI',
-      message: error.message
+      message: error.message,
+      stack: error.stack
     });
   }
 };
