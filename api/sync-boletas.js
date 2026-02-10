@@ -21,39 +21,49 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { apiKey, año, mes } = req.body;
+    const { apiKey, año, mes, rutUsuario, passwordSII } = req.body;
 
     // Log de lo que recibimos
     console.log('=== REQUEST BODY ===');
     console.log('apiKey:', apiKey ? 'presente' : 'FALTA');
+    console.log('rutUsuario:', rutUsuario ? 'presente' : 'FALTA');
+    console.log('passwordSII:', passwordSII ? 'presente' : 'FALTA');
     console.log('año:', año);
     console.log('mes:', mes);
-    console.log('mes type:', typeof mes);
 
-    // Validar solo apiKey y año
-    if (!apiKey || !año) {
+    // Validar parámetros requeridos
+    if (!apiKey || !año || !rutUsuario || !passwordSII) {
       return res.status(400).json({ 
-        error: 'Faltan parámetros requeridos: apiKey, año',
-        received: { apiKey: !!apiKey, año: !!año, mes: mes }
+        error: 'Faltan parámetros requeridos: apiKey, año, rutUsuario, passwordSII',
+        received: { 
+          apiKey: !!apiKey, 
+          año: !!año, 
+          rutUsuario: !!rutUsuario, 
+          passwordSII: !!passwordSII, 
+          mes: mes 
+        }
       });
     }
 
     // Determinar si pedir mes específico o todo el año
     let urlPath;
-    // Mes es válido si existe, no es vacío, y no es null/undefined
     if (mes && mes !== '' && mes !== 'null' && mes !== 'undefined') {
-      const mesPad = String(mes).padStart(2, '0'); // 1 -> 01
+      const mesPad = String(mes).padStart(2, '0');
       urlPath = `/api/bhe/listado/recibidas/${mesPad}/${año}`;
     } else {
-      // Si no hay mes, usar solo año
       urlPath = `/api/bhe/listado/recibidas/${año}`;
     }
     
     console.log('=== DEBUG INFO ===');
-    console.log('API Key (primeros 10 chars):', apiKey.substring(0, 10) + '...');
     console.log('Año:', año);
     console.log('Mes válido:', mes && mes !== '' ? mes : 'NO (traer todo el año)');
     console.log('URL completa:', `https://servicios.simpleapi.cl${urlPath}`);
+    
+    // Preparar body para SimpleAPI
+    const postData = JSON.stringify({
+      RutUsuario: rutUsuario,
+      PasswordSII: passwordSII
+    });
     
     const options = {
       hostname: 'servicios.simpleapi.cl',
@@ -61,7 +71,8 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: {
         'apikey': apiKey,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
       }
     };
 
@@ -70,7 +81,6 @@ export default async function handler(req, res) {
         let data = '';
         
         console.log('Response status code:', response.statusCode);
-        console.log('Response headers:', response.headers);
         
         response.on('data', (chunk) => {
           data += chunk;
@@ -100,6 +110,8 @@ export default async function handler(req, res) {
         reject(e);
       });
 
+      // Enviar el body
+      request.write(postData);
       request.end();
     });
 
