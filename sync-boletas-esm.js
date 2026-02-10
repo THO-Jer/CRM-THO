@@ -23,26 +23,37 @@ export default async function handler(req, res) {
   try {
     const { apiKey, año, mes } = req.body;
 
-    // Validar
+    // Log de lo que recibimos
+    console.log('=== REQUEST BODY ===');
+    console.log('apiKey:', apiKey ? 'presente' : 'FALTA');
+    console.log('año:', año);
+    console.log('mes:', mes);
+    console.log('mes type:', typeof mes);
+
+    // Validar solo apiKey y año
     if (!apiKey || !año) {
       return res.status(400).json({ 
-        error: 'Faltan parámetros requeridos: apiKey, año'
+        error: 'Faltan parámetros requeridos: apiKey, año',
+        received: { apiKey: !!apiKey, año: !!año, mes: mes }
       });
     }
 
     // Determinar si pedir mes específico o todo el año
     let urlPath;
-    if (mes) {
+    // Mes es válido si existe, no es vacío, y no es null/undefined
+    if (mes && mes !== '' && mes !== 'null' && mes !== 'undefined') {
       const mesPad = String(mes).padStart(2, '0'); // 1 -> 01
       urlPath = `/api/bhe/listado/recibidas/${mesPad}/${año}`;
     } else {
-      // Si no hay mes, traer enero-diciembre y concatenar
-      urlPath = `/api/bhe/listado/recibidas/${año}`; // o hacer 12 llamadas
+      // Si no hay mes, usar solo año
+      urlPath = `/api/bhe/listado/recibidas/${año}`;
     }
     
     console.log('=== DEBUG INFO ===');
     console.log('API Key (primeros 10 chars):', apiKey.substring(0, 10) + '...');
     console.log('Año:', año);
+    console.log('Mes válido:', mes && mes !== '' ? mes : 'NO (traer todo el año)');
+    console.log('URL completa:', `https://servicios.simpleapi.cl${urlPath}`);
     console.log('Mes:', mes || 'TODO EL AÑO');
     console.log('URL completa:', `https://servicios.simpleapi.cl${urlPath}`);
     
