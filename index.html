@@ -536,29 +536,26 @@ window.addEventListener('unhandledrejection', (e) => {
                 try {
                     console.log('Intentando sincronizar:', año, mes);
                     
-                    // SOLUCIÓN TEMPORAL: Usar proxy CORS
-                    // Para producción, deberías crear tu propio backend
-                    const apiUrl = `https://api.simpleapi.cl/api/boletas_honorarios_emitidas/${año}/${mes}`;
-                    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
-                    
-                    console.log('URL original:', apiUrl);
-                    console.log('URL con proxy:', proxyUrl);
-                    
-                    const response = await fetch(proxyUrl, {
-                        method: 'GET',
+                    // Usar Vercel Serverless Function (sin problemas de CORS)
+                    const response = await fetch('/api/sync-boletas', {
+                        method: 'POST',
                         headers: { 
-                            'apikey': apiKey,
                             'Content-Type': 'application/json'
-                        }
+                        },
+                        body: JSON.stringify({
+                            apiKey: apiKey,
+                            año: año,
+                            mes: mes
+                        })
                     });
                     
                     console.log('Response status:', response.status);
                     console.log('Response ok:', response.ok);
                     
                     if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('Error response:', errorText);
-                        throw new Error(`Error ${response.status}: ${errorText || response.statusText}`);
+                        const errorData = await response.json();
+                        console.error('Error response:', errorData);
+                        throw new Error(errorData.error || `Error ${response.status}`);
                     }
                     
                     const result = await response.json();
@@ -637,14 +634,7 @@ window.addEventListener('unhandledrejection', (e) => {
                     
                 } catch (error) {
                     console.error('Error sincronizando:', error);
-                    
-                    // Mensajes de error más específicos
-                    let errorMsg = error.message;
-                    if (error.message.includes('Failed to fetch')) {
-                        errorMsg = 'No se pudo conectar con SimpleAPI.\n\nPosibles causas:\n• API Key inválida\n• Problema de CORS\n• SimpleAPI no está disponible\n• Verifica tu conexión a internet';
-                    }
-                    
-                    alert(`❌ Error al sincronizar:\n\n${errorMsg}\n\nRevisa la consola del navegador para más detalles (F12).`);
+                    alert(`❌ Error al sincronizar:\n\n${error.message}\n\nRevisa la consola del navegador para más detalles (F12).`);
                 }
             };
             
