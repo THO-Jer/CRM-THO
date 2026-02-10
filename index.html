@@ -615,33 +615,36 @@ window.addEventListener('unhandledrejection', (e) => {
                     
                     for (const boleta of boletas) {
                         try {
+                            // Extraer campos de la estructura anidada de SimpleAPI
+                            const fecha = boleta.encabezado?.fechaBoleta?.split('T')[0] || null;
+                            const prestador = boleta.emisor?.razonSocial?.trim() || 'Sin nombre';
+                            const rut = boleta.emisor?.rut || '';
+                            const montoBruto = parseFloat(boleta.honorarios?.brutos) || 0;
+                            const retenido = parseFloat(boleta.honorarios?.retenido) || 0;
+                            const liquido = parseFloat(boleta.honorarios?.pagado) || 0;
+                            const ufDia = ufActual;
+                            
                             // Detectar duplicados
-                            const key = `${boleta.razon_social_emisor || 'Sin nombre'}-${boleta.fecha}-${boleta.monto_bruto}`;
+                            const key = `${prestador}-${fecha}-${montoBruto}`;
                             if (existentesMap.has(key)) {
                                 duplicadas++;
                                 continue;
                             }
                             
-                            // Mapear datos del SII a estructura interna
-                            const montoBruto = parseFloat(boleta.monto_bruto) || 0;
-                            const retencion = parseFloat(boleta.retencion) || 0;
-                            const liquido = parseFloat(boleta.liquido) || 0;
-                            const ufDia = parseFloat(boleta.uf_dia) || ufActual;
-                            
                             const nuevaBoleta = {
-                                fecha: boleta.fecha,
-                                prestador: boleta.razon_social_emisor || 'Sin nombre',
-                                rut: boleta.rut_emisor || '',
+                                fecha: fecha,
+                                prestador: prestador,
+                                rut: rut,
                                 monto_bruto_clp: montoBruto,
                                 monto_bruto_uf: (montoBruto / ufDia).toFixed(2),
-                                monto_retencion_clp: retencion,
-                                monto_retencion_uf: (retencion / ufDia).toFixed(2),
+                                monto_retencion_clp: retenido,
+                                monto_retencion_uf: (retenido / ufDia).toFixed(2),
                                 monto_liquido_clp: liquido,
                                 monto_liquido_uf: (liquido / ufDia).toFixed(2),
-                                porcentaje_retencion: retencion > 0 ? ((retencion / montoBruto) * 100).toFixed(2) : 0,
+                                porcentaje_retencion: retenido > 0 ? ((retenido / montoBruto) * 100).toFixed(2) : 0,
                                 uf_dia: ufDia,
-                                descripcion: boleta.detalle || '',
-                                mes_servicio: boleta.periodo_servicio || `${getNombreMes(new Date(boleta.fecha).getMonth() + 1)} ${año}`,
+                                descripcion: '',
+                                mes_servicio: `${getNombreMes(mes)} ${año}`,
                                 proyecto: '',
                                 moneda_principal: 'CLP'
                             };
