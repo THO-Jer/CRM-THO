@@ -562,112 +562,111 @@ window.addEventListener('unhandledrejection', (e) => {
                 try {
                     console.log('Intentando sincronizar:', año, mes || 'TODO EL AÑO');
                     
-                    // Usar Vercel Serverless Function (sin problemas de CORS)
-                    const payload = {
-                        apiKey: apiKey,
-                        rutUsuario: rutUsuario,
-                        passwordSII: passwordSII,
-                        año: año
-                    };
+                    // Si no se especificó mes, sincronizar todos los meses
+                    const mesesASincronizar = mes ? [parseInt(mes)] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
                     
-                    // Solo incluir mes si se especificó
-                    if (mes) {
-                        payload.mes = mes;
-                    }
+                    let totalInsertadas = 0;
+                    let totalDuplicadas = 0;
+                    let totalErrores = 0;
                     
-                    const response = await fetch('/api/sync-boletas', {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    console.log('Response status:', response.status);
-                    console.log('Response ok:', response.ok);
-                    
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        console.error('Error response:', errorData);
-                        throw new Error(errorData.error || `Error ${response.status}`);
-                    }
-                    
-                    const result = await response.json();
-                    console.log('Resultado completo:', result);
-                    
-                    const boletas = result.boletas || result.data || [];
-                    console.log('Boletas encontradas:', boletas.length);
-                    
-                    if (boletas.length === 0) {
-                        alert(`No se encontraron boletas para ${mesTexto} ${año}`);
-                        return;
-                    }
-                    
-                    let insertadas = 0;
-                    let duplicadas = 0;
-                    let errores = 0;
-                    
-                    // Obtener boletas existentes para detectar duplicados
+                    // Obtener boletas existentes una sola vez para detectar duplicados
                     const { data: existentes } = await supabase.from('boletas_honorarios').select('*');
                     const existentesMap = new Set(
                         (existentes || []).map(b => `${b.prestador}-${b.fecha}-${b.monto_bruto_clp}`)
                     );
                     
-                    for (const boleta of boletas) {
+                    for (const mesActual of mesesASincronizar) {
                         try {
-                            // Extraer campos de la estructura anidada de SimpleAPI
-                            const fecha = boleta.encabezado?.fechaBoleta?.split('T')[0] || null;
-                            const prestador = boleta.emisor?.razonSocial?.trim() || 'Sin nombre';
-                            const rut = boleta.emisor?.rut || '';
-                            const montoBruto = parseFloat(boleta.honorarios?.brutos) || 0;
-                            const retenido = parseFloat(boleta.honorarios?.retenido) || 0;
-                            const liquido = parseFloat(boleta.honorarios?.pagado) || 0;
-                            const ufDia = ufActual;
+                            console.log(`Sincronizando ${getNombreMes(mesActual)} ${año}...`);
                             
-                            // Detectar duplicados
-                            const key = `${prestador}-${fecha}-${montoBruto}`;
-                            if (existentesMap.has(key)) {
-                                duplicadas++;
-                                continue;
-                            }
-                            
-                            const nuevaBoleta = {
-                                fecha: fecha,
-                                prestador: prestador,
-                                rut: rut,
-                                monto_bruto_clp: montoBruto,
-                                monto_bruto_uf: (montoBruto / ufDia).toFixed(2),
-                                monto_retencion_clp: retenido,
-                                monto_retencion_uf: (retenido / ufDia).toFixed(2),
-                                monto_liquido_clp: liquido,
-                                monto_liquido_uf: (liquido / ufDia).toFixed(2),
-                                porcentaje_retencion: retenido > 0 ? ((retenido / montoBruto) * 100).toFixed(2) : 0,
-                                uf_dia: ufDia,
-                                descripcion: '',
-                                mes_servicio: `${getNombreMes(mes)} ${año}`,
-                                proyecto: '',
-                                moneda_principal: 'CLP'
+                            // Usar Vercel Serverless Function
+                            const payload = {
+                                apiKey: apiKey,
+                                rutUsuario: rutUsuario,
+                                passwordSII: passwordSII,
+                                año: año,
+                                mes: mesActual
                             };
                             
-                            console.log('Insertando boleta:', nuevaBoleta);
+                            const response = await fetch('/api/sync-boletas', {
+                                method: 'POST',
+                                headers: { 
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(payload)
+                            });
                             
-                            const { error: insertError } = await supabase
-                                .from('boletas_honorarios')
-                                .insert([nuevaBoleta]);
-                            
-                            if (insertError) {
-                                console.error('Error insertando boleta:', insertError);
-                                errores++;
-                            } else {
-                                insertadas++;
+                            if (!response.ok) {
+                                const errorData = await response.json();
+                                console.error(`Error en ${getNombreMes(mesActual)}:`, errorData);
+                                totalErrores++;
+                                continue; // Continuar con el siguiente mes
                             }
-                        } catch (boletaError) {
-                            console.error('Error procesando boleta individual:', boletaError);
-                            errores++;
+                            
+                            const result = await response.json();
+                            const boletas = result.boletas || result.data || [];
+                            
+                            console.log(`${getNombreMes(mesActual)}: ${boletas.length} boletas encontradas`);
+                            
+                            for (const boleta of boletas) {
+                                try {
+                                    // Extraer campos de la estructura anidada de SimpleAPI
+                                    const fecha = boleta.encabezado?.fechaBoleta?.split('T')[0] || null;
+                                    const prestador = boleta.emisor?.razonSocial?.trim() || 'Sin nombre';
+                                    const rut = boleta.emisor?.rut || '';
+                                    const montoBruto = parseFloat(boleta.honorarios?.brutos) || 0;
+                                    const retenido = parseFloat(boleta.honorarios?.retenido) || 0;
+                                    const liquido = parseFloat(boleta.honorarios?.pagado) || 0;
+                                    const ufDia = ufActual;
+                                    
+                                    // Detectar duplicados
+                                    const key = `${prestador}-${fecha}-${montoBruto}`;
+                                    if (existentesMap.has(key)) {
+                                        totalDuplicadas++;
+                                        continue;
+                                    }
+                                    
+                                    const nuevaBoleta = {
+                                        fecha: fecha,
+                                        prestador: prestador,
+                                        rut: rut,
+                                        monto_bruto_clp: montoBruto,
+                                        monto_bruto_uf: (montoBruto / ufDia).toFixed(2),
+                                        monto_retencion_clp: retenido,
+                                        monto_retencion_uf: (retenido / ufDia).toFixed(2),
+                                        monto_liquido_clp: liquido,
+                                        monto_liquido_uf: (liquido / ufDia).toFixed(2),
+                                        porcentaje_retencion: retenido > 0 ? ((retenido / montoBruto) * 100).toFixed(2) : 0,
+                                        uf_dia: ufDia,
+                                        descripcion: '',
+                                        mes_servicio: `${getNombreMes(mesActual)} ${año}`,
+                                        proyecto: '',
+                                        moneda_principal: 'CLP'
+                                    };
+                                    
+                                    const { error: insertError } = await supabase
+                                        .from('boletas_honorarios')
+                                        .insert([nuevaBoleta]);
+                                    
+                                    if (insertError) {
+                                        console.error('Error insertando boleta:', insertError);
+                                        totalErrores++;
+                                    } else {
+                                        totalInsertadas++;
+                                        existentesMap.add(key); // Agregar al set para evitar duplicados en la misma sincronización
+                                    }
+                                } catch (boletaError) {
+                                    console.error('Error procesando boleta individual:', boletaError);
+                                    totalErrores++;
+                                }
+                            }
+                        } catch (mesError) {
+                            console.error(`Error sincronizando ${getNombreMes(mesActual)}:`, mesError);
+                            totalErrores++;
                         }
                     }
                     
-                    alert(`✅ Sincronización completada:\n\n• ${insertadas} boletas nuevas insertadas\n• ${duplicadas} duplicadas omitidas\n• ${errores} errores`);
+                    alert(`✅ Sincronización completada:\n\n• ${totalInsertadas} boletas nuevas insertadas\n• ${totalDuplicadas} duplicadas omitidas\n• ${totalErrores} errores`);
                     loadBoletasHonorarios();
                     
                 } catch (error) {
