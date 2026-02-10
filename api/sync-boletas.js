@@ -1,52 +1,52 @@
-// Vercel Serverless Function para sincronizar Boletas de Honorarios
-// IMPORTANTE: Esta función requiere Node.js 18+ para usar fetch nativo
+// Vercel Serverless Function - ES Module syntax
+import https from 'https';
 
-module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Credentials', true);
+export default async function handler(req, res) {
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // OPTIONS preflight
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
+  // Solo POST
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { apiKey, año, mes } = req.body;
-
-  if (!apiKey) {
-    return res.status(400).json({ error: 'API Key es requerida' });
-  }
-
-  if (!año || !mes) {
-    return res.status(400).json({ error: 'Año y mes son requeridos' });
-  }
-
-  const mesNum = parseInt(mes);
-  if (mesNum < 1 || mesNum > 12) {
-    return res.status(400).json({ error: 'Mes inválido (debe ser 1-12)' });
+    return res.status(405).json({ 
+      error: 'Method not allowed',
+      method: req.method 
+    });
   }
 
   try {
-    // Usar https module nativo en lugar de fetch
-    const https = require('https');
-    
-    const url = `https://api.simpleapi.cl/api/boletas_honorarios_emitidas/${año}/${mes}`;
-    
-    const response = await new Promise((resolve, reject) => {
-      const options = {
-        method: 'GET',
-        headers: {
-          'apikey': apiKey,
-          'Content-Type': 'application/json'
-        }
-      };
+    const { apiKey, año, mes } = req.body;
 
-      const request = https.get(url, options, (response) => {
+    // Validar
+    if (!apiKey || !año || !mes) {
+      return res.status(400).json({ 
+        error: 'Faltan parámetros requeridos: apiKey, año, mes'
+      });
+    }
+
+    const mesNum = parseInt(mes);
+    if (mesNum < 1 || mesNum > 12) {
+      return res.status(400).json({ error: 'Mes inválido (debe ser 1-12)' });
+    }
+
+    // Llamar a SimpleAPI
+    const options = {
+      hostname: 'api.simpleapi.cl',
+      path: `/api/boletas_honorarios_emitidas/${año}/${mes}`,
+      method: 'GET',
+      headers: {
+        'apikey': apiKey
+      }
+    };
+
+    const result = await new Promise((resolve, reject) => {
+      const request = https.request(options, (response) => {
         let data = '';
         
         response.on('data', (chunk) => {
@@ -54,38 +54,44 @@ module.exports = async (req, res) => {
         });
         
         response.on('end', () => {
-          resolve({
-            ok: response.statusCode >= 200 && response.statusCode < 300,
-            status: response.statusCode,
-            data: data
-          });
+          try {
+            const parsed = JSON.parse(data);
+            resolve({
+              statusCode: response.statusCode,
+              data: parsed
+            });
+          } catch (e) {
+            resolve({
+              statusCode: response.statusCode,
+              data: data,
+              parseError: e.message
+            });
+          }
         });
       });
 
-      request.on('error', (error) => {
-        reject(error);
+      request.on('error', (e) => {
+        reject(e);
       });
 
       request.end();
     });
 
-    if (!response.ok) {
-      console.error('Error from SimpleAPI:', response.data);
-      return res.status(response.status).json({
-        error: `Error ${response.status} desde SimpleAPI`,
-        details: response.data
+    if (result.statusCode !== 200) {
+      return res.status(result.statusCode).json({
+        error: 'Error desde SimpleAPI',
+        statusCode: result.statusCode,
+        details: result.data
       });
     }
 
-    const data = JSON.parse(response.data);
-    return res.status(200).json(data);
+    return res.status(200).json(result.data);
 
   } catch (error) {
     console.error('Error en sync-boletas:', error);
     return res.status(500).json({
-      error: 'Error al conectar con SimpleAPI',
-      message: error.message,
-      stack: error.stack
+      error: 'Error interno del servidor',
+      message: error.message
     });
   }
-};
+}
