@@ -523,18 +523,21 @@ window.addEventListener('unhandledrejection', (e) => {
                 const año = prompt('¿Qué año deseas sincronizar? (ejemplo: 2025)');
                 if (!año) return;
                 
-                const mes = prompt('¿Qué mes? (1-12)');
-                if (!mes || parseInt(mes) < 1 || parseInt(mes) > 12) {
-                    alert('Mes inválido');
+                const mes = prompt('¿Qué mes? (1-12, o deja vacío para TODO el año)');
+                
+                // Validar mes solo si se ingresó
+                if (mes && (parseInt(mes) < 1 || parseInt(mes) > 12)) {
+                    alert('Mes inválido (debe ser 1-12 o vacío para todo el año)');
                     return;
                 }
                 
                 // Mostrar loading
-                const loading = confirm(`Sincronizando boletas de ${getNombreMes(parseInt(mes))} ${año}...\n\nPresiona OK para continuar.`);
+                const mesTexto = mes ? getNombreMes(parseInt(mes)) : 'TODO';
+                const loading = confirm(`Sincronizando boletas de ${mesTexto} ${año}...\n\nPresiona OK para continuar.`);
                 if (!loading) return;
                 
                 try {
-                    console.log('Intentando sincronizar:', año, mes);
+                    console.log('Intentando sincronizar:', año, mes || 'TODO EL AÑO');
                     
                     // Usar Vercel Serverless Function (sin problemas de CORS)
                     const response = await fetch('/api/sync-boletas', {
@@ -545,7 +548,7 @@ window.addEventListener('unhandledrejection', (e) => {
                         body: JSON.stringify({
                             apiKey: apiKey,
                             año: año,
-                            mes: mes
+                            mes: mes || null
                         })
                     });
                     
@@ -565,7 +568,7 @@ window.addEventListener('unhandledrejection', (e) => {
                     console.log('Boletas encontradas:', boletas.length);
                     
                     if (boletas.length === 0) {
-                        alert(`No se encontraron boletas para ${getNombreMes(parseInt(mes))} ${año}`);
+                        alert(`No se encontraron boletas para ${mesTexto} ${año}`);
                         return;
                     }
                     
@@ -582,7 +585,7 @@ window.addEventListener('unhandledrejection', (e) => {
                     for (const boleta of boletas) {
                         try {
                             // Detectar duplicados
-                            const key = `${boleta.razon_social_receptor || 'Sin nombre'}-${boleta.fecha_emision}-${boleta.monto_bruto}`;
+                            const key = `${boleta.razon_social_emisor || 'Sin nombre'}-${boleta.fecha}-${boleta.monto_bruto}`;
                             if (existentesMap.has(key)) {
                                 duplicadas++;
                                 continue;
@@ -591,13 +594,13 @@ window.addEventListener('unhandledrejection', (e) => {
                             // Mapear datos del SII a estructura interna
                             const montoBruto = parseFloat(boleta.monto_bruto) || 0;
                             const retencion = parseFloat(boleta.retencion) || 0;
-                            const liquido = parseFloat(boleta.monto_liquido) || 0;
-                            const ufDia = parseFloat(boleta.valor_uf) || ufActual;
+                            const liquido = parseFloat(boleta.liquido) || 0;
+                            const ufDia = parseFloat(boleta.uf_dia) || ufActual;
                             
                             const nuevaBoleta = {
-                                fecha: boleta.fecha_emision,
-                                prestador: boleta.razon_social_receptor || 'Sin nombre',
-                                rut: boleta.rut_receptor || '',
+                                fecha: boleta.fecha,
+                                prestador: boleta.razon_social_emisor || 'Sin nombre',
+                                rut: boleta.rut_emisor || '',
                                 monto_bruto_clp: montoBruto,
                                 monto_bruto_uf: (montoBruto / ufDia).toFixed(2),
                                 monto_retencion_clp: retencion,
@@ -606,8 +609,8 @@ window.addEventListener('unhandledrejection', (e) => {
                                 monto_liquido_uf: (liquido / ufDia).toFixed(2),
                                 porcentaje_retencion: retencion > 0 ? ((retencion / montoBruto) * 100).toFixed(2) : 0,
                                 uf_dia: ufDia,
-                                descripcion: boleta.detalle_servicio || '',
-                                mes_servicio: `${getNombreMes(parseInt(mes))} ${año}`,
+                                descripcion: boleta.detalle || '',
+                                mes_servicio: boleta.periodo_servicio || `${getNombreMes(new Date(boleta.fecha).getMonth() + 1)} ${año}`,
                                 proyecto: ''
                             };
                             
