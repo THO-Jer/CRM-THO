@@ -3900,7 +3900,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                     if (confirm('¿Eliminar TODOS los movimientos bancarios? Esta acción no se puede deshacer.')) {
                                                         const { error } = await supabase.from('movimientos_bancarios').delete().neq('id', '00000000-0000-0000-0000-000000000000');
                                                         if (error) alert('Error: ' + error.message);
-                                                        else { alert('✅ Movimientos eliminados'); loadMovimientosBancarios(); }
+                                                        else { alert('✅ Movimientos eliminados'); onReload(); }
                                                     }
                                                 }}
                                                 className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
