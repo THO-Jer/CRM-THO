@@ -13,10 +13,35 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        /* Variables CSS para modo oscuro */
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f9fafb;
+            --bg-tertiary: #f3f4f6;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+        
+        [data-theme="dark"] {
+            --bg-primary: #1f2937;
+            --bg-secondary: #111827;
+            --bg-tertiary: #374151;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --border-color: #374151;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+        }
+        
         body { 
             font-family: 'Inter', sans-serif; 
             overflow-x: hidden;
             max-width: 100vw;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: background-color 0.2s, color 0.2s;
         }
         .color-naranja { background-color: #FF8C42; }
         .border-naranja { border-color: #FF8C42; }
@@ -48,10 +73,80 @@
             .desktop-table { display: table; }
             .mobile-cards { display: none; }
         }
+        
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        
+        .toast {
+            pointer-events: auto;
+            min-width: 320px;
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            font-weight: 500;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .toast.success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
+        .toast.error { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; }
+        .toast.warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; }
+        .toast.info { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; }
+        
+        /* Skeleton loaders */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s ease-in-out infinite;
+            border-radius: 4px;
+        }
+        
+        [data-theme="dark"] .skeleton {
+            background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+            background-size: 200% 100%;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .skeleton-text { height: 16px; margin-bottom: 8px; }
+        .skeleton-title { height: 24px; width: 60%; margin-bottom: 12px; }
+        .skeleton-card { height: 120px; margin-bottom: 16px; }
+        
+        /* Smooth transitions */
+        * { transition: background-color 0.2s, color 0.2s, border-color 0.2s; }
+        button { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        button:active:not(:disabled) { transform: translateY(0); }
+        
+        /* Responsive toast */
+        @media (max-width: 768px) {
+            .toast-container { right: 10px; left: 10px; top: 10px; }
+            .toast { min-width: auto; width: 100%; }
+        }
     </style>
 </head>
 <body class="bg-gray-50">
     <div id="root"></div>
+    <div id="toast-container" class="toast-container"></div>
     <script type="text/babel">
 
 // ---- Debug safety net (shows JS errors on screen instead of blank page)
@@ -82,6 +177,89 @@ window.addEventListener('unhandledrejection', (e) => {
 
 
         const { useState, useEffect } = React;
+        
+        // ============================================
+        // SISTEMA DE TOASTS
+        // ============================================
+        const showToast = (message, type = 'info') => {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const icons = {
+                success: '✓',
+                error: '✕',
+                warning: '⚠',
+                info: 'ℹ'
+            };
+            
+            toast.innerHTML = `
+                <span style="font-size: 20px; flex-shrink: 0;">${icons[type] || icons.info}</span>
+                <span style="flex: 1;">${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        };
+        
+        // Reemplazar alert() nativo con toasts
+        const originalAlert = window.alert;
+        window.alert = (msg) => {
+            if (!msg) return;
+            const type = msg.includes('✅') ? 'success' : 
+                        msg.includes('❌') ? 'error' :
+                        msg.includes('⚠') ? 'warning' : 'info';
+            showToast(msg.replace(/[✅❌⚠]/g, '').trim(), type);
+        };
+        
+        // Confirm mejorado con modal
+        const originalConfirm = window.confirm;
+        window.confirm = async (message) => {
+            return new Promise((resolve) => {
+                const overlay = document.createElement('div');
+                overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+                overlay.style.animation = 'fadeIn 0.2s';
+                
+                const modal = document.createElement('div');
+                modal.className = 'bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl max-w-md mx-4';
+                modal.style.animation = 'slideIn 0.3s';
+                modal.innerHTML = `
+                    <p class="text-gray-800 dark:text-gray-200 mb-6 text-lg">${message}</p>
+                    <div class="flex gap-3 justify-end">
+                        <button id="cancel-btn" class="px-5 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 font-medium">
+                            Cancelar
+                        </button>
+                        <button id="confirm-btn" class="px-5 py-2 rounded-lg color-naranja text-white hover:opacity-90 font-medium">
+                            Confirmar
+                        </button>
+                    </div>
+                `;
+                
+                overlay.appendChild(modal);
+                document.body.appendChild(overlay);
+                
+                document.getElementById('confirm-btn').onclick = () => {
+                    overlay.remove();
+                    resolve(true);
+                };
+                document.getElementById('cancel-btn').onclick = () => {
+                    overlay.remove();
+                    resolve(false);
+                };
+                overlay.onclick = (e) => {
+                    if (e.target === overlay) {
+                        overlay.remove();
+                        resolve(false);
+                    }
+                };
+            });
+        };
         
         const SUPABASE_URL = 'https://bepifbenblkqjuplvylh.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlcGlmYmVuYmxrcWp1cGx2eWxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2MTEzMDQsImV4cCI6MjA4NTE4NzMwNH0.E0gnHaRFm1V3PuN6aAvspmeuByzrqScbItE-ihh9kY0';
@@ -146,6 +324,16 @@ window.addEventListener('unhandledrejection', (e) => {
             const [filterTipo, setFilterTipo] = useState('todos');
             const [ufActual, setUfActual] = useState(38000); // Valor UF del día
             const [monedaPreferida, setMonedaPreferida] = useState('UF'); // Toggle global UF/CLP
+            const [darkMode, setDarkMode] = useState(() => {
+                const saved = localStorage.getItem('darkMode');
+                return saved === 'true';
+            });
+            
+            // Aplicar tema al document
+            useEffect(() => {
+                document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+                localStorage.setItem('darkMode', darkMode);
+            }, [darkMode]);
             const [actividadReciente, setActividadReciente] = useState([]);
 
             // Modal de archivos
@@ -2094,25 +2282,25 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-xl text-gray-600">Cargando...</div></div>;
 
             return (
-                <div className="min-h-screen bg-gray-50">
-                    <header className="bg-white border-b sticky top-0 z-10">
+                <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+                    <header className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 sticky top-0 z-10 transition-colors">
                         <div className="max-w-7xl mx-auto px-4 py-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h1 className="text-2xl font-bold text-naranja">CRM THO</h1>
                                     <div className="flex items-center space-x-2">
-                                        <p className="text-sm text-gray-600">The Human Org</p>
-                                        <span className="text-xs text-gray-400">•</span>
-                                        <p className="text-xs text-gray-500">UF: ${ufActual.toLocaleString('es-CL')}</p>
-                                        <span className="text-xs text-gray-400">•</span>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">The Human Org</p>
+                                        <span className="text-xs text-gray-400 dark:text-gray-600">•</span>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">UF: ${ufActual.toLocaleString('es-CL')}</p>
+                                        <span className="text-xs text-gray-400 dark:text-gray-600">•</span>
                                         {/* Toggle UF/CLP */}
-                                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                                        <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                                             <button
                                                 onClick={() => setMonedaPreferida('UF')}
                                                 className={`px-2 py-1 text-xs font-medium rounded transition ${
                                                     monedaPreferida === 'UF'
                                                         ? 'bg-verde text-white'
-                                                        : 'text-gray-600 hover:text-gray-900'
+                                                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
                                                 }`}
                                             >
                                                 UF
@@ -2122,12 +2310,20 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                 className={`px-2 py-1 text-xs font-medium rounded transition ${
                                                     monedaPreferida === 'CLP'
                                                         ? 'bg-verde text-white'
-                                                        : 'text-gray-600 hover:text-gray-900'
+                                                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
                                                 }`}
                                             >
                                                 $
                                             </button>
                                         </div>
+                                        <span className="text-xs text-gray-400">•</span>
+                                        <button
+                                            onClick={() => setDarkMode(!darkMode)}
+                                            className="p-1.5 rounded-lg hover:bg-gray-200 transition text-lg"
+                                            title={darkMode ? 'Modo claro' : 'Modo oscuro'}
+                                        >
+                                            {darkMode ? '☀️' : '🌙'}
+                                        </button>
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-4">
