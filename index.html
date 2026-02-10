@@ -642,7 +642,8 @@ window.addEventListener('unhandledrejection', (e) => {
                                 uf_dia: ufDia,
                                 descripcion: boleta.detalle || '',
                                 mes_servicio: boleta.periodo_servicio || `${getNombreMes(new Date(boleta.fecha).getMonth() + 1)} ${año}`,
-                                proyecto: ''
+                                proyecto: '',
+                                moneda_principal: 'CLP'
                             };
                             
                             console.log('Insertando boleta:', nuevaBoleta);
