@@ -1,11 +1,5 @@
 {
-  "functions": {
-    "functions/*.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/functions/:path*" }
+    { "source": "/api/sync-boletas", "destination": "/sync-boletas-api" }
   ]
 }
