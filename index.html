@@ -1822,14 +1822,14 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             // Buscar matches automáticos para un movimiento
             const buscarMatches = (movimiento) => {
                 const matches = [];
-                const montoUF = parseFloat(movimiento.monto_uf);
+                const montoCLP = parseFloat(movimiento.monto_clp);
                 const fechaMov = new Date(movimiento.fecha);
                 
                 // Función para calcular score de similaridad
-                const calcularScore = (fechaRegistro, montoRegistroUF) => {
+                const calcularScore = (fechaRegistro, montoRegistroCLP) => {
                     const fechaReg = new Date(fechaRegistro);
                     const diffDias = Math.abs((fechaMov - fechaReg) / (1000 * 60 * 60 * 24));
-                    const diffMonto = Math.abs(montoUF - montoRegistroUF) / montoUF;
+                    const diffMonto = Math.abs(montoCLP - montoRegistroCLP) / montoCLP;
                     
                     if (diffDias > 30 || diffMonto > 0.05) return 0; // Fuera de rango
                     
@@ -1846,15 +1846,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         if (f.estado === 'Cobrada' || f.estado === 'Reclamado' || f.estado === 'Reclamada') return;
                         
                         const fechaFac = f.fecha_pago || f.fecha_emision;
-                        const montoFacUF = parseFloat(f.monto_uf) || 0;
-                        const score = calcularScore(fechaFac, montoFacUF);
+                        const montoFacCLP = parseFloat(f.monto_clp) || 0;
+                        const score = calcularScore(fechaFac, montoFacCLP);
                         
                         if (score > 0.6) {
                             matches.push({
                                 tipo: 'factura_emitida',
                                 id: f.id,
                                 descripcion: `Factura #${f.numero_factura} - ${f.cliente}`,
-                                monto_uf: montoFacUF,
+                                monto_clp: montoFacCLP,
+                                monto_uf: parseFloat(f.monto_uf) || 0,
                                 fecha: fechaFac,
                                 score: score
                             });
@@ -1868,15 +1869,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         if (f.estado === 'Pagada' || f.estado === 'Reclamado' || f.estado === 'Reclamada') return;
                         
                         const fechaFac = f.fecha_pago || f.fecha_emision;
-                        const montoFacUF = parseFloat(f.monto_uf) || 0;
-                        const score = calcularScore(fechaFac, montoFacUF);
+                        const montoFacCLP = parseFloat(f.monto_clp) || 0;
+                        const score = calcularScore(fechaFac, montoFacCLP);
                         
                         if (score > 0.6) {
                             matches.push({
                                 tipo: 'factura_recibida',
                                 id: f.id,
                                 descripcion: `Factura #${f.numero_factura} - ${f.proveedor}`,
-                                monto_uf: montoFacUF,
+                                monto_clp: montoFacCLP,
+                                monto_uf: parseFloat(f.monto_uf) || 0,
                                 fecha: fechaFac,
                                 score: score
                             });
@@ -1885,15 +1887,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     
                     // Buscar en sueldos
                     sueldosSocios.forEach(s => {
-                        const montoSueldoUF = parseFloat(s.monto_uf) || 0;
-                        const score = calcularScore(s.fecha, montoSueldoUF);
+                        const montoSueldoCLP = parseFloat(s.monto_clp) || 0;
+                        const score = calcularScore(s.fecha, montoSueldoCLP);
                         
                         if (score > 0.6) {
                             matches.push({
                                 tipo: 'sueldo_socio',
                                 id: s.id,
                                 descripcion: `Sueldo ${s.socio} - ${s.mes_servicio}`,
-                                monto_uf: montoSueldoUF,
+                                monto_clp: montoSueldoCLP,
+                                monto_uf: parseFloat(s.monto_uf) || 0,
                                 fecha: s.fecha,
                                 score: score
                             });
@@ -1902,15 +1905,16 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     
                     // Buscar en boletas
                     boletasHonorarios.forEach(b => {
-                        const montoBrutoUF = parseFloat(b.monto_bruto_uf) || 0;
-                        const score = calcularScore(b.fecha, montoBrutoUF);
+                        const montoBrutoCLP = parseFloat(b.monto_bruto_clp) || 0;
+                        const score = calcularScore(b.fecha, montoBrutoCLP);
                         
                         if (score > 0.6) {
                             matches.push({
                                 tipo: 'boleta_honorario',
                                 id: b.id,
                                 descripcion: `Boleta ${b.prestador} - ${b.mes_servicio}`,
-                                monto_uf: montoBrutoUF,
+                                monto_clp: montoBrutoCLP,
+                                monto_uf: parseFloat(b.monto_bruto_uf) || 0,
                                 fecha: b.fecha,
                                 score: score
                             });
@@ -3922,7 +3926,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                                     ✨ Match sugerido ({Math.round(mejorMatch.score * 100)}% confianza)
                                                                 </div>
                                                                 <div className="text-sm">{mejorMatch.descripcion}</div>
-                                                                <div className="text-sm text-gray-600">{mejorMatch.monto_uf.toFixed(2)} UF</div>
+                                                                <div className="text-sm text-gray-600">${mejorMatch.monto_clp.toLocaleString('es-CL')}</div>
                                                                 <button 
                                                                     onClick={() => {
                                                                         if (confirm(`¿Conciliar con ${mejorMatch.descripcion}?`)) {
@@ -3985,7 +3989,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                                         <div key={mov.id} className="bg-gray-50 p-3 rounded text-sm">
                                                             <div className="flex justify-between">
                                                                 <span>{mov.descripcion}</span>
-                                                                <span className="font-medium">{mov.monto_uf.toFixed(2)} UF</span>
+                                                                <span className="font-medium">${mov.monto_clp.toLocaleString('es-CL')}</span>
                                                             </div>
                                                         </div>
                                                     ))}
