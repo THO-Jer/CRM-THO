@@ -595,7 +595,7 @@ window.addEventListener('unhandledrejection', (e) => {
                     const result = await response.json();
                     console.log('Resultado completo:', result);
                     
-                    const boletas = result.data || [];
+                    const boletas = result.boletas || result.data || [];
                     console.log('Boletas encontradas:', boletas.length);
                     
                     if (boletas.length === 0) {
