@@ -863,6 +863,284 @@ window.addEventListener('unhandledrejection', (e) => {
                 }
             };
             
+            // Sincronizar Facturas Emitidas desde SII
+            const sincronizarFacturasEmitidas = async () => {
+                const apiKey = prompt('Ingresa tu API Key de SimpleAPI:');
+                if (!apiKey) return;
+                
+                const rutUsuario = prompt('Ingresa tu RUT (con guión, ej: 12345678-9):');
+                if (!rutUsuario) return;
+                
+                const passwordSII = prompt('Ingresa tu contraseña del SII:');
+                if (!passwordSII) return;
+                
+                const año = prompt('¿Qué año deseas sincronizar? (ejemplo: 2025)');
+                if (!año) return;
+                
+                const mes = prompt('¿Qué mes? (1-12, o deja vacío para TODO el año)');
+                
+                if (mes && (parseInt(mes) < 1 || parseInt(mes) > 12)) {
+                    alert('Mes inválido (debe ser 1-12 o vacío para todo el año)');
+                    return;
+                }
+                
+                const mesTexto = mes ? getNombreMes(parseInt(mes)) : 'TODO';
+                const loading = confirm(`Sincronizando facturas emitidas de ${mesTexto} ${año}...\n\nPresiona OK para continuar.`);
+                if (!loading) return;
+                
+                try {
+                    const mesesASincronizar = mes ? [parseInt(mes)] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+                    
+                    let totalInsertadas = 0;
+                    let totalDuplicadas = 0;
+                    let totalErrores = 0;
+                    
+                    const { data: existentes } = await supabase.from('facturas_emitidas').select('*');
+                    const existentesMap = new Set(
+                        (existentes || []).map(f => `${f.numero_factura}-${f.fecha_emision}`)
+                    );
+                    
+                    for (const mesActual of mesesASincronizar) {
+                        try {
+                            console.log(`Sincronizando facturas emitidas ${getNombreMes(mesActual)} ${año}...`);
+                            
+                            const payload = {
+                                apiKey: apiKey,
+                                rutUsuario: rutUsuario,
+                                passwordSII: passwordSII,
+                                año: año,
+                                mes: mesActual
+                            };
+                            
+                            const response = await fetch('/api/sync-facturas-emitidas', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+                            
+                            if (!response.ok) {
+                                const errorData = await response.json();
+                                console.error(`Error en ${getNombreMes(mesActual)}:`, errorData);
+                                totalErrores++;
+                                continue;
+                            }
+                            
+                            const result = await response.json();
+                            const documentos = result.documentos || [];
+                            
+                            console.log(`${getNombreMes(mesActual)}: ${documentos.length} documentos encontrados`);
+                            
+                            for (const doc of documentos) {
+                                try {
+                                    // Filtrar solo facturas (33 y 34), excluir notas de crédito/débito
+                                    if (![33, 34].includes(doc.tipo)) {
+                                        console.log(`Documento tipo ${doc.tipo} omitido (no es factura)`);
+                                        continue;
+                                    }
+                                    
+                                    // Verificar estado - solo vigentes
+                                    if (doc.estado && doc.estado !== 'VIGENTE') {
+                                        console.log(`Factura ${doc.folio} omitida (estado: ${doc.estado})`);
+                                        continue;
+                                    }
+                                    
+                                    const fecha = doc.fecha || doc.fechaEmision || null;
+                                    const cliente = doc.receptor?.razonSocial || 'Sin nombre';
+                                    const rutCliente = doc.receptor?.rut || '';
+                                    const total = parseFloat(doc.totales?.total || doc.total || 0);
+                                    const neto = parseFloat(doc.totales?.neto || doc.neto || 0);
+                                    
+                                    // Detectar duplicados
+                                    const key = `${doc.folio}-${fecha}`;
+                                    if (existentesMap.has(key)) {
+                                        totalDuplicadas++;
+                                        continue;
+                                    }
+                                    
+                                    const nuevaFactura = {
+                                        fecha_emision: fecha,
+                                        numero_factura: doc.folio,
+                                        cliente: cliente,
+                                        rut_cliente: rutCliente,
+                                        monto_neto_clp: neto,
+                                        monto_clp: total,
+                                        monto_uf: (total / ufActual).toFixed(2),
+                                        descripcion: doc.descripcion || `Factura tipo ${doc.tipo}`,
+                                        estado: 'Pendiente',
+                                        moneda_principal: 'CLP',
+                                        uf_dia: ufActual
+                                    };
+                                    
+                                    const { error: insertError } = await supabase
+                                        .from('facturas_emitidas')
+                                        .insert([nuevaFactura]);
+                                    
+                                    if (insertError) {
+                                        console.error('Error insertando factura:', insertError);
+                                        totalErrores++;
+                                    } else {
+                                        totalInsertadas++;
+                                        existentesMap.add(key);
+                                    }
+                                } catch (docError) {
+                                    console.error('Error procesando documento:', docError);
+                                    totalErrores++;
+                                }
+                            }
+                        } catch (mesError) {
+                            console.error(`Error sincronizando ${getNombreMes(mesActual)}:`, mesError);
+                            totalErrores++;
+                        }
+                    }
+                    
+                    alert(`✅ Sincronización completada:\n\n• ${totalInsertadas} facturas emitidas insertadas\n• ${totalDuplicadas} duplicadas omitidas\n• ${totalErrores} errores`);
+                    loadFacturasEmitidas();
+                    
+                } catch (error) {
+                    console.error('Error sincronizando facturas emitidas:', error);
+                    alert(`❌ Error al sincronizar:\n\n${error.message}`);
+                }
+            };
+            
+            // Sincronizar Facturas Recibidas desde SII
+            const sincronizarFacturasRecibidas = async () => {
+                const apiKey = prompt('Ingresa tu API Key de SimpleAPI:');
+                if (!apiKey) return;
+                
+                const rutUsuario = prompt('Ingresa tu RUT (con guión, ej: 12345678-9):');
+                if (!rutUsuario) return;
+                
+                const passwordSII = prompt('Ingresa tu contraseña del SII:');
+                if (!passwordSII) return;
+                
+                const año = prompt('¿Qué año deseas sincronizar? (ejemplo: 2025)');
+                if (!año) return;
+                
+                const mes = prompt('¿Qué mes? (1-12, o deja vacío para TODO el año)');
+                
+                if (mes && (parseInt(mes) < 1 || parseInt(mes) > 12)) {
+                    alert('Mes inválido (debe ser 1-12 o vacío para todo el año)');
+                    return;
+                }
+                
+                const mesTexto = mes ? getNombreMes(parseInt(mes)) : 'TODO';
+                const loading = confirm(`Sincronizando facturas recibidas de ${mesTexto} ${año}...\n\nPresiona OK para continuar.`);
+                if (!loading) return;
+                
+                try {
+                    const mesesASincronizar = mes ? [parseInt(mes)] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+                    
+                    let totalInsertadas = 0;
+                    let totalDuplicadas = 0;
+                    let totalErrores = 0;
+                    
+                    const { data: existentes } = await supabase.from('facturas_recibidas').select('*');
+                    const existentesMap = new Set(
+                        (existentes || []).map(f => `${f.numero_factura}-${f.fecha_emision}`)
+                    );
+                    
+                    for (const mesActual of mesesASincronizar) {
+                        try {
+                            console.log(`Sincronizando facturas recibidas ${getNombreMes(mesActual)} ${año}...`);
+                            
+                            const payload = {
+                                apiKey: apiKey,
+                                rutUsuario: rutUsuario,
+                                passwordSII: passwordSII,
+                                año: año,
+                                mes: mesActual
+                            };
+                            
+                            const response = await fetch('/api/sync-facturas-recibidas', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+                            
+                            if (!response.ok) {
+                                const errorData = await response.json();
+                                console.error(`Error en ${getNombreMes(mesActual)}:`, errorData);
+                                totalErrores++;
+                                continue;
+                            }
+                            
+                            const result = await response.json();
+                            const documentos = result.documentos || [];
+                            
+                            console.log(`${getNombreMes(mesActual)}: ${documentos.length} documentos encontrados`);
+                            
+                            for (const doc of documentos) {
+                                try {
+                                    // Filtrar solo facturas (33 y 34), excluir notas de crédito/débito
+                                    if (![33, 34].includes(doc.tipo)) {
+                                        console.log(`Documento tipo ${doc.tipo} omitido (no es factura)`);
+                                        continue;
+                                    }
+                                    
+                                    // Verificar estado - solo vigentes
+                                    if (doc.estado && doc.estado !== 'VIGENTE') {
+                                        console.log(`Factura ${doc.folio} omitida (estado: ${doc.estado})`);
+                                        continue;
+                                    }
+                                    
+                                    const fecha = doc.fecha || doc.fechaEmision || null;
+                                    const proveedor = doc.emisor?.razonSocial || 'Sin nombre';
+                                    const rutProveedor = doc.emisor?.rut || '';
+                                    const total = parseFloat(doc.totales?.total || doc.total || 0);
+                                    const neto = parseFloat(doc.totales?.neto || doc.neto || 0);
+                                    
+                                    // Detectar duplicados
+                                    const key = `${doc.folio}-${fecha}`;
+                                    if (existentesMap.has(key)) {
+                                        totalDuplicadas++;
+                                        continue;
+                                    }
+                                    
+                                    const nuevaFactura = {
+                                        fecha_emision: fecha,
+                                        numero_factura: doc.folio,
+                                        proveedor: proveedor,
+                                        rut_proveedor: rutProveedor,
+                                        monto_neto_clp: neto,
+                                        monto_clp: total,
+                                        monto_uf: (total / ufActual).toFixed(2),
+                                        descripcion: doc.descripcion || `Factura tipo ${doc.tipo}`,
+                                        estado: 'Pendiente',
+                                        moneda_principal: 'CLP',
+                                        uf_dia: ufActual
+                                    };
+                                    
+                                    const { error: insertError } = await supabase
+                                        .from('facturas_recibidas')
+                                        .insert([nuevaFactura]);
+                                    
+                                    if (insertError) {
+                                        console.error('Error insertando factura:', insertError);
+                                        totalErrores++;
+                                    } else {
+                                        totalInsertadas++;
+                                        existentesMap.add(key);
+                                    }
+                                } catch (docError) {
+                                    console.error('Error procesando documento:', docError);
+                                    totalErrores++;
+                                }
+                            }
+                        } catch (mesError) {
+                            console.error(`Error sincronizando ${getNombreMes(mesActual)}:`, mesError);
+                            totalErrores++;
+                        }
+                    }
+                    
+                    alert(`✅ Sincronización completada:\n\n• ${totalInsertadas} facturas recibidas insertadas\n• ${totalDuplicadas} duplicadas omitidas\n• ${totalErrores} errores`);
+                    loadFacturasRecibidas();
+                    
+                } catch (error) {
+                    console.error('Error sincronizando facturas recibidas:', error);
+                    alert(`❌ Error al sincronizar:\n\n${error.message}`);
+                }
+            };
+            
             const getNombreMes = (num) => {
                 const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                               'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -2393,7 +2671,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
-                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} boletasHonorarios={boletasHonorarios} sueldosSocios={sueldosSocios} movimientosBancarios={movimientosBancarios} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} monedaPreferida={monedaPreferida} alertasValidacion={alertasValidacion} setAlertasValidacion={setAlertasValidacion} sincronizarBoletasSII={sincronizarBoletasSII} importarCartola={importarCartola} buscarMatches={buscarMatches} aplicarConciliacion={aplicarConciliacion} crearGastoCajaChica={crearGastoCajaChica} ignorarMovimiento={ignorarMovimiento} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); loadBoletasHonorarios(); loadSueldosSocios(); loadMovimientosBancarios(); }} onFiles={openFilesModal} />}
+                        {activeTab === 'contabilidad' && <ContabilidadView facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} boletasHonorarios={boletasHonorarios} sueldosSocios={sueldosSocios} movimientosBancarios={movimientosBancarios} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} monedaPreferida={monedaPreferida} alertasValidacion={alertasValidacion} setAlertasValidacion={setAlertasValidacion} sincronizarBoletasSII={sincronizarBoletasSII} sincronizarFacturasEmitidas={sincronizarFacturasEmitidas} sincronizarFacturasRecibidas={sincronizarFacturasRecibidas} importarCartola={importarCartola} buscarMatches={buscarMatches} aplicarConciliacion={aplicarConciliacion} crearGastoCajaChica={crearGastoCajaChica} ignorarMovimiento={ignorarMovimiento} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); loadBoletasHonorarios(); loadSueldosSocios(); loadMovimientosBancarios(); }} onFiles={openFilesModal} />}
                         {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                         {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                         {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
@@ -3126,7 +3404,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             );
         }
 
-        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, sueldosSocios, movimientosBancarios, tickets, keyAccounts, ufActual, contaTab, setContaTab, monedaPreferida, alertasValidacion, setAlertasValidacion, sincronizarBoletasSII, importarCartola, buscarMatches, aplicarConciliacion, crearGastoCajaChica, ignorarMovimiento, onReload, onFiles }) {
+        function ContabilidadView({ facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, sueldosSocios, movimientosBancarios, tickets, keyAccounts, ufActual, contaTab, setContaTab, monedaPreferida, alertasValidacion, setAlertasValidacion, sincronizarBoletasSII, sincronizarFacturasEmitidas, sincronizarFacturasRecibidas, importarCartola, buscarMatches, aplicarConciliacion, crearGastoCajaChica, ignorarMovimiento, onReload, onFiles }) {
             const [showModal, setShowModal] = useState(false);
             const [modalType, setModalType] = useState(null);
             const [editing, setEditing] = useState(null);
@@ -3667,8 +3945,11 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             {contaTab === 'emitidas' && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <h3 className="font-bold">Facturas Emitidas</h3>
-                                        <button onClick={() => { setEditing(null); setModalType('emitida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
+                                        <h3 className="font-bold dark:text-gray-200">Facturas Emitidas</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={sincronizarFacturasEmitidas} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🔄 Sincronizar SII</button>
+                                            <button onClick={() => { setEditing(null); setModalType('emitida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
+                                        </div>
                                     </div>
                                     
                                     {/* Desktop */}
@@ -3779,8 +4060,11 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             {contaTab === 'recibidas' && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <h3 className="font-bold">Facturas Recibidas (Gastos)</h3>
-                                        <button onClick={() => { setEditing(null); setModalType('recibida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
+                                        <h3 className="font-bold dark:text-gray-200">Facturas Recibidas (Gastos)</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={sincronizarFacturasRecibidas} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🔄 Sincronizar SII</button>
+                                            <button onClick={() => { setEditing(null); setModalType('recibida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
+                                        </div>
                                     </div>
                                     
                                     <div className="hidden md:block overflow-x-auto">
