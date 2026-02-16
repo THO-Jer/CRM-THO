@@ -148,6 +148,11 @@
     <div id="root"></div>
     <div id="toast-container" class="toast-container"></div>
     <script type="text/babel">
+    
+    <!-- Cargar módulo de Contabilidad primero -->
+    <script src="./components/contabilidad.js"></script>
+    
+    <script type="text/babel">
 
 // ---- Debug safety net (shows JS errors on screen instead of blank page)
 const __renderFatal = (err) => {
@@ -2671,17 +2676,40 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
                         {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                         {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
-                        {activeTab === 'contabilidad' && (
-                            loadingModule ? (
-                                <div className="flex items-center justify-center py-20">
-                                    <div className="text-center">
-                                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-naranja mb-4"></div>
-                                        <p className="text-gray-600 dark:text-gray-400">Cargando módulo...</p>
-                                    </div>
-                                </div>
-                            ) : ContabilidadComponent ? (
-                                <ContabilidadComponent facturasEmitidas={facturasEmitidas} facturasRecibidas={facturasRecibidas} cajaChica={cajaChica} boletasHonorarios={boletasHonorarios} sueldosSocios={sueldosSocios} movimientosBancarios={movimientosBancarios} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} contaTab={contaTab} setContaTab={setContaTab} monedaPreferida={monedaPreferida} alertasValidacion={alertasValidacion} setAlertasValidacion={setAlertasValidacion} sincronizarBoletasSII={sincronizarBoletasSII} sincronizarFacturasEmitidas={sincronizarFacturasEmitidas} sincronizarFacturasRecibidas={sincronizarFacturasRecibidas} importarCartola={importarCartola} buscarMatches={buscarMatches} aplicarConciliacion={aplicarConciliacion} crearGastoCajaChica={crearGastoCajaChica} ignorarMovimiento={ignorarMovimiento} onReload={() => { loadFacturasEmitidas(); loadFacturasRecibidas(); loadCajaChica(); loadBoletasHonorarios(); loadSueldosSocios(); loadMovimientosBancarios(); }} onFiles={openFilesModal} />
-                            ) : null
+                        {activeTab === 'contabilidad' && window.ContabilidadModule && (
+                            <window.ContabilidadModule 
+                                facturasEmitidas={facturasEmitidas} 
+                                facturasRecibidas={facturasRecibidas} 
+                                cajaChica={cajaChica} 
+                                boletasHonorarios={boletasHonorarios} 
+                                sueldosSocios={sueldosSocios} 
+                                movimientosBancarios={movimientosBancarios} 
+                                tickets={tickets} 
+                                keyAccounts={keyAccounts} 
+                                ufActual={ufActual} 
+                                contaTab={contaTab} 
+                                setContaTab={setContaTab} 
+                                monedaPreferida={monedaPreferida} 
+                                alertasValidacion={alertasValidacion} 
+                                setAlertasValidacion={setAlertasValidacion} 
+                                sincronizarBoletasSII={sincronizarBoletasSII} 
+                                sincronizarFacturasEmitidas={sincronizarFacturasEmitidas} 
+                                sincronizarFacturasRecibidas={sincronizarFacturasRecibidas} 
+                                importarCartola={importarCartola} 
+                                buscarMatches={buscarMatches} 
+                                aplicarConciliacion={aplicarConciliacion} 
+                                crearGastoCajaChica={crearGastoCajaChica} 
+                                ignorarMovimiento={ignorarMovimiento} 
+                                onReload={() => { 
+                                    loadFacturasEmitidas(); 
+                                    loadFacturasRecibidas(); 
+                                    loadCajaChica(); 
+                                    loadBoletasHonorarios(); 
+                                    loadSueldosSocios(); 
+                                    loadMovimientosBancarios(); 
+                                }} 
+                                onFiles={openFilesModal} 
+                            />
                         )}
                         {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                         {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
@@ -3404,50 +3432,6 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 canvasPipeline.chart.destroy();
                                 canvasPipeline.chart = null;
                             }
-        
-        // ============================================
-        // LAZY LOADING DE MÓDULOS (Compatible con Babel)
-        // ============================================
-        
-        const [ContabilidadComponent, setContabilidadComponent] = useState(null);
-        const [loadingModule, setLoadingModule] = useState(false);
-        
-        // Cargar módulo de Contabilidad dinámicamente
-        useEffect(() => {
-            if (activeTab === 'contabilidad' && !ContabilidadComponent && !loadingModule) {
-                setLoadingModule(true);
-                
-                // Cargar script dinámicamente
-                const script = document.createElement('script');
-                script.src = './components/contabilidad.js';
-                script.type = 'text/javascript';
-                script.onload = () => {
-                    if (window.ContabilidadModule) {
-                        setContabilidadComponent(() => window.ContabilidadModule);
-                        setLoadingModule(false);
-                    }
-                };
-                script.onerror = () => {
-                    console.error('Error cargando módulo Contabilidad');
-                    setLoadingModule(false);
-                    showToast('Error cargando módulo de Contabilidad', 'error');
-                };
-                
-                document.head.appendChild(script);
-            }
-        }, [activeTab, ContabilidadComponent, loadingModule]);
-        
-                        setContabilidadComponent(() => module.default());
-                        setLoadingModule(false);
-                    })
-                    .catch(err => {
-                        console.error('Error cargando módulo Contabilidad:', err);
-                        setLoadingModule(false);
-                        showToast('Error cargando módulo de Contabilidad', 'error');
-                    });
-            }
-        }, [activeTab]);
-        
         function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory, onConvertClosed, onFiles}) {
             const [filtroAño, setFiltroAño] = useState('todos');
             
