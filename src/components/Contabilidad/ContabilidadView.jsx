@@ -291,7 +291,7 @@ export default function ContabilidadView({
                     throw new Error(result.error.message);
                 }
                 
-                showToast('✅ Guardado exitosamente', 'info');
+                showToast('✅ Guardado exitosamente', 'success');
                 setShowModal(false);
                 setEditing(null);
                 onReload();
@@ -341,14 +341,14 @@ export default function ContabilidadView({
                 const cellUF = ws[XLSX.utils.encode_cell({ r: R, c: 4 })];
                 if (cellUF && typeof cellUF.v === 'number') cellUF.z = '#,##0.00';
             }
-            XLSX.utils.book_append_sheet(wb, ws, 'Sueldos Socios');
+            XLSX.utils.book_append_sheet(wb, ws, 'Retiros Socios');
             const periodoTexto = {
                 'mes-actual': 'Mes_Actual', 'ultimos-3-meses': 'Ultimos_3_Meses',
                 'año-actual': `Año_${new Date().getFullYear()}`,
                 'personalizado': `${filtroSueldosDesde}_a_${filtroSueldosHasta}`, 'todo': 'Todos'
             }[periodo] || 'Export';
             const fechaExport = new Date().toISOString().split('T')[0];
-            const nombreArchivo = `THO_Sueldos_Socios_${periodoTexto}_${fechaExport}.xlsx`;
+            const nombreArchivo = `THO_Retiros_Socios_${periodoTexto}_${fechaExport}.xlsx`;
             XLSX.writeFile(wb, nombreArchivo);
             showToast(`✅ Excel exportado: ${nombreArchivo}`, 'success');
         };
@@ -612,15 +612,15 @@ export default function ContabilidadView({
                                         <div className="mt-3 space-y-1 text-xs">
                                             <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-orange-400"></span> Operacionales</div>
-                                                <span className="font-medium">{totalGastosDonut > 0 ? Math.round(gastosActual/totalGastosDonut*100) : 0}%</span>
+                                                <span className="font-medium dark:text-gray-200">{totalGastosDonut > 0 ? Math.round(gastosActual/totalGastosDonut*100) : 0}%</span>
                                             </div>
                                             <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-blue-400"></span> Honorarios</div>
-                                                <span className="font-medium">{totalGastosDonut > 0 ? Math.round(honorariosActual/totalGastosDonut*100) : 0}%</span>
+                                                <span className="font-medium dark:text-gray-200">{totalGastosDonut > 0 ? Math.round(honorariosActual/totalGastosDonut*100) : 0}%</span>
                                             </div>
                                             <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-purple-400"></span> Caja Chica</div>
-                                                <span className="font-medium">{totalGastosDonut > 0 ? Math.round(cajaActual/totalGastosDonut*100) : 0}%</span>
+                                                <span className="font-medium dark:text-gray-200">{totalGastosDonut > 0 ? Math.round(cajaActual/totalGastosDonut*100) : 0}%</span>
                                             </div>
                                         </div>
                                     </div>
@@ -669,7 +669,7 @@ export default function ContabilidadView({
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">
-                                        <thead className="bg-gray-50">
+                                        <thead className="bg-gray-50 dark:bg-gray-700">
                                             <tr>
                                                 <th className="px-2 py-3 text-center text-xs font-medium text-gray-500">✓</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">N° Factura</th>
@@ -684,7 +684,7 @@ export default function ContabilidadView({
                                             {facturasEmitidas.length === 0 ? (
                                                 <tr><td colSpan="7" className="px-4 py-4 text-center text-sm text-gray-500">Sin facturas emitidas</td></tr>
                                             ) : facturasEmitidas.map(f => (
-                                                <tr key={f.id} className="hover:bg-gray-50">
+                                                <tr key={f.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-2 py-3 text-center">
                                                         <input
                                                             type="checkbox"
@@ -745,8 +745,8 @@ export default function ContabilidadView({
                                         <div key={f.id} className="border rounded-lg p-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
-                                                    <div className="font-bold">{f.numero_factura}</div>
-                                                    <div className="text-sm text-gray-600">{f.cliente}</div>
+                                                    <div className="font-bold dark:text-gray-200">{f.numero_factura}</div>
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400">{f.cliente}</div>
                                                 </div>
                                                 <span className={`px-2 py-1 text-xs rounded-full ${
                                                     f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 
@@ -783,7 +783,7 @@ export default function ContabilidadView({
                                 
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">
-                                        <thead className="bg-gray-50">
+                                        <thead className="bg-gray-50 dark:bg-gray-700">
                                             <tr>
                                                 <th className="px-2 py-3 text-center text-xs font-medium text-gray-500">✓</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Proveedor</th>
@@ -798,7 +798,7 @@ export default function ContabilidadView({
                                             {facturasRecibidas.length === 0 ? (
                                                 <tr><td colSpan="7" className="px-4 py-4 text-center text-sm text-gray-500">Sin facturas recibidas</td></tr>
                                             ) : facturasRecibidas.map(f => (
-                                                <tr key={f.id} className="hover:bg-gray-50">
+                                                <tr key={f.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-2 py-3 text-center">
                                                         <input
                                                             type="checkbox"
@@ -857,8 +857,8 @@ export default function ContabilidadView({
                                         <div key={f.id} className="border rounded-lg p-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
-                                                    <div className="font-bold">{f.proveedor}</div>
-                                                    <div className="text-sm text-gray-600">{f.categoria}</div>
+                                                    <div className="font-bold dark:text-gray-200">{f.proveedor}</div>
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400">{f.categoria}</div>
                                                 </div>
                                                 <span className={`px-2 py-1 text-xs rounded-full ${
                                                     f.estado === 'Pagada' ? 'bg-green-100 text-green-800' :
@@ -868,7 +868,7 @@ export default function ContabilidadView({
                                             </div>
                                             <div className="text-sm space-y-1 mb-3">
                                                 <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{f.fecha_emision}</span></div>
-                                                <div className="flex justify-between"><span className="text-gray-600">Monto:</span><span className="font-medium">{f.monto_uf} UF</span></div>
+                                                <div className="flex justify-between"><span className="text-gray-600">Monto:</span><span className="font-medium dark:text-gray-200">{f.monto_uf} UF</span></div>
                                             </div>
                                             <div className="flex gap-2 pt-2 border-t">
                                                 <button onClick={() => { setEditing(f); setModalType('recibida'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
@@ -882,7 +882,7 @@ export default function ContabilidadView({
                         )}
                         
                         
-                        {/* Sueldos Socios */}
+                        {/* Retiros Socios */}
                         {contaTab === 'sueldos' && (
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center flex-wrap gap-3">
@@ -925,14 +925,14 @@ export default function ContabilidadView({
                                         >
                                             📊 Exportar Excel
                                         </button>
-                                        <button onClick={() => { setEditing(null); setModalType('sueldo'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Sueldo</button>
+                                        <button onClick={() => { setEditing(null); setModalType('sueldo'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Retiro</button>
                                     </div>
                                 </div>
                                 
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">
-                                        <thead className="bg-gray-50">
+                                        <thead className="bg-gray-50 dark:bg-gray-700">
                                             <tr>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Socio</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Mes Servicio</th>
@@ -944,9 +944,9 @@ export default function ContabilidadView({
                                         </thead>
                                         <tbody className="divide-y">
                                             {sueldosSociosFiltrados.length === 0 ? (
-                                                <tr><td colSpan="6" className="text-center text-sm text-gray-500 py-4">Sin sueldos en el período seleccionado</td></tr>
+                                                <tr><td colSpan="6" className="text-center text-sm text-gray-500 py-4">Sin retiros en el período seleccionado</td></tr>
                                             ) : sueldosSociosFiltrados.map(s => (
-                                                <tr key={s.id} className="hover:bg-gray-50">
+                                                <tr key={s.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-4 py-3 text-sm font-medium">{s.socio}</td>
                                                     <td className="px-4 py-3 text-sm">{s.mes_servicio}</td>
                                                     <td className="px-4 py-3 text-sm">{s.fecha}</td>
@@ -954,9 +954,9 @@ export default function ContabilidadView({
                                                     <td className="px-4 py-3 text-sm">{s.concepto}</td>
                                                     <td className="px-4 py-3 text-right space-x-2">
                                                         <button onClick={async () => { setEditing(s); setModalType('sueldo'); setShowModal(true); }} className="text-azul text-sm">Editar</button>
-                                                        <button onClick={() => onFiles('sueldos_socios', s.id, `Sueldo ${s.socio} ${s.mes_servicio}`)} className="text-gray-700 text-sm">📎</button>
+                                                        <button onClick={() => onFiles('sueldos_socios', s.id, `Retiro ${s.socio} ${s.mes_servicio}`)} className="text-gray-700 text-sm">📎</button>
                                                         <button onClick={async () => {
-                                                            if (await confirmModal('¿Eliminar este sueldo?')) {
+                                                            if (await confirmModal('¿Eliminar este retiro?')) {
                                                                 await supabase.from('sueldos_socios').delete().eq('id', s.id);
                                                                 onReload();
                                                             }
@@ -971,13 +971,13 @@ export default function ContabilidadView({
                                 {/* Mobile */}
                                 <div className="md:hidden space-y-3">
                                     {sueldosSociosFiltrados.length === 0 ? (
-                                        <div className="text-center text-sm text-gray-500 py-4">Sin sueldos en el período seleccionado</div>
+                                        <div className="text-center text-sm text-gray-500 py-4">Sin retiros en el período seleccionado</div>
                                     ) : sueldosSociosFiltrados.map(s => (
                                         <div key={s.id} className="border rounded-lg p-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
-                                                    <div className="font-bold">{s.socio}</div>
-                                                    <div className="text-sm text-gray-600">{s.mes_servicio}</div>
+                                                    <div className="font-bold dark:text-gray-200">{s.socio}</div>
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400">{s.mes_servicio}</div>
                                                 </div>
                                             </div>
                                             <div className="text-sm space-y-1 mb-3">
@@ -987,9 +987,9 @@ export default function ContabilidadView({
                                             </div>
                                             <div className="flex gap-2 pt-2 border-t">
                                                 <button onClick={async () => { setEditing(s); setModalType('sueldo'); setShowModal(true); }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                                <button onClick={() => onFiles('sueldos_socios', s.id, `Sueldo ${s.socio} ${s.mes_servicio}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
+                                                <button onClick={() => onFiles('sueldos_socios', s.id, `Retiro ${s.socio} ${s.mes_servicio}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
                                                 <button onClick={async () => {
-                                                    if (await confirmModal('¿Eliminar este sueldo?')) {
+                                                    if (await confirmModal('¿Eliminar este retiro?')) {
                                                         await supabase.from('sueldos_socios').delete().eq('id', s.id);
                                                         onReload();
                                                     }
@@ -1004,13 +1004,13 @@ export default function ContabilidadView({
                         {contaTab === 'caja' && (
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
-                                    <h3 className="font-bold">Caja Chica</h3>
+                                    <h3 className="font-bold dark:text-gray-200">Caja Chica</h3>
                                     <button onClick={() => { setEditing(null); setModalType('caja'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Gasto</button>
                                 </div>
                                 
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">
-                                        <thead className="bg-gray-50">
+                                        <thead className="bg-gray-50 dark:bg-gray-700">
                                             <tr>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Fecha</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Concepto</th>
@@ -1024,7 +1024,7 @@ export default function ContabilidadView({
                                             {cajaChica.length === 0 ? (
                                                 <tr><td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">Sin gastos de caja chica</td></tr>
                                             ) : cajaChica.map(c => (
-                                                <tr key={c.id} className="hover:bg-gray-50">
+                                                <tr key={c.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-4 py-3 text-sm">{c.fecha}</td>
                                                     <td className="px-4 py-3 text-sm font-medium">{c.concepto}</td>
                                                     <td className="px-4 py-3 text-sm">{c.categoria}</td>
@@ -1048,8 +1048,8 @@ export default function ContabilidadView({
                                         <div key={c.id} className="border rounded-lg p-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
-                                                    <div className="font-bold">{c.concepto}</div>
-                                                    <div className="text-sm text-gray-600">{c.categoria}</div>
+                                                    <div className="font-bold dark:text-gray-200">{c.concepto}</div>
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400">{c.categoria}</div>
                                                 </div>
                                                 <span className="font-medium text-verde">${Math.round(c.monto_clp).toLocaleString('es-CL')}</span>
                                             </div>
@@ -1072,7 +1072,7 @@ export default function ContabilidadView({
                         {contaTab === 'boletas' && (
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
-                                    <h3 className="font-bold">Boletas de Honorarios</h3>
+                                    <h3 className="font-bold dark:text-gray-200">Boletas de Honorarios</h3>
                                     <div className="flex gap-2">
                                         <button 
                                             onClick={sincronizarBoletasSII} 
@@ -1087,7 +1087,7 @@ export default function ContabilidadView({
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">
-                                        <thead className="bg-gray-50">
+                                        <thead className="bg-gray-50 dark:bg-gray-700">
                                             <tr>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Prestador</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Mes Servicio</th>
@@ -1102,7 +1102,7 @@ export default function ContabilidadView({
                                             {boletasHonorarios.length === 0 ? (
                                                 <tr><td colSpan="7" className="px-4 py-4 text-center text-sm text-gray-500">Sin boletas de honorarios</td></tr>
                                             ) : boletasHonorarios.map(b => (
-                                                <tr key={b.id} className="hover:bg-gray-50">
+                                                <tr key={b.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-4 py-3 text-sm font-medium">{b.prestador}</td>
                                                     <td className="px-4 py-3 text-sm">{b.mes_servicio}</td>
                                                     <td className="px-4 py-3 text-sm">{b.fecha}</td>
@@ -1128,14 +1128,14 @@ export default function ContabilidadView({
                                         <div key={b.id} className="border rounded-lg p-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
-                                                    <div className="font-bold">{b.prestador}</div>
-                                                    <div className="text-sm text-gray-600">{b.mes_servicio}</div>
+                                                    <div className="font-bold dark:text-gray-200">{b.prestador}</div>
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400">{b.mes_servicio}</div>
                                                 </div>
                                                 <span className="text-sm font-medium text-verde">{b.monto_liquido_uf} UF</span>
                                             </div>
                                             <div className="text-sm space-y-1 mb-3">
                                                 <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{b.fecha}</span></div>
-                                                <div className="flex justify-between"><span className="text-gray-600">Bruto:</span><span className="font-medium">{b.monto_bruto_uf} UF</span></div>
+                                                <div className="flex justify-between"><span className="text-gray-600">Bruto:</span><span className="font-medium dark:text-gray-200">{b.monto_bruto_uf} UF</span></div>
                                                 <div className="flex justify-between"><span className="text-gray-600">Retención:</span><span className="text-naranja">-{b.monto_retencion_uf} UF ({b.porcentaje_retencion}%)</span></div>
                                             </div>
                                             <div className="flex gap-2 pt-2 border-t">
@@ -1154,14 +1154,18 @@ export default function ContabilidadView({
                         {contaTab === 'conciliacion' && (
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
-                                    <h3 className="font-bold">Conciliación Bancaria</h3>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                                            {movimientosBancarios.length} movimientos · {movimientosBancarios.filter(m => m.estado_conciliacion === 'pendiente').length} pendientes
+                                        </span>
+                                    </div>
                                     <div className="flex gap-2">
                                         <button 
                                             onClick={async () => {
                                                 if (await confirmModal('¿Eliminar TODOS los movimientos bancarios? Esta acción no se puede deshacer.')) {
                                                     const { error } = await supabase.from('movimientos_bancarios').delete().neq('id', '00000000-0000-0000-0000-000000000000');
                                                     if (error) alert('Error: ' + error.message);
-                                                    else { showToast('✅ Movimientos eliminados', 'info'); onReload(); }
+                                                    else { showToast('✅ Movimientos eliminados', 'success'); onReload(); }
                                                 }
                                             }}
                                             className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
@@ -1174,12 +1178,12 @@ export default function ContabilidadView({
                                 
                                 {/* Resumen - sin total acumulativo */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="bg-white p-4 rounded-lg border">
-                                        <div className="text-sm text-gray-600">⏳ Pendientes por Revisar</div>
+                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700">
+                                        <div className="text-sm text-gray-600 dark:text-gray-400">⏳ Pendientes por Revisar</div>
                                         <div className="text-2xl font-bold text-orange-600">{movimientosBancarios.filter(m => m.estado_conciliacion === 'pendiente').length}</div>
                                     </div>
-                                    <div className="bg-white p-4 rounded-lg border">
-                                        <div className="text-sm text-gray-600">✅ Conciliados</div>
+                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700">
+                                        <div className="text-sm text-gray-600 dark:text-gray-400">✅ Conciliados</div>
                                         <div className="text-2xl font-bold text-verde">{movimientosBancarios.filter(m => m.estado_conciliacion === 'conciliado').length}</div>
                                     </div>
                                 </div>
@@ -1193,14 +1197,14 @@ export default function ContabilidadView({
                                             const mejorMatch = resultado.matches[0];
                                             
                                             return (
-                                                <div key={mov.id} className="bg-white p-4 rounded-lg border">
+                                                <div key={mov.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700">
                                                     <div className="flex justify-between items-start mb-3">
                                                         <div className="flex-1">
                                                             <div className="flex items-center gap-2">
                                                                 <span className={`px-2 py-1 rounded text-xs ${mov.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                                     {mov.tipo === 'entrada' ? '📈 Entrada' : '📉 Salida'}
                                                                 </span>
-                                                                <span className="text-sm text-gray-600">{mov.fecha}</span>
+                                                                <span className="text-sm text-gray-600 dark:text-gray-400">{mov.fecha}</span>
                                                             </div>
                                                             <div className="font-medium mt-1">{mov.descripcion}</div>
                                                             <div className="text-lg font-bold mt-1">
@@ -1211,12 +1215,12 @@ export default function ContabilidadView({
                                                     
                                                     {/* Sugerencia de match */}
                                                     {mejorMatch && mejorMatch.score >= 0.60 ? (
-                                                        <div className="bg-blue-50 p-3 rounded mb-2">
-                                                            <div className="text-sm font-medium text-azul mb-1">
+                                                        <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded mb-2">
+                                                            <div className="text-sm font-medium text-azul dark:text-blue-400 mb-1">
                                                                 ✨ Match sugerido ({Math.round(mejorMatch.score * 100)}% confianza)
                                                             </div>
                                                             <div className="text-sm">{mejorMatch.descripcion}</div>
-                                                            <div className="text-sm text-gray-600">${mejorMatch.monto_clp.toLocaleString('es-CL')}</div>
+                                                            <div className="text-sm text-gray-600 dark:text-gray-400">${mejorMatch.monto_clp.toLocaleString('es-CL')}</div>
                                                             <button 
                                                                 onClick={async () => {
                                                                     if (await confirmModal(`¿Conciliar con ${mejorMatch.descripcion}?`)) {
@@ -1253,8 +1257,8 @@ export default function ContabilidadView({
                                                             )}
                                                         </div>
                                                     ) : resultado.sugerenciaCategoria ? (
-                                                        <div className="bg-yellow-50 p-3 rounded mb-2">
-                                                            <div className="text-sm font-medium text-yellow-700 mb-1">
+                                                        <div className="bg-yellow-50 dark:bg-yellow-900/30 p-3 rounded mb-2">
+                                                            <div className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-1">
                                                                 💡 Sugerencia: Crear en Caja Chica
                                                             </div>
                                                             <div className="text-sm">Categoría sugerida: {resultado.sugerenciaCategoria}</div>
@@ -1349,7 +1353,7 @@ export default function ContabilidadView({
                                                         
                                                         <button 
                                                             onClick={() => ignorarMovimiento(mov.id)}
-                                                            className="text-xs px-2 py-1 text-gray-600 hover:text-gray-800"
+                                                            className="text-xs px-2 py-1 text-gray-600 hover:text-gray-800 dark:text-gray-200"
                                                         >
                                                             Ignorar
                                                         </button>
@@ -1367,22 +1371,52 @@ export default function ContabilidadView({
                                 
                                 {/* Movimientos conciliados */}
                                 {movimientosBancarios.filter(m => m.estado_conciliacion === 'conciliado').length > 0 && (
-                                    <div className="mt-6">
-                                        <h4 className="font-medium mb-2">✅ Conciliados</h4>
-                                        <div className="space-y-2">
+                                    <details className="mt-6">
+                                        <summary className="font-medium mb-2 cursor-pointer dark:text-gray-200 hover:text-naranja transition">
+                                            ✅ Conciliados ({movimientosBancarios.filter(m => m.estado_conciliacion === 'conciliado').length})
+                                        </summary>
+                                        <div className="space-y-2 mt-3">
                                             {movimientosBancarios
                                                 .filter(m => m.estado_conciliacion === 'conciliado')
-                                                .slice(0, 5)
+                                                .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
                                                 .map(mov => (
-                                                    <div key={mov.id} className="bg-gray-50 p-3 rounded text-sm">
-                                                        <div className="flex justify-between">
-                                                            <span>{mov.descripcion}</span>
-                                                            <span className="font-medium">${mov.monto_clp.toLocaleString('es-CL')}</span>
+                                                    <div key={mov.id} className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg text-sm flex justify-between items-center">
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${mov.tipo === 'entrada' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                                                                    {mov.tipo === 'entrada' ? '↑' : '↓'}
+                                                                </span>
+                                                                <span className="text-gray-500 dark:text-gray-400 text-xs">{mov.fecha}</span>
+                                                                <span className="truncate dark:text-gray-300">{mov.descripcion}</span>
+                                                            </div>
+                                                            {mov.conciliado_con_tipo && (
+                                                                <span className="text-[10px] text-gray-400 ml-6">↔ {mov.conciliado_con_tipo}</span>
+                                                            )}
                                                         </div>
+                                                        <span className="font-medium ml-2 dark:text-gray-200">${mov.monto_clp?.toLocaleString('es-CL')}</span>
                                                     </div>
                                                 ))}
                                         </div>
-                                    </div>
+                                    </details>
+                                )}
+                                
+                                {/* Movimientos ignorados */}
+                                {movimientosBancarios.filter(m => m.estado_conciliacion === 'ignorar').length > 0 && (
+                                    <details className="mt-4">
+                                        <summary className="font-medium mb-2 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition text-sm">
+                                            🚫 Ignorados ({movimientosBancarios.filter(m => m.estado_conciliacion === 'ignorar').length})
+                                        </summary>
+                                        <div className="space-y-1 mt-2">
+                                            {movimientosBancarios
+                                                .filter(m => m.estado_conciliacion === 'ignorar')
+                                                .map(mov => (
+                                                    <div key={mov.id} className="text-xs text-gray-400 dark:text-gray-500 flex justify-between p-2">
+                                                        <span>{mov.fecha} · {mov.descripcion}</span>
+                                                        <span>${mov.monto_clp?.toLocaleString('es-CL')}</span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </details>
                                 )}
                             </div>
                         )}
@@ -1450,7 +1484,7 @@ export default function ContabilidadView({
                                         })
                                         .reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || 0), 0);
                                     
-                                    // Sueldos Socios del mes
+                                    // Retiros Socios del mes
                                     const sueldos = sueldosSocios
                                         .filter(s => {
                                             const d = new Date(s.fecha);
@@ -1515,11 +1549,11 @@ export default function ContabilidadView({
                             <div className="space-y-6">
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                                     <div className="flex items-center gap-3">
-                                        <h3 className="font-bold text-lg">📊 Estado de Resultados</h3>
+                                        <h3 className="font-bold text-lg dark:text-gray-200">Año Fiscal</h3>
                                         <select 
                                             value={añoSeleccionado} 
                                             onChange={(e) => setAñoSeleccionado(parseInt(e.target.value))}
-                                            className="px-3 py-2 border rounded-lg text-sm font-medium"
+                                            className="px-3 py-2 border dark:border-gray-600 rounded-lg text-sm font-medium bg-white dark:bg-gray-700 dark:text-gray-200"
                                         >
                                             {añosDisponibles.map(año => (
                                                 <option key={año} value={año}>{año}</option>
@@ -1559,7 +1593,7 @@ export default function ContabilidadView({
                                             ['GASTOS OPERACIONALES'],
                                             ['  Proveedores (+ IVA)', ...data.map(m => Math.round((m.gastos || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.gastos||0), 0) * uf)],
                                             ['  Honorarios (bruto)', ...data.map(m => Math.round((m.honorarios || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.honorarios||0), 0) * uf)],
-                                            ['  Sueldos/Retiros Socios', ...data.map(m => Math.round((m.sueldos || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.sueldos||0), 0) * uf)],
+                                            ['  Retiros Socios', ...data.map(m => Math.round((m.sueldos || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.sueldos||0), 0) * uf)],
                                             ['  Caja Chica (boletas)', ...data.map(m => Math.round((m.cajaChica || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.cajaChica||0), 0) * uf)],
                                             ['TOTAL GASTOS', ...data.map(m => Math.round(((m.gastos||0) + (m.honorarios||0) + (m.sueldos||0) + (m.cajaChica||0)) * uf)), Math.round(data.reduce((s,m) => s + (m.gastos||0) + (m.honorarios||0) + (m.sueldos||0) + (m.cajaChica||0), 0) * uf)],
                                             [],
@@ -1601,14 +1635,14 @@ export default function ContabilidadView({
                                 </div>
                                 
                                 {/* Resumen anual */}
-                                <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6">
+                                <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-gray-800 dark:to-gray-800 rounded-lg p-6">
                                     <h4 className="font-bold mb-4 text-lg">📊 Resumen {añoSeleccionado}</h4>
                                     
                                     {/* INGRESOS */}
                                     <div className="mb-4">
                                         <div className="text-sm font-bold text-gray-600 mb-2">💰 INGRESOS</div>
-                                        <div className="flex justify-between p-3 bg-white rounded">
-                                            <span className="font-medium">Facturas Emitidas (exentas):</span>
+                                        <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded">
+                                            <span className="font-medium dark:text-gray-200">Facturas Emitidas (exentas):</span>
                                             <span className="font-bold text-verde">{fmtVal(totalEmitidas)}</span>
                                         </div>
                                     </div>
@@ -1617,19 +1651,19 @@ export default function ContabilidadView({
                                     <div className="mb-4">
                                         <div className="text-sm font-bold text-gray-600 mb-2">📥 GASTOS</div>
                                         <div className="grid grid-cols-1 gap-2">
-                                            <div className="flex justify-between p-3 bg-white rounded">
-                                                <span className="font-medium">Gastos Operacionales (+ IVA):</span>
+                                            <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded">
+                                                <span className="font-medium dark:text-gray-200">Gastos Operacionales (+ IVA):</span>
                                                 <span className="font-bold text-naranja">{fmtVal(totalGastos)}</span>
                                             </div>
-                                            <div className="flex justify-between p-3 bg-white rounded">
-                                                <span className="font-medium">Honorarios (bruto):</span>
+                                            <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded">
+                                                <span className="font-medium dark:text-gray-200">Honorarios (bruto):</span>
                                                 <span className="font-bold text-azul">{fmtVal(totalHonorarios)}</span>
                                             </div>
-                                            <div className="flex justify-between p-3 bg-white rounded">
-                                                <span className="font-medium">Caja Chica (boletas):</span>
+                                            <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded">
+                                                <span className="font-medium dark:text-gray-200">Caja Chica (boletas):</span>
                                                 <span className="font-bold text-fucsia">{fmtVal(totalCajaChica)}</span>
                                             </div>
-                                            <div className="flex justify-between p-3 bg-gray-100 rounded font-bold">
+                                            <div className="flex justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded font-bold">
                                                 <span>TOTAL GASTOS:</span>
                                                 <span className="text-naranja">{fmtVal(totalGastosConsolidado)}</span>
                                             </div>
@@ -1648,15 +1682,15 @@ export default function ContabilidadView({
                                     <div className="mb-4">
                                         <div className="text-sm font-bold text-gray-600 mb-2">💸 OBLIGACIONES FISCALES</div>
                                         <div className="grid grid-cols-1 gap-2">
-                                            <div className="flex justify-between p-3 bg-orange-50 rounded">
-                                                <span className="font-medium">Retenciones por pagar (15.25%):</span>
+                                            <div className="flex justify-between p-3 bg-orange-50 dark:bg-orange-900/30 rounded">
+                                                <span className="font-medium dark:text-gray-200">Retenciones por pagar (15.25%):</span>
                                                 <span className="font-bold text-orange-600">{fmtVal(totalRetenciones)}</span>
                                             </div>
-                                            <div className="flex justify-between p-3 bg-purple-50 rounded">
-                                                <span className="font-medium">Impuesto estimado (20%):</span>
+                                            <div className="flex justify-between p-3 bg-purple-50 dark:bg-purple-900/30 rounded">
+                                                <span className="font-medium dark:text-gray-200">Impuesto estimado (20%):</span>
                                                 <span className="font-bold text-purple-600">{fmtVal(impuestosEstimados)}</span>
                                             </div>
-                                            <div className="flex justify-between p-3 bg-gray-100 rounded font-bold">
+                                            <div className="flex justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded font-bold">
                                                 <span>TOTAL FISCAL:</span>
                                                 <span className="text-orange-600">{fmtVal(totalRetenciones + impuestosEstimados)}</span>
                                             </div>
@@ -1664,7 +1698,7 @@ export default function ContabilidadView({
                                     </div>
                                     
                                     {/* UTILIDAD NETA */}
-                                    <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-blue-100 rounded border-2 border-verde">
+                                    <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-blue-100 dark:from-green-900/30 dark:to-blue-900/30 rounded border-2 border-verde">
                                         <span className="text-lg font-bold">🎯 UTILIDAD NETA (después impuestos):</span>
                                         <span className={`text-2xl font-bold ${utilidadDespuesImpuestos >= 0 ? 'text-verde' : 'text-red-600'}`}>
                                             {utilidadDespuesImpuestos >= 0 ? '+' : ''}{fmtVal(utilidadDespuesImpuestos)}
@@ -1678,26 +1712,26 @@ export default function ContabilidadView({
                                 
                                 {/* Tabla mes a mes */}
                                 <div>
-                                <h4 className="font-bold mb-3">Desglose Mensual</h4>
+                                <h4 className="font-bold mb-3 dark:text-gray-200">Desglose Mensual</h4>
                                 
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y bg-white rounded-lg shadow">
-                                        <thead className="bg-gray-50">
+                                        <thead className="bg-gray-50 dark:bg-gray-700">
                                             <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mes</th>
-                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💰 Ingresos</th>
-                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📥 Gastos</th>
-                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">👤 Honorarios</th>
-                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💼 Sueldos</th>
-                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💵 Caja</th>
-                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">🔶 Retenc.</th>
-                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📊 Utilidad</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Mes</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">💰 Ingresos</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">📥 Gastos</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">👤 Honorarios</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">💼 Retiros</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">💵 Caja</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">🔶 Retenc.</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">📊 Utilidad</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y">
                                             {datosPL.map((m, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50">
+                                                <tr key={idx} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-4 py-3 text-sm font-medium">{m.mes}</td>
                                                     <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.emitidas} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
                                                     <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.gastos} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
@@ -1715,7 +1749,7 @@ export default function ContabilidadView({
                                 {/* Mobile */}
                                 <div className="md:hidden space-y-3">
                                     {datosPL.map((m, idx) => (
-                                        <div key={idx} className="bg-white rounded-lg shadow p-4">
+                                        <div key={idx} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
                                             <div className="font-bold text-lg mb-3 border-b pb-2">{m.mes}</div>
                                             <div className="space-y-2 text-sm">
                                                 <div className="flex justify-between">
@@ -1731,7 +1765,7 @@ export default function ContabilidadView({
                                                     <span className="font-medium text-azul">{fmtVal(m.honorarios)}</span>
                                                 </div>
                                                 <div className="flex justify-between">
-                                                    <span className="text-gray-600">💼 Sueldos:</span>
+                                                    <span className="text-gray-600">💼 Retiros:</span>
                                                     <span className="font-medium text-purple-600">{fmtVal(m.sueldos)}</span>
                                                 </div>
                                                 <div className="flex justify-between">
@@ -1743,7 +1777,7 @@ export default function ContabilidadView({
                                                     <span className="font-medium text-orange-600">{fmtVal(m.retenciones)}</span>
                                                 </div>
                                                 <div className="flex justify-between pt-2 border-t">
-                                                    <span className="font-bold">📊 Utilidad:</span>
+                                                    <span className="font-bold dark:text-gray-200">📊 Utilidad:</span>
                                                     <span className={`font-bold ${m.utilidadNeta >= 0 ? 'text-verde' : 'text-red-600'}`}>
                                                         {m.utilidadNeta >= 0 ? '+' : ''}{fmtVal(m.utilidadNeta)}
                                                     </span>

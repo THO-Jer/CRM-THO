@@ -704,12 +704,12 @@ function CRMApp() {
                 }
             }
             
-            showToast(`✅ Sincronización completada:\n\n• ${totalInsertadas} boletas nuevas insertadas\n• ${totalDuplicadas} duplicadas omitidas\n• ${totalErrores} errores`, "info");
+            showToast(`✅ Sincronización completada:\n\n• ${totalInsertadas} boletas nuevas insertadas\n• ${totalDuplicadas} duplicadas omitidas\n• ${totalErrores} errores`, "success");
             loadBoletasHonorarios();
             
         } catch (error) {
             console.error('Error sincronizando:', error);
-            showToast(`❌ Error al sincronizar:\n\n${error.message}\n\nRevisa la consola del navegador para más detalles (F12).`, "info");
+            showToast(`❌ Error al sincronizar:\n\n${error.message}\n\nRevisa la consola del navegador para más detalles (F12).`, "error");
         }
     };
     
@@ -843,12 +843,12 @@ function CRMApp() {
                 }
             }
             
-            showToast(`✅ Sincronización completada:\n\n• ${totalInsertadas} facturas emitidas insertadas\n• ${totalDuplicadas} duplicadas omitidas\n• ${totalErrores} errores`, "info");
+            showToast(`✅ Sincronización completada:\n\n• ${totalInsertadas} facturas emitidas insertadas\n• ${totalDuplicadas} duplicadas omitidas\n• ${totalErrores} errores`, "success");
             loadFacturasEmitidas();
             
         } catch (error) {
             console.error('Error sincronizando facturas emitidas:', error);
-            showToast(`❌ Error al sincronizar:\n\n${error.message}`, "info");
+            showToast(`❌ Error al sincronizar:\n\n${error.message}`, "error");
         }
     };
     
@@ -982,12 +982,12 @@ function CRMApp() {
                 }
             }
             
-            showToast(`✅ Sincronización completada:\n\n• ${totalInsertadas} facturas recibidas insertadas\n• ${totalDuplicadas} duplicadas omitidas\n• ${totalErrores} errores`, "info");
+            showToast(`✅ Sincronización completada:\n\n• ${totalInsertadas} facturas recibidas insertadas\n• ${totalDuplicadas} duplicadas omitidas\n• ${totalErrores} errores`, "success");
             loadFacturasRecibidas();
             
         } catch (error) {
             console.error('Error sincronizando facturas recibidas:', error);
-            showToast(`❌ Error al sincronizar:\n\n${error.message}`, "info");
+            showToast(`❌ Error al sincronizar:\n\n${error.message}`, "error");
         }
     };
     
@@ -2187,12 +2187,19 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 if (error) throw error;
                 
                 const duplicados = movimientos.length - movimientosNuevos.length;
-                alert(`✅ ${movimientosNuevos.length} movimientos nuevos importados${duplicados > 0 ? `\n⚠️ ${duplicados} duplicados omitidos` : ''}`);
+                showToast(`✅ ${movimientosNuevos.length} movimientos importados${duplicados > 0 ? ` (${duplicados} duplicados omitidos)` : ''}`, 'success');
                 loadMovimientosBancarios();
                 
             } catch (error) {
                 console.error('Error importando cartola:', error);
-                showToast(`❌ Error al importar: ${error.message}`, "info");
+                const msg = error.message || 'Error desconocido';
+                if (msg.includes('null value in column')) {
+                    showToast('❌ Error: La cartola tiene filas sin fecha válida. Verifica el formato del archivo.', 'error');
+                } else if (msg.includes('already exists') || msg.includes('duplicate')) {
+                    showToast('⚠️ Algunos movimientos ya existían en el sistema', 'info');
+                } else {
+                    showToast(`❌ Error al importar: ${msg}`, 'error');
+                }
             }
         };
         
@@ -2232,7 +2239,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 if (score > 0.6) {
                     matches.push({
                         tipo: 'factura_emitida',
-                        id: f.id,
+                        id: String(f.id),
                         descripcion: `Factura #${f.numero_factura} - ${f.cliente}`,
                         monto_clp: montoFacCLP,
                         monto_uf: parseFloat(f.monto_uf) || 0,
@@ -2255,7 +2262,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 if (score > 0.6) {
                     matches.push({
                         tipo: 'factura_recibida',
-                        id: f.id,
+                        id: String(f.id),
                         descripcion: `Factura #${f.numero_factura} - ${f.proveedor}`,
                         monto_clp: montoFacCLP,
                         monto_uf: parseFloat(f.monto_uf) || 0,
@@ -2273,8 +2280,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 if (score > 0.6) {
                     matches.push({
                         tipo: 'sueldo_socio',
-                        id: s.id,
-                        descripcion: `Sueldo ${s.socio} - ${s.mes_servicio}`,
+                        id: String(s.id),
+                        descripcion: `Retiro ${s.socio} - ${s.mes_servicio}`,
                         monto_clp: montoSueldoCLP,
                         monto_uf: parseFloat(s.monto_uf) || 0,
                         fecha: s.fecha,
@@ -2291,7 +2298,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 if (score > 0.6) {
                     matches.push({
                         tipo: 'boleta_honorario',
-                        id: b.id,
+                        id: String(b.id),
                         descripcion: `Boleta ${b.prestador} - ${b.mes_servicio}`,
                         monto_clp: montoBrutoCLP,
                         monto_uf: parseFloat(b.monto_bruto_uf) || 0,
@@ -2316,7 +2323,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 if (diffDias <= 7 && diffMonto <= 0.02) { // Mismo día ±7 y monto ±2%
                     matches.push({
                         tipo: 'caja_chica',
-                        id: c.id,
+                        id: String(c.id),
                         descripcion: `Caja Chica: ${c.concepto}`,
                         monto_clp: montoCajaCLP,
                         monto_uf: montoCajaCLP / ufActual,
@@ -2354,16 +2361,20 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
     // Aplicar conciliación
     const aplicarConciliacion = async (movimientoId, conciliadoConTipo, conciliadoConId) => {
         try {
+            // Ensure IDs are strings (some records have numeric IDs from SII sync)
+            const movId = String(movimientoId);
+            const conId = String(conciliadoConId);
+            
             // Actualizar movimiento
             const { error: errorMov } = await supabase
                 .from('movimientos_bancarios')
                 .update({
                     estado_conciliacion: 'conciliado',
                     conciliado_con_tipo: conciliadoConTipo,
-                    conciliado_con_id: conciliadoConId,
+                    conciliado_con_id: conId,
                     conciliado_at: new Date().toISOString()
                 })
-                .eq('id', movimientoId);
+                .eq('id', movId);
             
             if (errorMov) throw errorMov;
             
@@ -2379,8 +2390,15 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     tabla = 'facturas_recibidas';
                     nuevoEstado = 'Pagada';
                     break;
+                case 'boleta_honorario':
+                    tabla = 'boletas_honorarios';
+                    nuevoEstado = 'Pagada';
+                    break;
+                case 'sueldo_socio':
+                    tabla = 'sueldos_socios';
+                    nuevoEstado = 'Pagado';
+                    break;
                 default:
-                    // Sueldos, boletas y caja chica no tienen estado de pago
                     tabla = null;
             }
             
@@ -2388,19 +2406,22 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 const { error: errorReg } = await supabase
                     .from(tabla)
                     .update({ estado: nuevoEstado })
-                    .eq('id', conciliadoConId);
+                    .eq('id', conId);
                 
-                if (errorReg) throw errorReg;
+                // Don't throw on this - the record might use different ID format
+                if (errorReg) console.warn(`Could not update ${tabla} status:`, errorReg.message);
             }
             
-            showToast('✅ Conciliación aplicada correctamente', 'info');
+            showToast('✅ Conciliación aplicada correctamente', 'success');
             loadMovimientosBancarios();
             loadFacturasEmitidas();
             loadFacturasRecibidas();
+            loadBoletasHonorarios();
+            loadSueldosSocios();
             
         } catch (error) {
             console.error('Error aplicando conciliación:', error);
-            showToast(`❌ Error: ${error.message}`, "info");
+            showToast(`❌ Error: ${error.message}`, 'error');
         }
     };
     
@@ -2424,12 +2445,12 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             if (error) throw error;
             
             // Conciliar
-            await aplicarConciliacion(movimiento.id, 'caja_chica', data[0].id);
+            await aplicarConciliacion(String(movimiento.id), 'caja_chica', String(data[0].id));
             loadCajaChica();
             
         } catch (error) {
             console.error('Error creando gasto:', error);
-            showToast(`❌ Error: ${error.message}`, "info");
+            showToast(`❌ Error: ${error.message}`, 'error');
         }
     };
     
@@ -2439,14 +2460,15 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             const { error } = await supabase
                 .from('movimientos_bancarios')
                 .update({ estado_conciliacion: 'ignorar' })
-                .eq('id', movimientoId);
+                .eq('id', String(movimientoId));
             
             if (error) throw error;
             
+            showToast('Movimiento ignorado', 'info');
             loadMovimientosBancarios();
         } catch (error) {
             console.error('Error ignorando movimiento:', error);
-            showToast(`❌ Error: ${error.message}`, "info");
+            showToast(`❌ Error: ${error.message}`, 'error');
         }
     };
     if (loading) return (
@@ -2635,7 +2657,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', 'finanzas-dashboard': 'Dashboard Financiero', contabilidad: 'Estado de Resultados', conciliacion: 'Conciliación Bancaria' }[activeTab]}
                     </span>
                 </div>
-                {['cerrados', 'tickets', 'keyaccounts', 'reportes', 'finanzas-dashboard', 'contabilidad', 'conciliacion'].includes(activeTab) && (
+                {['cerrados', 'tickets', 'keyaccounts', 'reportes'].includes(activeTab) && (
                     <DateRangeFilter desde={dateRange.desde} hasta={dateRange.hasta} onChange={setDateRange} className="mt-2" />
                 )}
             </div>

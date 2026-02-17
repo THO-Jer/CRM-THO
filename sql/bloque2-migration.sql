@@ -63,3 +63,20 @@ ALTER TABLE cerrados ADD COLUMN IF NOT EXISTS convertido_a TEXT;  -- 'ticket', '
 -- SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'contactos' ORDER BY ordinal_position;
 -- SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'notas' ORDER BY ordinal_position;
 -- SELECT column_name FROM information_schema.columns WHERE table_name = 'cerrados' AND column_name IN ('fecha_inicio', 'fecha_termino', 'motivo_cierre', 'contacto');
+
+-- ============================================
+-- FIX: conciliado_con_id should be TEXT, not UUID
+-- because factura IDs from SII are integers
+-- ============================================
+ALTER TABLE movimientos_bancarios 
+    ALTER COLUMN conciliado_con_id TYPE TEXT;
+
+-- Add missing columns if they don't exist
+ALTER TABLE movimientos_bancarios ADD COLUMN IF NOT EXISTS conciliado_con_tipo TEXT;
+ALTER TABLE movimientos_bancarios ADD COLUMN IF NOT EXISTS conciliado_con_id TEXT;
+ALTER TABLE movimientos_bancarios ADD COLUMN IF NOT EXISTS conciliado_at TIMESTAMPTZ;
+ALTER TABLE movimientos_bancarios ADD COLUMN IF NOT EXISTS numero_documento TEXT;
+ALTER TABLE movimientos_bancarios ADD COLUMN IF NOT EXISTS sucursal TEXT;
+ALTER TABLE movimientos_bancarios ADD COLUMN IF NOT EXISTS monto_uf NUMERIC;
+ALTER TABLE movimientos_bancarios ADD COLUMN IF NOT EXISTS uf_dia NUMERIC;
+ALTER TABLE movimientos_bancarios ADD COLUMN IF NOT EXISTS archivo_origen TEXT;
