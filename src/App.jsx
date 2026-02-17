@@ -173,7 +173,48 @@ function CRMApp() {
     const [cancelAlsoRegisterLoss, setCancelAlsoRegisterLoss] = useState(true);
     
 
-    useEffect(() => { checkAccess(); }, []);
+    useEffect(() => {
+        // Check for Supabase OAuth session first, then fallback to localStorage email
+        const initAuth = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    const email = session.user.email;
+                    const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || email.split('@')[0];
+                    setUser({ email, name });
+                    localStorage.setItem('crm_tho_email', email);
+                    setLoading(false);
+                    return;
+                }
+            } catch (e) {
+                console.warn('OAuth session check failed:', e);
+            }
+            // Fallback to localStorage
+            const savedEmail = localStorage.getItem('crm_tho_email');
+            if (savedEmail) {
+                setUser({ email: savedEmail, name: savedEmail.split('@')[0] });
+            }
+            setLoading(false);
+        };
+        initAuth();
+
+        // Listen for auth state changes (OAuth redirect callback)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' && session?.user) {
+                const email = session.user.email;
+                const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || email.split('@')[0];
+                setUser({ email, name });
+                localStorage.setItem('crm_tho_email', email);
+                setShowLoginModal(false);
+            }
+            if (event === 'SIGNED_OUT') {
+                setUser(null);
+                localStorage.removeItem('crm_tho_email');
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
     useEffect(() => { if (user) loadAllData(); }, [user]);
     useEffect(() => {
         // Cargar UF del día al iniciar
@@ -2420,7 +2461,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 {user ? (
                                     <div className="flex items-center gap-2">
                                         <span className="hidden md:inline text-xs text-gray-500 dark:text-gray-400">{user.email.split('@')[0]}</span>
-                                        <button onClick={() => { localStorage.removeItem('crm_tho_email'); setUser(null); }} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Salir</button>
+                                        <button onClick={async () => { await supabase.auth.signOut(); localStorage.removeItem('crm_tho_email'); setUser(null); }} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Salir</button>
                                     </div>
                                 ) : (
                                     <button onClick={() => setShowLoginModal(true)} className="px-3 py-1.5 color-naranja text-white rounded-lg text-sm font-medium">Ingresar</button>
