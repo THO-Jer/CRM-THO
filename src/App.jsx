@@ -1671,6 +1671,21 @@ function CRMApp() {
     // ===== GESTIÓN DE ARCHIVOS =====
     const openDetail = (type, item) => setSelectedEntity({ type, item });
 
+    // Date range filter helper - filters any array by a date field
+    const filterByDateRange = (items, dateField) => {
+        if (!dateRange.desde && !dateRange.hasta) return items;
+        return items.filter(item => {
+            const d = item[dateField];
+            if (!d) return true; // Keep items without dates
+            if (dateRange.desde && d < dateRange.desde) return false;
+            if (dateRange.hasta && d > dateRange.hasta) return false;
+            return true;
+        });
+    };
+    const filteredCerrados = filterByDateRange(cerrados, 'fecha_cierre');
+    const filteredTickets = filterByDateRange(tickets, 'fecha_inicio');
+    const filteredKeyAccounts = filterByDateRange(keyAccounts, 'fecha_inicio_contrato');
+
     const openFilesModal = async (entityType, entityId, entityName) => {
         if (!requireAuth()) return;
         setFilesEntityType(entityType);
@@ -2544,14 +2559,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         <span className="text-gray-300 dark:text-gray-600 mx-1 flex-shrink-0 hidden md:inline">|</span>
                         <span className="text-[9px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-bold flex-shrink-0 hidden md:inline mr-1">Finanzas</span>
                         
-                        {/* Finanzas tabs */}
-                        {[
-                            { id: 'finanzas-dashboard', nombre: '💰 Finanzas', cTab: 'dashboard' },
-                            { id: 'contabilidad', nombre: '📊 EERR', cTab: 'pl' },
-                            { id: 'conciliacion', nombre: '🏦 Conciliación', cTab: 'conciliacion' },
-                        ].map(tab => (
-                            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setContaTab(tab.cTab); }} className={`py-3 px-3 border-b-2 font-medium text-xs whitespace-nowrap flex-shrink-0 transition ${activeTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{tab.nombre}</button>
-                        ))}
+                        {/* Single Finanzas tab */}
+                        <button onClick={() => setActiveTab('finanzas')} className={`py-3 px-3 border-b-2 font-medium text-xs whitespace-nowrap flex-shrink-0 transition ${activeTab === 'finanzas' ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>💰 Finanzas</button>
                         
                         {/* Spacer + Global Search */}
                         <div className="flex-1"></div>
@@ -2613,10 +2622,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
                     <span>CRM</span>
                     <span>›</span>
-                    <span>{['pipeline','tickets','keyaccounts','cerrados','reportes'].includes(activeTab) ? 'Comercial' : ['contabilidad','finanzas-dashboard','conciliacion'].includes(activeTab) ? 'Finanzas' : 'General'}</span>
+                    <span>{['pipeline','tickets','keyaccounts','cerrados','reportes'].includes(activeTab) ? 'Comercial' : activeTab === 'finanzas' ? 'Finanzas' : 'General'}</span>
                     <span>›</span>
                     <span className="text-gray-600 dark:text-gray-300 font-medium">
-                        {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', contabilidad: 'Estado de Resultados', 'finanzas-dashboard': 'Dashboard Financiero', conciliacion: 'Conciliación Bancaria' }[activeTab]}
+                        {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', finanzas: 'Finanzas' }[activeTab]}
                     </span>
                 </div>
                 {['cerrados', 'tickets', 'keyaccounts', 'reportes'].includes(activeTab) && (
@@ -2642,8 +2651,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             <main className="max-w-7xl mx-auto px-3 py-4 md:px-4 md:py-8">
                 {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
                 {activeTab === 'pipeline' && <KanbanBoard onDetail={(p) => openDetail('prospecto', p)} onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
-                {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
-                {['contabilidad', 'finanzas-dashboard', 'conciliacion'].includes(activeTab) && (
+                {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={filteredCerrados} tickets={filteredTickets} keyAccounts={filteredKeyAccounts} ufActual={ufActual} dateRange={dateRange} />}
+                {activeTab === 'finanzas' && (
                     <ContabilidadView 
                         facturasEmitidas={facturasEmitidas} 
                         facturasRecibidas={facturasRecibidas} 
@@ -2678,9 +2687,9 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         onFiles={openFilesModal} 
                     />
                 )}
-                {activeTab === 'cerrados' && <CerradosView onDetail={(c) => openDetail('cerrado', c)} onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
-                {activeTab === 'tickets' && <TicketsView onDetail={(t) => openDetail('ticket', t)} onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
-                {activeTab === 'keyaccounts' && <KeyAccountsView onDetail={(k) => openDetail('keyaccount', k)} onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
+                {activeTab === 'cerrados' && <CerradosView onDetail={(c) => openDetail('cerrado', c)} onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={filteredCerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
+                {activeTab === 'tickets' && <TicketsView onDetail={(t) => openDetail('ticket', t)} onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={filteredTickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
+                {activeTab === 'keyaccounts' && <KeyAccountsView onDetail={(k) => openDetail('keyaccount', k)} onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={filteredKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
             </main>
 
             {showModal && <UniversalModal type={modalType} item={editingItem} onSave={(data) => modalType === 'prospecto' ? handleSaveProspecto(data) : handleSaveOther(modalType, data)} onClose={() => setShowModal(false)} />}
@@ -2822,7 +2831,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             )}
 
             {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
-            {selectedEntity && <EntityDetail entity={selectedEntity} onClose={() => setSelectedEntity(null)} contactos={contactos} notas={notas} user={user} onRefresh={() => { loadNotas(); loadContactos(); }} />}
+            {selectedEntity && <EntityDetail entity={selectedEntity} onClose={() => setSelectedEntity(null)} contactos={contactos} notas={notas} user={user} onRefresh={() => { loadNotas(); loadContactos(); loadProspectos(); loadCerrados(); loadTickets(); loadKeyAccounts(); }} />}
         </div>
     );
 

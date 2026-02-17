@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Chart } from 'chart.js'
 
-export default function ReportesView({ prospectos, cerrados, tickets, keyAccounts, ufActual }) {
+export default function ReportesView({ prospectos, cerrados, tickets, keyAccounts, ufActual, dateRange }) {
     const [periodo, setPeriodo] = useState('6meses');
     
     const prepararDatosIngresos = () => {
@@ -9,12 +9,31 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
         const meses = [], mrrData = [], ticketsData = [];
         for (let i = 5; i >= 0; i--) {
             const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+            const mesEnd = new Date(hoy.getFullYear(), hoy.getMonth() - i + 1, 0);
+            const mesKey = `${fecha.getFullYear()}-${String(fecha.getMonth()+1).padStart(2,'0')}`;
             meses.push(fecha.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' }));
-            const mrrTotal = keyAccounts.reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
-            const ticketsTotal = tickets.reduce((sum, t) => {
-                const monto = parseFloat(t.valor_monto) || 0;
-                return sum + (t.valor_moneda === 'CLP' ? monto / (ufActual || 38000) : monto);
+            
+            // MRR: sum KA uf_mes only if the account was active during this month
+            const mrrTotal = keyAccounts.reduce((sum, ka) => {
+                const inicio = ka.fecha_inicio_contrato || ka.created_at;
+                if (!inicio) return sum;
+                const kaStart = new Date(inicio);
+                if (kaStart > mesEnd) return sum; // Not yet started
+                return sum + (parseFloat(ka.uf_mes) || 0);
             }, 0);
+            
+            // Tickets: distribute value across active months (fecha_inicio to fecha_entrega)
+            const ticketsTotal = tickets.reduce((sum, t) => {
+                const tStart = new Date(t.fecha_inicio || t.created_at);
+                const tEnd = t.fecha_entrega ? new Date(t.fecha_entrega) : hoy;
+                if (tStart > mesEnd || tEnd < fecha) return sum; // Not active this month
+                const monto = parseFloat(t.valor_monto) || 0;
+                const montoUF = t.valor_moneda === 'CLP' ? monto / (ufActual || 38000) : monto;
+                // Distribute evenly across months of service
+                const totalMonths = Math.max(1, Math.ceil((tEnd - tStart) / (30*86400000)));
+                return sum + (montoUF / totalMonths);
+            }, 0);
+            
             mrrData.push(Math.round(mrrTotal));
             ticketsData.push(Math.round(ticketsTotal));
         }

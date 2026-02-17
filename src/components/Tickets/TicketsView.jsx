@@ -63,7 +63,7 @@ export default function TicketsView({tickets, onAdd, onEdit, onDelete, onExport,
                     <div key={t.id} className="bg-white rounded-lg shadow p-4">
                         <div className="flex justify-between items-start mb-3">
                             <div>
-                                <h3 className="font-bold text-lg">{t.organizacion}</h3>
+                                <h3 className="font-bold text-lg cursor-pointer hover:text-naranja" onClick={() => onDetail && onDetail(t)}>{t.organizacion}</h3>
                                 <p className="text-sm text-gray-600">{t.ticket}</p>
                             </div>
                             {t.valor_monto && (

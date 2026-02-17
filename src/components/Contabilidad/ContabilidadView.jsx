@@ -353,14 +353,18 @@ export default function ContabilidadView({
         return (
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <h2 className="text-2xl font-bold">💰 Contabilidad</h2>
+                    <h2 className="text-2xl font-bold">
+                        {contaTab === 'dashboard' && '💰 Dashboard Financiero'}
+                        {contaTab === 'conciliacion' && '🏦 Conciliación Bancaria'}
+                        {['pl','emitidas','recibidas','boletas','sueldos','caja'].includes(contaTab) && '📊 Estado de Resultados'}
+                    </h2>
 
                     {/* Selector de período */}
                     <div className="flex items-center gap-2 flex-wrap">
                         <select
                             value={periodo}
                             onChange={(e) => setPeriodo(e.target.value)}
-                            className="px-3 py-1.5 border rounded-lg text-sm font-medium bg-white"
+                            className="px-3 py-1.5 border rounded-lg text-sm font-medium bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                         >
                             <option value="mes_actual">Mes actual</option>
                             <option value="mes_anterior">Mes anterior</option>
@@ -380,9 +384,10 @@ export default function ContabilidadView({
                 </div>
 
                 {/* Etiqueta período activo */}
-                <div className="text-sm text-gray-500 -mt-3 capitalize">{periodoLabel()}</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400 -mt-3 capitalize">{periodoLabel()}</div>
                 
-                {/* Métricas resumen */}
+                {/* Métricas resumen - solo en dashboard */}
+                {contaTab === 'dashboard' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     <MetricCard title="💵 Emitidas" value={`${Math.round(totalEmitidas)} UF`} subtitle={`$${Math.round(totalEmitidas * ufActual).toLocaleString('es-CL')}`} color="verde" />
                     <MetricCard title="📥 Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * ufActual).toLocaleString('es-CL')}`} color="naranja" />
@@ -390,31 +395,33 @@ export default function ContabilidadView({
                     <MetricCard title="💵 Caja Chica" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / ufActual)} UF`} color="fucsia" />
                     <MetricCard title="📊 Margen" value={`${Math.round(margen)} UF`} subtitle={margen >= 0 ? '🟢 Positivo' : '🔴 Negativo'} color={margen >= 0 ? 'verde' : 'naranja'} />
                 </div>
+                )}
                 
-                {/* Sub-tabs */}
-                <div className="bg-white rounded-lg shadow">
-                    <div className="border-b px-6">
+                {/* Content area */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+                    {/* Sub-tabs only for EERR section (pl, emitidas, recibidas, etc.) */}
+                    {['pl','emitidas','recibidas','boletas','sueldos','caja'].includes(contaTab) && (
+                    <div className="border-b dark:border-gray-700 px-6">
                         <nav className="flex space-x-6 overflow-x-auto">
                             {[
-                                { id: 'dashboard', nombre: '🏠 Dashboard' },
-                                { id: 'emitidas', nombre: '📤 Facturas Emitidas' },
-                                { id: 'recibidas', nombre: '📥 Facturas Recibidas' },
-                                { id: 'boletas', nombre: '👤 Boletas Honorarios' },
-                                { id: 'sueldos', nombre: '💼 Sueldos Socios' },
-                                { id: 'conciliacion', nombre: '🏦 Conciliación' },
+                                { id: 'pl', nombre: '📋 Estado de Resultados' },
+                                { id: 'emitidas', nombre: '📤 Emitidas' },
+                                { id: 'recibidas', nombre: '📥 Recibidas' },
+                                { id: 'boletas', nombre: '👤 Honorarios' },
+                                { id: 'sueldos', nombre: '💼 Sueldos' },
                                 { id: 'caja', nombre: '💵 Caja Chica' },
-                                { id: 'pl', nombre: '📊 Estado de Resultados' }
                             ].map(tab => (
                                 <button 
                                     key={tab.id} 
                                     onClick={() => setContaTab(tab.id)}
-                                    className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${contaTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500'}`}
+                                    className={`py-3 px-1 border-b-2 font-medium text-xs whitespace-nowrap ${contaTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                                 >
                                     {tab.nombre}
                                 </button>
                             ))}
                         </nav>
                     </div>
+                    )}
                     
                     <div className="p-6">
                         {/* Dashboard de Contabilidad */}

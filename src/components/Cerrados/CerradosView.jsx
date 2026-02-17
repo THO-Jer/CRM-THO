@@ -88,7 +88,7 @@ export default function CerradosView({cerrados, onAdd, onEdit, onDelete, onExpor
                     <div key={c.id} className="bg-white rounded-lg shadow p-4">
                         <div className="flex justify-between items-start mb-3">
                             <div>
-                                <h3 className="font-bold text-lg">{c.organizacion}</h3>
+                                <h3 className="font-bold text-lg cursor-pointer hover:text-naranja" onClick={() => onDetail && onDetail(c)}>{c.organizacion}</h3>
                                 <p className="text-sm text-gray-600">{c.tipo}</p>
                             </div>
                             <span className={`px-2 py-1 text-xs rounded-full ${c.estado_final === 'Ganado' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
