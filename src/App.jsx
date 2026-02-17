@@ -2348,12 +2348,12 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
     };
     if (loading) return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900">
-            <div className="relative w-16 h-16 mb-6">
-                <div className="absolute inset-0 rounded-full border-4 border-gray-200 dark:border-gray-700"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-naranja border-t-transparent animate-spin"></div>
+            <img src="/logo-tho.png" alt="THO" className="h-16 mb-6 dark:brightness-0 dark:invert opacity-80" />
+            <div className="relative w-10 h-10 mb-4">
+                <div className="absolute inset-0 rounded-full border-2 border-gray-200 dark:border-gray-700"></div>
+                <div className="absolute inset-0 rounded-full border-2 border-naranja border-t-transparent animate-spin"></div>
             </div>
-            <p className="text-lg font-medium text-gray-600 dark:text-gray-400">Cargando CRM...</p>
-            <p className="text-sm text-gray-400 dark:text-gray-600 mt-1">The Human Org</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500">Cargando...</p>
         </div>
     );
 
