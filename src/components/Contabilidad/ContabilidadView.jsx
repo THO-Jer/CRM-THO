@@ -314,6 +314,41 @@ export default function ContabilidadView({
         const totalBoletas = boletasAct.reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || 0), 0);
         const totalCajaChica = cajaAct.reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0);
         const margen = totalEmitidas - totalRecibidas - totalBoletas - (totalCajaChica / (ufActual || 38000));
+
+        const exportarSueldosExcel = (sueldos, periodo) => {
+            const datosExport = sueldos.map(s => ({
+                'Socio': s.socio,
+                'Mes Servicio': s.mes_servicio,
+                'Fecha': s.fecha,
+                'Monto CLP': parseFloat(s.monto_clp) || 0,
+                'Monto UF': parseFloat(s.monto_uf) || 0,
+                'UF Día': parseFloat(s.uf_dia) || ufActual,
+                'Concepto': s.concepto || ''
+            }));
+            const totalCLP = datosExport.reduce((sum, s) => sum + s['Monto CLP'], 0);
+            const totalUF = datosExport.reduce((sum, s) => sum + s['Monto UF'], 0);
+            datosExport.push({ 'Socio': 'TOTAL', 'Mes Servicio': '', 'Fecha': '', 'Monto CLP': totalCLP, 'Monto UF': totalUF, 'UF Día': '', 'Concepto': '' });
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(datosExport);
+            ws['!cols'] = [{ wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 30 }];
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let R = range.s.r + 1; R <= range.e.r; R++) {
+                const cellCLP = ws[XLSX.utils.encode_cell({ r: R, c: 3 })];
+                if (cellCLP && typeof cellCLP.v === 'number') cellCLP.z = '#,##0';
+                const cellUF = ws[XLSX.utils.encode_cell({ r: R, c: 4 })];
+                if (cellUF && typeof cellUF.v === 'number') cellUF.z = '#,##0.00';
+            }
+            XLSX.utils.book_append_sheet(wb, ws, 'Sueldos Socios');
+            const periodoTexto = {
+                'mes-actual': 'Mes_Actual', 'ultimos-3-meses': 'Ultimos_3_Meses',
+                'año-actual': `Año_${new Date().getFullYear()}`,
+                'personalizado': `${filtroSueldosDesde}_a_${filtroSueldosHasta}`, 'todo': 'Todos'
+            }[periodo] || 'Export';
+            const fechaExport = new Date().toISOString().split('T')[0];
+            const nombreArchivo = `THO_Sueldos_Socios_${periodoTexto}_${fechaExport}.xlsx`;
+            XLSX.writeFile(wb, nombreArchivo);
+            showToast(`✅ Excel exportado: ${nombreArchivo}`, 'success');
+        };
         
         return (
             <div className="space-y-6">
@@ -346,70 +381,6 @@ export default function ContabilidadView({
 
                 {/* Etiqueta período activo */}
                 <div className="text-sm text-gray-500 -mt-3 capitalize">{periodoLabel()}</div>
-                
-                {/* FUNCIÓN EXPORTAR SUELDOS EXCEL */}
-                {(() => {
-                    const exportarSueldosExcel = (sueldos, periodo) => {
-                        const datosExport = sueldos.map(s => ({
-                            'Socio': s.socio,
-                            'Mes Servicio': s.mes_servicio,
-                            'Fecha': s.fecha,
-                            'Monto CLP': parseFloat(s.monto_clp) || 0,
-                            'Monto UF': parseFloat(s.monto_uf) || 0,
-                            'UF Día': parseFloat(s.uf_dia) || ufActual,
-                            'Concepto': s.concepto || ''
-                        }));
-                        
-                        const totalCLP = datosExport.reduce((sum, s) => sum + s['Monto CLP'], 0);
-                        const totalUF = datosExport.reduce((sum, s) => sum + s['Monto UF'], 0);
-                        
-                        datosExport.push({
-                            'Socio': 'TOTAL',
-                            'Mes Servicio': '',
-                            'Fecha': '',
-                            'Monto CLP': totalCLP,
-                            'Monto UF': totalUF,
-                            'UF Día': '',
-                            'Concepto': ''
-                        });
-                        
-                        const wb = XLSX.utils.book_new();
-                        const ws = XLSX.utils.json_to_sheet(datosExport);
-                        
-                        ws['!cols'] = [
-                            { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 15 },
-                            { wch: 12 }, { wch: 10 }, { wch: 30 }
-                        ];
-                        
-                        const range = XLSX.utils.decode_range(ws['!ref']);
-                        for (let R = range.s.r + 1; R <= range.e.r; R++) {
-                            const cellCLP = ws[XLSX.utils.encode_cell({ r: R, c: 3 })];
-                            if (cellCLP && typeof cellCLP.v === 'number') cellCLP.z = '#,##0';
-                            
-                            const cellUF = ws[XLSX.utils.encode_cell({ r: R, c: 4 })];
-                            if (cellUF && typeof cellUF.v === 'number') cellUF.z = '#,##0.00';
-                        }
-                        
-                        XLSX.utils.book_append_sheet(wb, ws, 'Sueldos Socios');
-                        
-                        const periodoTexto = {
-                            'mes-actual': 'Mes_Actual',
-                            'ultimos-3-meses': 'Ultimos_3_Meses',
-                            'año-actual': `Año_${new Date().getFullYear()}`,
-                            'personalizado': `${filtroSueldosDesde}_a_${filtroSueldosHasta}`,
-                            'todo': 'Todos'
-                        }[periodo] || 'Export';
-                        
-                        const fechaExport = new Date().toISOString().split('T')[0];
-                        const nombreArchivo = `THO_Sueldos_Socios_${periodoTexto}_${fechaExport}.xlsx`;
-                        
-                        XLSX.writeFile(wb, nombreArchivo);
-                        showToast(`✅ Excel exportado: ${nombreArchivo}`, 'success');
-                    };
-                    
-                    // exportarSueldosExcel defined locally
-                    return null;
-                })()}
                 
                 {/* Métricas resumen */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
