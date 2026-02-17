@@ -2334,7 +2334,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 <div className="max-w-7xl mx-auto px-3 md:px-4 py-3">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <img src="/logo-tho.png" alt="THO" className="h-9 w-9 object-contain dark:invert" />
+                            <img src="/logo-tho.png" alt="THO" className="h-9 w-9 object-contain dark:brightness-0 dark:invert" />
                             <div className="hidden sm:block">
                                 <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 leading-tight">CRM</h1>
                                 <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest leading-tight">The Human Org</p>

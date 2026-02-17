@@ -484,8 +484,8 @@ export default function ContabilidadView({
                             if (porPagar > 0) alertas.push({ tipo: 'info', msg: `${Math.round(porPagar)} UF por pagar en facturas recibidas` });
                             if (retenciones > 0) alertas.push({ tipo: 'fiscal', msg: `${Math.round(retenciones)} UF en retenciones del período (15.25%)` });
 
-                            const cambioIngresos = emitidaAnterior > 0 ? ((emitidaActual - emitidaAnterior) / emitidaAnterior * 100) : 0;
-                            const cambioGastos = gastosAnterior > 0 ? ((gastosActual - gastosAnterior) / gastosAnterior * 100) : 0;
+                            const cambioIngresos = emitidaAnterior > 0 ? ((emitidaActual - emitidaAnterior) / emitidaAnterior * 100) : (emitidaActual > 0 ? null : 0);
+                            const cambioGastos = gastosAnterior > 0 ? ((gastosActual - gastosAnterior) / gastosAnterior * 100) : (gastosActual > 0 ? null : 0);
 
                             return (
                             <div className="space-y-6">
@@ -511,15 +511,15 @@ export default function ContabilidadView({
                                     <div className="bg-white border rounded-xl p-4">
                                         <div className="text-xs text-gray-500 mb-1">💰 Ingresos</div>
                                         <DualCurrency amountUF={Math.round(emitidaActual)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
-                                        <div className={`text-xs mt-1 ${cambioIngresos >= 0 ? 'text-verde' : 'text-red-500'}`}>
-                                            {cambioIngresos >= 0 ? '↑' : '↓'} {Math.abs(Math.round(cambioIngresos))}% vs período anterior
+                                        <div className={`text-xs mt-1 ${cambioIngresos === null ? 'text-gray-400' : cambioIngresos >= 0 ? 'text-verde' : 'text-red-500'}`}>
+                                            {cambioIngresos === null ? 'Sin datos período anterior' : `${cambioIngresos >= 0 ? '↑' : '↓'} ${Math.abs(Math.round(cambioIngresos))}% vs período anterior`}
                                         </div>
                                     </div>
                                     <div className="bg-white border rounded-xl p-4">
                                         <div className="text-xs text-gray-500 mb-1">📥 Gastos Total</div>
                                         <DualCurrency amountUF={Math.round(gastosActual + honorariosActual + cajaActual)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
-                                        <div className={`text-xs mt-1 ${cambioGastos >= 0 ? 'text-red-500' : 'text-verde'}`}>
-                                            {cambioGastos >= 0 ? '↑' : '↓'} {Math.abs(Math.round(cambioGastos))}% vs período anterior
+                                        <div className={`text-xs mt-1 ${cambioGastos === null ? 'text-gray-400' : cambioGastos >= 0 ? 'text-red-500' : 'text-verde'}`}>
+                                            {cambioGastos === null ? 'Sin datos período anterior' : `${cambioGastos >= 0 ? '↑' : '↓'} ${Math.abs(Math.round(cambioGastos))}% vs período anterior`}
                                         </div>
                                     </div>
                                     <div className="bg-white border rounded-xl p-4">
@@ -1377,6 +1377,20 @@ export default function ContabilidadView({
                         )}
                         {/* Estado de Resultados */}
                         {contaTab === 'pl' && (() => {
+                            const isCLP = monedaPreferida === 'CLP';
+                            const uf = ufActual || 38000;
+                            const fmtVal = (valUF) => {
+                                const rounded = Math.round(valUF * 10) / 10;
+                                if (isCLP) return `$${Math.round(valUF * uf).toLocaleString('es-CL')}`;
+                                return `${rounded} UF`;
+                            };
+                            const fmtValBig = (valUF) => {
+                                const rounded = Math.round(valUF * 10) / 10;
+                                if (isCLP) return `$${Math.round(valUF * uf).toLocaleString('es-CL')}`;
+                                return `${rounded} UF`;
+                            };
+                            const monLabel = isCLP ? 'CLP' : 'UF';
+
                             // Obtener años disponibles de los datos
                             const añosDisponibles = [...new Set([
                                 ...facturasEmitidas.map(f => new Date(f.fecha_emision).getFullYear()),
@@ -1534,8 +1548,9 @@ export default function ContabilidadView({
                                             ['GASTOS OPERACIONALES'],
                                             ['  Proveedores (+ IVA)', ...data.map(m => Math.round((m.gastos || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.gastos||0), 0) * uf)],
                                             ['  Honorarios (bruto)', ...data.map(m => Math.round((m.honorarios || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.honorarios||0), 0) * uf)],
+                                            ['  Sueldos/Retiros Socios', ...data.map(m => Math.round((m.sueldos || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.sueldos||0), 0) * uf)],
                                             ['  Caja Chica (boletas)', ...data.map(m => Math.round((m.cajaChica || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.cajaChica||0), 0) * uf)],
-                                            ['TOTAL GASTOS', ...data.map(m => Math.round(((m.gastos||0) + (m.honorarios||0) + (m.cajaChica||0)) * uf)), Math.round(data.reduce((s,m) => s + (m.gastos||0) + (m.honorarios||0) + (m.cajaChica||0), 0) * uf)],
+                                            ['TOTAL GASTOS', ...data.map(m => Math.round(((m.gastos||0) + (m.honorarios||0) + (m.sueldos||0) + (m.cajaChica||0)) * uf)), Math.round(data.reduce((s,m) => s + (m.gastos||0) + (m.honorarios||0) + (m.sueldos||0) + (m.cajaChica||0), 0) * uf)],
                                             [],
                                             ['UTILIDAD OPERACIONAL', ...data.map(m => Math.round((m.utilidadOperacional || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.utilidadOperacional||0), 0) * uf)],
                                             [],
@@ -1583,7 +1598,7 @@ export default function ContabilidadView({
                                         <div className="text-sm font-bold text-gray-600 mb-2">💰 INGRESOS</div>
                                         <div className="flex justify-between p-3 bg-white rounded">
                                             <span className="font-medium">Facturas Emitidas (exentas):</span>
-                                            <span className="font-bold text-verde">{Math.round(totalEmitidas * 10) / 10} UF</span>
+                                            <span className="font-bold text-verde">{fmtVal(totalEmitidas)}</span>
                                         </div>
                                     </div>
                                     
@@ -1593,19 +1608,19 @@ export default function ContabilidadView({
                                         <div className="grid grid-cols-1 gap-2">
                                             <div className="flex justify-between p-3 bg-white rounded">
                                                 <span className="font-medium">Gastos Operacionales (+ IVA):</span>
-                                                <span className="font-bold text-naranja">{Math.round(totalGastos * 10) / 10} UF</span>
+                                                <span className="font-bold text-naranja">{fmtVal(totalGastos)}</span>
                                             </div>
                                             <div className="flex justify-between p-3 bg-white rounded">
                                                 <span className="font-medium">Honorarios (bruto):</span>
-                                                <span className="font-bold text-azul">{Math.round(totalHonorarios * 10) / 10} UF</span>
+                                                <span className="font-bold text-azul">{fmtVal(totalHonorarios)}</span>
                                             </div>
                                             <div className="flex justify-between p-3 bg-white rounded">
                                                 <span className="font-medium">Caja Chica (boletas):</span>
-                                                <span className="font-bold text-fucsia">{Math.round(totalCajaChica * 10) / 10} UF</span>
+                                                <span className="font-bold text-fucsia">{fmtVal(totalCajaChica)}</span>
                                             </div>
                                             <div className="flex justify-between p-3 bg-gray-100 rounded font-bold">
                                                 <span>TOTAL GASTOS:</span>
-                                                <span className="text-naranja">{Math.round(totalGastosConsolidado * 10) / 10} UF</span>
+                                                <span className="text-naranja">{fmtVal(totalGastosConsolidado)}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1614,7 +1629,7 @@ export default function ContabilidadView({
                                     <div className="flex justify-between items-center p-4 bg-white rounded mb-4 border-2">
                                         <span className="text-lg font-bold">📊 UTILIDAD OPERACIONAL:</span>
                                         <span className={`text-2xl font-bold ${utilidadOperacional >= 0 ? 'text-verde' : 'text-red-600'}`}>
-                                            {utilidadOperacional >= 0 ? '+' : ''}{Math.round(utilidadOperacional * 10) / 10} UF
+                                            {utilidadOperacional >= 0 ? "+" : ""}{fmtVal(utilidadOperacional)}
                                         </span>
                                     </div>
                                     
@@ -1624,15 +1639,15 @@ export default function ContabilidadView({
                                         <div className="grid grid-cols-1 gap-2">
                                             <div className="flex justify-between p-3 bg-orange-50 rounded">
                                                 <span className="font-medium">Retenciones por pagar (15.25%):</span>
-                                                <span className="font-bold text-orange-600">{Math.round(totalRetenciones * 10) / 10} UF</span>
+                                                <span className="font-bold text-orange-600">{fmtVal(totalRetenciones)}</span>
                                             </div>
                                             <div className="flex justify-between p-3 bg-purple-50 rounded">
                                                 <span className="font-medium">Impuesto estimado (20%):</span>
-                                                <span className="font-bold text-purple-600">{Math.round(impuestosEstimados * 10) / 10} UF</span>
+                                                <span className="font-bold text-purple-600">{fmtVal(impuestosEstimados)}</span>
                                             </div>
                                             <div className="flex justify-between p-3 bg-gray-100 rounded font-bold">
                                                 <span>TOTAL FISCAL:</span>
-                                                <span className="text-orange-600">{Math.round((totalRetenciones + impuestosEstimados) * 10) / 10} UF</span>
+                                                <span className="text-orange-600">{fmtVal(totalRetenciones + impuestosEstimados)}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1641,7 +1656,7 @@ export default function ContabilidadView({
                                     <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-blue-100 rounded border-2 border-verde">
                                         <span className="text-lg font-bold">🎯 UTILIDAD NETA (después impuestos):</span>
                                         <span className={`text-2xl font-bold ${utilidadDespuesImpuestos >= 0 ? 'text-verde' : 'text-red-600'}`}>
-                                            {utilidadDespuesImpuestos >= 0 ? '+' : ''}{Math.round(utilidadDespuesImpuestos * 10) / 10} UF
+                                            {utilidadDespuesImpuestos >= 0 ? '+' : ''}{fmtVal(utilidadDespuesImpuestos)}
                                         </span>
                                     </div>
                                     
@@ -1694,32 +1709,32 @@ export default function ContabilidadView({
                                             <div className="space-y-2 text-sm">
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">💰 Ingresos:</span>
-                                                    <span className="font-medium text-verde">{m.emitidas} UF</span>
+                                                    <span className="font-medium text-verde">{fmtVal(m.emitidas)}</span>
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">📥 Gastos:</span>
-                                                    <span className="font-medium text-naranja">{m.gastos} UF</span>
+                                                    <span className="font-medium text-naranja">{fmtVal(m.gastos)}</span>
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">👤 Honorarios:</span>
-                                                    <span className="font-medium text-azul">{m.honorarios} UF</span>
+                                                    <span className="font-medium text-azul">{fmtVal(m.honorarios)}</span>
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">💼 Sueldos:</span>
-                                                    <span className="font-medium text-purple-600">{m.sueldos} UF</span>
+                                                    <span className="font-medium text-purple-600">{fmtVal(m.sueldos)}</span>
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">💵 Caja Chica:</span>
-                                                    <span className="font-medium text-fucsia">{m.cajaChica} UF</span>
+                                                    <span className="font-medium text-fucsia">{fmtVal(m.cajaChica)}</span>
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">🔶 Retenciones:</span>
-                                                    <span className="font-medium text-orange-600">{m.retenciones} UF</span>
+                                                    <span className="font-medium text-orange-600">{fmtVal(m.retenciones)}</span>
                                                 </div>
                                                 <div className="flex justify-between pt-2 border-t">
                                                     <span className="font-bold">📊 Utilidad:</span>
                                                     <span className={`font-bold ${m.utilidadNeta >= 0 ? 'text-verde' : 'text-red-600'}`}>
-                                                        {m.utilidadNeta >= 0 ? '+' : ''}{m.utilidadNeta} UF
+                                                        {m.utilidadNeta >= 0 ? '+' : ''}{fmtVal(m.utilidadNeta)}
                                                     </span>
                                                 </div>
                                             </div>
