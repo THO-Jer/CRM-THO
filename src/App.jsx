@@ -2559,8 +2559,14 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         <span className="text-gray-300 dark:text-gray-600 mx-1 flex-shrink-0 hidden md:inline">|</span>
                         <span className="text-[9px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-bold flex-shrink-0 hidden md:inline mr-1">Finanzas</span>
                         
-                        {/* Single Finanzas tab */}
-                        <button onClick={() => setActiveTab('finanzas')} className={`py-3 px-3 border-b-2 font-medium text-xs whitespace-nowrap flex-shrink-0 transition ${activeTab === 'finanzas' ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>💰 Finanzas</button>
+                        {/* Finanzas tabs */}
+                        {[
+                            { id: 'finanzas-dashboard', nombre: '💰 Finanzas', cTab: 'dashboard' },
+                            { id: 'contabilidad', nombre: '📊 EERR', cTab: 'pl' },
+                            { id: 'conciliacion', nombre: '🏦 Conciliación', cTab: 'conciliacion' },
+                        ].map(tab => (
+                            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setContaTab(tab.cTab); }} className={`py-3 px-3 border-b-2 font-medium text-xs whitespace-nowrap flex-shrink-0 transition ${activeTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{tab.nombre}</button>
+                        ))}
                         
                         {/* Spacer + Global Search */}
                         <div className="flex-1"></div>
@@ -2622,10 +2628,10 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
                     <span>CRM</span>
                     <span>›</span>
-                    <span>{['pipeline','tickets','keyaccounts','cerrados','reportes'].includes(activeTab) ? 'Comercial' : activeTab === 'finanzas' ? 'Finanzas' : 'General'}</span>
+                    <span>{['pipeline','tickets','keyaccounts','cerrados','reportes'].includes(activeTab) ? 'Comercial' : ['contabilidad','finanzas-dashboard','conciliacion'].includes(activeTab) ? 'Finanzas' : 'General'}</span>
                     <span>›</span>
                     <span className="text-gray-600 dark:text-gray-300 font-medium">
-                        {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', finanzas: 'Finanzas' }[activeTab]}
+                        {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', 'finanzas-dashboard': 'Dashboard Financiero', contabilidad: 'Estado de Resultados', conciliacion: 'Conciliación Bancaria' }[activeTab]}
                     </span>
                 </div>
                 {['cerrados', 'tickets', 'keyaccounts', 'reportes'].includes(activeTab) && (
@@ -2652,7 +2658,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
                 {activeTab === 'pipeline' && <KanbanBoard onDetail={(p) => openDetail('prospecto', p)} onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                 {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={filteredCerrados} tickets={filteredTickets} keyAccounts={filteredKeyAccounts} ufActual={ufActual} dateRange={dateRange} />}
-                {activeTab === 'finanzas' && (
+                {['finanzas-dashboard', 'contabilidad', 'conciliacion'].includes(activeTab) && (
                     <ContabilidadView 
                         facturasEmitidas={facturasEmitidas} 
                         facturasRecibidas={facturasRecibidas} 
