@@ -18,6 +18,7 @@ import UniversalModal from './components/Modals/UniversalModal'
 import HistoryModal from './components/shared/HistoryModal'
 import FilesModal from './components/shared/FilesModal'
 import EntityDetail from './components/Detail/EntityDetail'
+import DateRangeFilter from './components/shared/DateRangeFilter'
 
 Chart.register(...registerables)
 
@@ -79,6 +80,7 @@ function CRMApp() {
     const [contactos, setContactos] = useState([]);
     const [notas, setNotas] = useState([]);
     const [selectedEntity, setSelectedEntity] = useState(null); // { type, item } for detail view
+    const [dateRange, setDateRange] = useState({ desde: '', hasta: '' });
     const [showModal, setShowModal] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [modalType, setModalType] = useState('prospecto');
@@ -2048,7 +2050,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
         
-        // Buscar fila del header
+        // Buscar fila del header (MONTO)
         let headerIndex = -1;
         for (let i = 0; i < rows.length; i++) {
             if (rows[i][0] === 'MONTO') {
@@ -2061,6 +2063,25 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             throw new Error('No se encontró el formato esperado de Santander en la cartola');
         }
         
+        // Detect column layout: find CARGO/ABONO column
+        const headerRow = rows[headerIndex];
+        let cargoAbonoCol = -1;
+        let fechaCol = -1;
+        let docCol = -1;
+        let sucCol = -1;
+        for (let c = 0; c < headerRow.length; c++) {
+            const val = (headerRow[c] || '').toString().toUpperCase();
+            if (val.includes('CARGO') && val.includes('ABONO')) cargoAbonoCol = c;
+            if (val === 'FECHA') fechaCol = c;
+            if (val.includes('DOCUMENTO')) docCol = c;
+            if (val.includes('SUCURSAL')) sucCol = c;
+        }
+        // Fallbacks
+        if (fechaCol === -1) fechaCol = 3;
+        if (cargoAbonoCol === -1) cargoAbonoCol = 7;
+        if (docCol === -1) docCol = 4;
+        if (sucCol === -1) sucCol = 5;
+        
         // Parsear movimientos
         const movimientos = [];
         for (let i = headerIndex + 1; i < rows.length; i++) {
@@ -2068,12 +2089,18 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             if (!row[0] || typeof row[0] !== 'number') continue;
             
             const monto = parseFloat(row[0]);
-            const tipo = row[6] === 'A' ? 'entrada' : 'salida';
+            const cargoAbono = (row[cargoAbonoCol] || '').toString().toUpperCase();
+            const tipo = cargoAbono === 'A' ? 'entrada' : 'salida';
+            
+            // Descripción: columna 1 (puede extenderse a 2 por merged cells)
+            const desc = [row[1], row[2]].filter(x => x && typeof x === 'string').join(' ').trim() || (row[1] || '').toString();
             
             // Parsear fecha DD/MM/YYYY a YYYY-MM-DD
             let fecha = null;
-            if (row[2]) {
-                const partes = row[2].toString().split('/');
+            const fechaRaw = row[fechaCol];
+            if (fechaRaw) {
+                const str = fechaRaw.toString();
+                const partes = str.split('/');
                 if (partes.length === 3) {
                     fecha = `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
                 }
@@ -2081,12 +2108,11 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             
             movimientos.push({
                 fecha: fecha,
-                descripcion: (row[1] || '').toString(),
+                descripcion: desc,
                 monto_clp: Math.abs(monto),
                 tipo: tipo,
-                saldo_clp: parseFloat(row[3]) || 0,
-                numero_documento: (row[4] || '').toString(),
-                sucursal: (row[5] || '').toString(),
+                numero_documento: (row[docCol] || '').toString(),
+                sucursal: (row[sucCol] || '').toString(),
                 monto_uf: Math.abs(monto) / ufActual,
                 uf_dia: ufActual,
                 estado_conciliacion: 'pendiente'
@@ -2518,8 +2544,14 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         <span className="text-gray-300 dark:text-gray-600 mx-1 flex-shrink-0 hidden md:inline">|</span>
                         <span className="text-[9px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-bold flex-shrink-0 hidden md:inline mr-1">Finanzas</span>
                         
-                        {/* Finanzas tab */}
-                        <button onClick={() => setActiveTab('contabilidad')} className={`py-3 px-3 border-b-2 font-medium text-xs whitespace-nowrap flex-shrink-0 transition ${activeTab === 'contabilidad' ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>💰 Contabilidad</button>
+                        {/* Finanzas tabs */}
+                        {[
+                            { id: 'finanzas-dashboard', nombre: '💰 Finanzas', cTab: 'dashboard' },
+                            { id: 'contabilidad', nombre: '📊 EERR', cTab: 'pl' },
+                            { id: 'conciliacion', nombre: '🏦 Conciliación', cTab: 'conciliacion' },
+                        ].map(tab => (
+                            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setContaTab(tab.cTab); }} className={`py-3 px-3 border-b-2 font-medium text-xs whitespace-nowrap flex-shrink-0 transition ${activeTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{tab.nombre}</button>
+                        ))}
                         
                         {/* Spacer + Global Search */}
                         <div className="flex-1"></div>
@@ -2581,12 +2613,15 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
                     <span>CRM</span>
                     <span>›</span>
-                    <span>{['pipeline','tickets','keyaccounts','cerrados','reportes'].includes(activeTab) ? 'Comercial' : activeTab === 'contabilidad' ? 'Finanzas' : 'General'}</span>
+                    <span>{['pipeline','tickets','keyaccounts','cerrados','reportes'].includes(activeTab) ? 'Comercial' : ['contabilidad','finanzas-dashboard','conciliacion'].includes(activeTab) ? 'Finanzas' : 'General'}</span>
                     <span>›</span>
                     <span className="text-gray-600 dark:text-gray-300 font-medium">
-                        {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', contabilidad: 'Contabilidad' }[activeTab]}
+                        {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', contabilidad: 'Estado de Resultados', 'finanzas-dashboard': 'Dashboard Financiero', conciliacion: 'Conciliación Bancaria' }[activeTab]}
                     </span>
                 </div>
+                {['cerrados', 'tickets', 'keyaccounts', 'reportes'].includes(activeTab) && (
+                    <DateRangeFilter desde={dateRange.desde} hasta={dateRange.hasta} onChange={setDateRange} className="mt-2" />
+                )}
             </div>
 
             {activeTab === 'pipeline' && (
@@ -2608,7 +2643,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
                 {activeTab === 'pipeline' && <KanbanBoard onDetail={(p) => openDetail('prospecto', p)} onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                 {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
-                {activeTab === 'contabilidad' && (
+                {['contabilidad', 'finanzas-dashboard', 'conciliacion'].includes(activeTab) && (
                     <ContabilidadView 
                         facturasEmitidas={facturasEmitidas} 
                         facturasRecibidas={facturasRecibidas} 
