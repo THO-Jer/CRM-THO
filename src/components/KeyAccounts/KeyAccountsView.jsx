@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import MetricCard from '../shared/MetricCard'
 
-export default function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles}) {
+export default function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles, onDetail}) {
     const totalMRR = keyAccounts.reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
     
     return (
@@ -34,7 +34,7 @@ export default function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, o
                     <tbody className="divide-y">
                         {keyAccounts.length === 0 ? <tr><td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">Sin datos</td></tr> : keyAccounts.map(ka => (
                             <tr key={ka.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 text-sm font-medium">{ka.organizacion}</td>
+                                <td className="px-6 py-4 text-sm font-medium cursor-pointer hover:text-naranja transition" onClick={() => onDetail && onDetail(ka)}>{ka.organizacion}</td>
                                 <td className="px-6 py-4 text-sm text-gray-500">{ka.servicio}</td>
                                 <td className="px-6 py-4 text-sm">{ka.uf_mes} UF</td>
                                 <td className="px-6 py-4 text-sm">{ka.renovacion || '-'}</td>

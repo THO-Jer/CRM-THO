@@ -6,7 +6,7 @@ import TextAreaField from '../shared/TextAreaField'
 export default function UniversalModal({ type, item, onSave, onClose }) {
     const getDefault = (type) => {
         if (type === 'prospecto') return { organizacion: '', contacto: '', tipo: 'Ticket RC Express', estado: 'Contactado', valor: '', probabilidad: 10, proximo_paso: '', fecha_limite: '', notas: '' };
-        if (type === 'cerrado') return { organizacion: '', tipo: 'Ticket RC Express', estado_final: 'Ganado', fecha_cierre: new Date().toISOString().split('T')[0], valor: '', razon_perdida: '' };
+        if (type === 'cerrado') return { organizacion: '', contacto: '', tipo: 'Ticket RC Express', estado_final: 'Ganado', fecha_cierre: new Date().toISOString().split('T')[0], fecha_inicio: '', fecha_termino: '', valor: '', razon_perdida: '', motivo_cierre: '', notas: '' };
         if (type === 'ticket') return { organizacion: '', ticket: 'Ticket RC Express', fecha_inicio: new Date().toISOString().split('T')[0], fecha_entrega: '', fase_actual: 'Kick-off', porcentaje_avance: 0, responsable: '', valor_monto: 0, valor_moneda: 'UF' };
         if (type === 'keyaccount') return { organizacion: '', servicio: 'RC Nivel 3', uf_mes: '', inicio_contrato: '', fin_contrato: '', renovacion: 'Por definir', salud: 'Buena' };
     };
@@ -41,16 +41,22 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
                             <TextAreaField label="Notas" value={formData.notas || ''} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
                         </>)}
                         {type === 'cerrado' && (<>
-                            <InputField label="Organización" required value={formData.organizacion} onChange={(e) => setFormData({...formData, organizacion: e.target.value})} />
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <SelectField label="Tipo" required value={formData.tipo} onChange={(e) => setFormData({...formData, tipo: e.target.value})} options={['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG', 'Key Account Nivel 1', 'Key Account Nivel 2', 'Key Account Nivel 3']} />
+                                <InputField label="Organización" required value={formData.organizacion} onChange={(e) => setFormData({...formData, organizacion: e.target.value})} />
+                                <InputField label="Contacto" value={formData.contacto || ''} onChange={(e) => setFormData({...formData, contacto: e.target.value})} />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <SelectField label="Tipo" required value={formData.tipo} onChange={(e) => setFormData({...formData, tipo: e.target.value})} options={['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG', 'Key Account Nivel 1', 'Key Account Nivel 2', 'Key Account Nivel 3', 'Gestión de Contenido']} />
                                 <SelectField label="Estado Final" required value={formData.estado_final} onChange={(e) => setFormData({...formData, estado_final: e.target.value})} options={['Ganado', 'Perdido']} />
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <InputField label="Valor (UF)" type="number" step="0.01" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value) || 0})} />
+                                <InputField label="Fecha Inicio" type="date" value={formData.fecha_inicio || ''} onChange={(e) => setFormData({...formData, fecha_inicio: e.target.value})} />
                                 <InputField label="Fecha Cierre" type="date" required value={formData.fecha_cierre} onChange={(e) => setFormData({...formData, fecha_cierre: e.target.value})} />
                             </div>
-                            {formData.estado_final === 'Perdido' && <SelectField label="Razón" value={formData.razon_perdida || ''} onChange={(e) => setFormData({...formData, razon_perdida: e.target.value})} options={['Presupuesto', 'Timing', 'Competencia', 'No respondió', 'No calificado', 'Otro']} />}
+                            {formData.estado_final === 'Perdido' && <SelectField label="Razón de Pérdida" value={formData.razon_perdida || ''} onChange={(e) => setFormData({...formData, razon_perdida: e.target.value})} options={['Presupuesto', 'Timing', 'Competencia', 'No respondió', 'No calificado', 'Otro']} />}
+                            <InputField label="Motivo de Cierre / Observaciones" value={formData.motivo_cierre || ''} onChange={(e) => setFormData({...formData, motivo_cierre: e.target.value})} />
+                            <TextAreaField label="Notas" value={formData.notas || ''} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
                         </>)}
                         {type === 'ticket' && (<>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { formatDate } from '../../utils/formatters'
 import MetricCard from '../shared/MetricCard'
 
-export default function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory, onConvertClosed, onFiles}) {
+export default function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory, onConvertClosed, onFiles, onDetail}) {
     const [filtroAño, setFiltroAño] = useState('todos');
     
     // Extraer años únicos de los cierres
@@ -58,7 +58,7 @@ export default function CerradosView({cerrados, onAdd, onEdit, onDelete, onExpor
                     <tbody className="divide-y">
                         {cerradosFiltrados.length === 0 ? <tr><td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">Sin datos para {filtroAño === 'todos' ? 'mostrar' : `el año ${filtroAño}`}</td></tr> : cerradosFiltrados.map(c => (
                             <tr key={c.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 text-sm font-medium">{c.organizacion}</td>
+                                <td className="px-6 py-4 text-sm font-medium cursor-pointer hover:text-naranja transition" onClick={() => onDetail && onDetail(c)}>{c.organizacion}</td>
                                 <td className="px-6 py-4 text-sm text-gray-500">{c.tipo}</td>
                                 <td className="px-6 py-4 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${c.estado_final === 'Ganado' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{c.estado_final}</span></td>
                                 <td className="px-6 py-4 text-sm">{c.valor} UF</td>

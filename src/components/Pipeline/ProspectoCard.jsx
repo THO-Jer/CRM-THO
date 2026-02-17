@@ -1,13 +1,13 @@
 import { useState } from 'react'
 
-export default function ProspectoCard({ prospecto, onEdit, onDelete, onCerrar, onConvert, onHistory, onDragStart, onDragEnd }) {
+export default function ProspectoCard({ prospecto, onEdit, onDetail, onDelete, onCerrar, onConvert, onHistory, onDragStart, onDragEnd }) {
     const [showActions, setShowActions] = useState(false);
     const isOverdue = new Date(prospecto.fecha_limite) < new Date();
     
     return (
         <div draggable onDragStart={(e) => onDragStart(e, prospecto)} onDragEnd={onDragEnd} className={`bg-white rounded-lg p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-move border-l-4 transition-all ${isOverdue ? 'border-red-500' : 'border-azul'}`}>
             <div onClick={onEdit}>
-                <h4 className="font-semibold text-gray-900 mb-1">{prospecto.organizacion}</h4>
+                <h4 className="font-semibold text-gray-900 mb-1 cursor-pointer hover:text-naranja transition" onClick={onDetail}>{prospecto.organizacion}</h4>
                 <p className="text-sm text-gray-600 mb-2">{prospecto.contacto}</p>
                 <div className="flex justify-between text-xs text-gray-500 mb-2">
                     <span>{prospecto.tipo}</span>

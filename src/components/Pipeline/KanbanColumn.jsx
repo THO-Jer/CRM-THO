@@ -1,6 +1,6 @@
 import ProspectoCard from './ProspectoCard'
 
-export default function KanbanColumn({estado, prospectos, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey, onHistory, onConvert}) {
+export default function KanbanColumn({estado, prospectos, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey, onHistory, onConvert, onDetail}) {
     const handleDragStart = (e, p) => { e.dataTransfer.setData('prospectoId', p.id); e.currentTarget.classList.add('dragging'); };
     const handleDragEnd = (e) => { e.currentTarget.classList.remove('dragging'); };
     const handleDragOver = (e) => { e.preventDefault(); };
@@ -14,7 +14,7 @@ export default function KanbanColumn({estado, prospectos, onEdit, onDelete, onMo
             </div>
             <div className="space-y-3">
                 {prospectos.length === 0 && <p className="text-sm text-gray-400 text-center py-8 italic">Sin prospectos</p>}
-                {prospectos.map(p => <ProspectoCard key={p.id} prospecto={p} onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} onCerrar={onCerrar} onConvert={onConvert} onHistory={() => onHistory('prospectos', p.id, p.organizacion)} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
+                {prospectos.map(p => <ProspectoCard key={p.id} prospecto={p} onEdit={() => onEdit(p)} onDetail={() => onDetail && onDetail(p)} onDelete={() => onDelete(p.id)} onCerrar={onCerrar} onConvert={onConvert} onHistory={() => onHistory('prospectos', p.id, p.organizacion)} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
             </div>
         </div>
     );

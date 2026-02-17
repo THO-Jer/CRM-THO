@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function TicketsView({tickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose, onFiles}) {
+export default function TicketsView({tickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose, onFiles, onDetail}) {
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between gap-3">
@@ -28,7 +28,7 @@ export default function TicketsView({tickets, onAdd, onEdit, onDelete, onExport,
                     <tbody className="divide-y">
                         {tickets.length === 0 ? <tr><td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">Sin datos</td></tr> : tickets.map(t => (
                             <tr key={t.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 text-sm font-medium">{t.organizacion}</td>
+                                <td className="px-6 py-4 text-sm font-medium cursor-pointer hover:text-naranja transition" onClick={() => onDetail && onDetail(t)}>{t.organizacion}</td>
                                 <td className="px-6 py-4 text-sm text-gray-500">{t.ticket}</td>
                                 <td className="px-6 py-4 text-sm text-gray-700">
                                     {t.valor_monto ? (

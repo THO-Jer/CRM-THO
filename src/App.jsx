@@ -17,6 +17,7 @@ import KeyAccountsView from './components/KeyAccounts/KeyAccountsView'
 import UniversalModal from './components/Modals/UniversalModal'
 import HistoryModal from './components/shared/HistoryModal'
 import FilesModal from './components/shared/FilesModal'
+import EntityDetail from './components/Detail/EntityDetail'
 
 Chart.register(...registerables)
 
@@ -75,6 +76,9 @@ function CRMApp() {
     const [cerrados, setCerrados] = useState([]);
     const [tickets, setTickets] = useState([]);
     const [keyAccounts, setKeyAccounts] = useState([]);
+    const [contactos, setContactos] = useState([]);
+    const [notas, setNotas] = useState([]);
+    const [selectedEntity, setSelectedEntity] = useState(null); // { type, item } for detail view
     const [showModal, setShowModal] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [modalType, setModalType] = useState('prospecto');
@@ -241,6 +245,8 @@ function CRMApp() {
             loadCerrados(), 
             loadTickets(), 
             loadKeyAccounts(), 
+            loadContactos(),
+            loadNotas(),
             loadActividad(),
             loadFacturasEmitidas(),
             loadFacturasRecibidas(),
@@ -433,6 +439,18 @@ function CRMApp() {
             });
             setKeyAccounts(cleaned);
         }
+    };
+
+    const loadContactos = async () => {
+        const { data, error } = await supabase.from('contactos').select('*').order('organizacion');
+        if (error) console.warn('contactos table may not exist yet:', error.message);
+        else setContactos(data || []);
+    };
+
+    const loadNotas = async () => {
+        const { data, error } = await supabase.from('notas').select('*').order('created_at', { ascending: false });
+        if (error) console.warn('notas table may not exist yet:', error.message);
+        else setNotas(data || []);
     };
 
     // ===== CARGA DE CONTABILIDAD =====
@@ -1649,6 +1667,8 @@ function CRMApp() {
     };
 
     // ===== GESTIÓN DE ARCHIVOS =====
+    const openDetail = (type, item) => setSelectedEntity({ type, item });
+
     const openFilesModal = async (entityType, entityId, entityName) => {
         if (!requireAuth()) return;
         setFilesEntityType(entityType);
@@ -2586,7 +2606,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
 
             <main className="max-w-7xl mx-auto px-3 py-4 md:px-4 md:py-8">
                 {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
-                {activeTab === 'pipeline' && <KanbanBoard onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
+                {activeTab === 'pipeline' && <KanbanBoard onDetail={(p) => openDetail('prospecto', p)} onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                 {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} ufActual={ufActual} />}
                 {activeTab === 'contabilidad' && (
                     <ContabilidadView 
@@ -2623,9 +2643,9 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         onFiles={openFilesModal} 
                     />
                 )}
-                {activeTab === 'cerrados' && <CerradosView onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
-                {activeTab === 'tickets' && <TicketsView onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
-                {activeTab === 'keyaccounts' && <KeyAccountsView onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
+                {activeTab === 'cerrados' && <CerradosView onDetail={(c) => openDetail('cerrado', c)} onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={cerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
+                {activeTab === 'tickets' && <TicketsView onDetail={(t) => openDetail('ticket', t)} onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={tickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
+                {activeTab === 'keyaccounts' && <KeyAccountsView onDetail={(k) => openDetail('keyaccount', k)} onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
             </main>
 
             {showModal && <UniversalModal type={modalType} item={editingItem} onSave={(data) => modalType === 'prospecto' ? handleSaveProspecto(data) : handleSaveOther(modalType, data)} onClose={() => setShowModal(false)} />}
@@ -2767,6 +2787,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             )}
 
             {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
+            {selectedEntity && <EntityDetail entity={selectedEntity} onClose={() => setSelectedEntity(null)} contactos={contactos} notas={notas} user={user} onRefresh={() => { loadNotas(); loadContactos(); }} />}
         </div>
     );
 
