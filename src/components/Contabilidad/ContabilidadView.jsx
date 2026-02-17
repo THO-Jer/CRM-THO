@@ -71,6 +71,9 @@ export default function ContabilidadView({
                     case 'año-actual':
                         return fechaSueldo.getFullYear() === añoActual;
                     
+                    case 'año-anterior':
+                        return fechaSueldo.getFullYear() === (añoActual - 1);
+                    
                     case 'personalizado':
                         if (!filtroSueldosDesde || !filtroSueldosHasta) return true;
                         const desde = new Date(filtroSueldosDesde);
@@ -408,7 +411,7 @@ export default function ContabilidadView({
                                 { id: 'emitidas', nombre: '📤 Emitidas' },
                                 { id: 'recibidas', nombre: '📥 Recibidas' },
                                 { id: 'boletas', nombre: '👤 Honorarios' },
-                                { id: 'sueldos', nombre: '💼 Sueldos' },
+                                { id: 'sueldos', nombre: '💼 Retiros' },
                                 { id: 'caja', nombre: '💵 Caja Chica' },
                             ].map(tab => (
                                 <button 
@@ -883,7 +886,7 @@ export default function ContabilidadView({
                         {contaTab === 'sueldos' && (
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center flex-wrap gap-3">
-                                    <h3 className="font-bold dark:text-gray-200">Sueldos Socios</h3>
+                                    <h3 className="font-bold dark:text-gray-200">Retiros Socios</h3>
                                     <div className="flex gap-2 flex-wrap">
                                         {/* Filtros de período */}
                                         <select 
@@ -893,7 +896,8 @@ export default function ContabilidadView({
                                         >
                                             <option value="mes-actual">Mes actual</option>
                                             <option value="ultimos-3-meses">Últimos 3 meses</option>
-                                            <option value="año-actual">Año actual</option>
+                                            <option value="año-actual">Año actual ({new Date().getFullYear()})</option>
+                                            <option value="año-anterior">Año anterior ({new Date().getFullYear() - 1})</option>
                                             <option value="personalizado">Período personalizado</option>
                                             <option value="todo">Todo</option>
                                         </select>

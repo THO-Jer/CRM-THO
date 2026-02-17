@@ -2068,72 +2068,56 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
         // Buscar fila del header (MONTO)
         let headerIndex = -1;
         for (let i = 0; i < rows.length; i++) {
-            if (rows[i][0] === 'MONTO') {
-                headerIndex = i;
-                break;
-            }
+            if (rows[i] && rows[i][0] === 'MONTO') { headerIndex = i; break; }
         }
+        if (headerIndex === -1) throw new Error('No se encontró el formato esperado de Santander');
         
-        if (headerIndex === -1) {
-            throw new Error('No se encontró el formato esperado de Santander en la cartola');
+        // Detect columns dynamically
+        const hdr = rows[headerIndex];
+        let fechaCol = -1, caCol = -1, docCol = -1, sucCol = -1;
+        for (let c = 0; c < (hdr || []).length; c++) {
+            const v = (hdr[c] || '').toString().toUpperCase().trim();
+            if (v === 'FECHA') fechaCol = c;
+            if (v.includes('CARGO') || v.includes('ABONO')) caCol = c;
+            if (v.includes('DOCUMENTO')) docCol = c;
+            if (v.includes('SUCURSAL')) sucCol = c;
         }
+        console.log('Cartola cols:', { fechaCol, caCol, docCol, sucCol });
         
-        // Detect column layout: find CARGO/ABONO column
-        const headerRow = rows[headerIndex];
-        let cargoAbonoCol = -1;
-        let fechaCol = -1;
-        let docCol = -1;
-        let sucCol = -1;
-        for (let c = 0; c < headerRow.length; c++) {
-            const val = (headerRow[c] || '').toString().toUpperCase();
-            if (val.includes('CARGO') && val.includes('ABONO')) cargoAbonoCol = c;
-            if (val === 'FECHA') fechaCol = c;
-            if (val.includes('DOCUMENTO')) docCol = c;
-            if (val.includes('SUCURSAL')) sucCol = c;
-        }
-        // Fallbacks
-        if (fechaCol === -1) fechaCol = 3;
-        if (cargoAbonoCol === -1) cargoAbonoCol = 7;
-        if (docCol === -1) docCol = 4;
-        if (sucCol === -1) sucCol = 5;
-        
-        // Parsear movimientos
         const movimientos = [];
         for (let i = headerIndex + 1; i < rows.length; i++) {
             const row = rows[i];
-            if (!row[0] || typeof row[0] !== 'number') continue;
+            if (!row || typeof row[0] !== 'number' || row[0] === 0) continue;
             
             const monto = parseFloat(row[0]);
-            const cargoAbono = (row[cargoAbonoCol] || '').toString().toUpperCase();
-            const tipo = cargoAbono === 'A' ? 'entrada' : 'salida';
+            if (isNaN(monto)) continue;
             
-            // Descripción: columna 1 (puede extenderse a 2 por merged cells)
-            const desc = [row[1], row[2]].filter(x => x && typeof x === 'string').join(' ').trim() || (row[1] || '').toString();
+            // Tipo: from CARGO/ABONO column or sign
+            const tipo = caCol >= 0 && (row[caCol] || '').toString().toUpperCase() === 'A' ? 'entrada' : (monto > 0 ? 'entrada' : 'salida');
             
-            // Parsear fecha DD/MM/YYYY a YYYY-MM-DD
+            // Fecha: parse DD/MM/YYYY or YYYY-MM-DD
             let fecha = null;
-            const fechaRaw = row[fechaCol];
-            if (fechaRaw) {
-                const str = fechaRaw.toString();
-                const partes = str.split('/');
-                if (partes.length === 3) {
-                    fecha = `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
-                }
+            const raw = fechaCol >= 0 ? row[fechaCol] : null;
+            if (raw) {
+                const s = raw.toString().trim();
+                const p = s.split('/');
+                if (p.length === 3) fecha = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+                else if (s.match(/^\d{4}-\d{2}-\d{2}$/)) fecha = s;
             }
+            if (!fecha) continue; // Skip rows without valid dates
             
-            movimientos.push({
-                fecha: fecha,
-                descripcion: desc,
+            const obj = {
+                fecha,
+                descripcion: (row[1] || '').toString().trim(),
                 monto_clp: Math.abs(monto),
-                tipo: tipo,
-                numero_documento: (row[docCol] || '').toString(),
-                sucursal: (row[sucCol] || '').toString(),
-                monto_uf: Math.abs(monto) / ufActual,
-                uf_dia: ufActual,
+                tipo,
                 estado_conciliacion: 'pendiente'
-            });
+            };
+            if (docCol >= 0 && row[docCol]) obj.numero_documento = row[docCol].toString();
+            if (sucCol >= 0 && row[sucCol]) obj.sucursal = row[sucCol].toString();
+            if (ufActual > 0) { obj.monto_uf = Math.abs(monto) / ufActual; obj.uf_dia = ufActual; }
+            movimientos.push(obj);
         }
-        
         return movimientos;
     };
     
@@ -2651,7 +2635,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', 'finanzas-dashboard': 'Dashboard Financiero', contabilidad: 'Estado de Resultados', conciliacion: 'Conciliación Bancaria' }[activeTab]}
                     </span>
                 </div>
-                {['cerrados', 'tickets', 'keyaccounts', 'reportes'].includes(activeTab) && (
+                {['cerrados', 'tickets', 'keyaccounts', 'reportes', 'finanzas-dashboard', 'contabilidad', 'conciliacion'].includes(activeTab) && (
                     <DateRangeFilter desde={dateRange.desde} hasta={dateRange.hasta} onChange={setDateRange} className="mt-2" />
                 )}
             </div>
