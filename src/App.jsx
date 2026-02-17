@@ -1684,7 +1684,7 @@ function CRMApp() {
     };
     const filteredCerrados = filterByDateRange(cerrados, 'fecha_cierre');
     const filteredTickets = filterByDateRange(tickets, 'fecha_inicio');
-    const filteredKeyAccounts = filterByDateRange(keyAccounts, 'fecha_inicio_contrato');
+    const filteredKeyAccounts = filterByDateRange(keyAccounts, 'inicio_contrato');
 
     const openFilesModal = async (entityType, entityId, entityName) => {
         if (!requireAuth()) return;
@@ -2177,10 +2177,27 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                     return;
                 }
                 
-                // Insertar solo los nuevos
+                // Insertar solo los nuevos - only include columns that exist in the table
+                const cleanedMovimientos = movimientosNuevos.map(m => {
+                    const clean = {
+                        fecha: m.fecha,
+                        descripcion: m.descripcion,
+                        monto_clp: m.monto_clp,
+                        tipo: m.tipo,
+                        estado_conciliacion: m.estado_conciliacion || 'pendiente',
+                        archivo_origen: m.archivo_origen
+                    };
+                    // Only add optional fields if they have values
+                    if (m.monto_uf) clean.monto_uf = m.monto_uf;
+                    if (m.uf_dia) clean.uf_dia = m.uf_dia;
+                    if (m.numero_documento) clean.numero_documento = m.numero_documento;
+                    if (m.sucursal) clean.sucursal = m.sucursal;
+                    return clean;
+                });
+                
                 const { data, error } = await supabase
                     .from('movimientos_bancarios')
-                    .insert(movimientosNuevos)
+                    .insert(cleanedMovimientos)
                     .select();
                 
                 if (error) throw error;
@@ -2561,7 +2578,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         
                         {/* Finanzas tabs */}
                         {[
-                            { id: 'finanzas-dashboard', nombre: '💰 Finanzas', cTab: 'dashboard' },
+                            { id: 'finanzas-dashboard', nombre: '📋 Resumen', cTab: 'dashboard' },
                             { id: 'contabilidad', nombre: '📊 EERR', cTab: 'pl' },
                             { id: 'conciliacion', nombre: '🏦 Conciliación', cTab: 'conciliacion' },
                         ].map(tab => (
