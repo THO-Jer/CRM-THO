@@ -1514,7 +1514,64 @@ export default function ContabilidadView({
                                         a.href = url;
                                         a.download = `estado-resultados-${añoSeleccionado}.csv`;
                                         a.click();
-                                    }} className="px-4 py-2 bg-gray-100 rounded-lg text-sm whitespace-nowrap">📥 Exportar {añoSeleccionado}</button>
+                                    }} className="px-4 py-2 bg-gray-100 rounded-lg text-sm whitespace-nowrap">📥 CSV</button>
+                                    <button onClick={() => {
+                                        const data = generarDatosPL();
+                                        const uf = ufActual || 38000;
+                                        
+                                        // Header
+                                        const rows = [
+                                            ['THE HUMAN ORG Ltda.'],
+                                            [`Estado de Resultados - Año ${añoSeleccionado}`],
+                                            [`Generado: ${new Date().toLocaleDateString('es-CL')} | UF referencia: $${uf.toLocaleString('es-CL')}`],
+                                            [],
+                                            ['', ...data.map(m => m.mes.toUpperCase()), 'TOTAL AÑO'],
+                                            [],
+                                            ['INGRESOS'],
+                                            ['  Facturación (exento IVA)', ...data.map(m => Math.round((m.emitidas || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.emitidas||0), 0) * uf)],
+                                            ['TOTAL INGRESOS', ...data.map(m => Math.round((m.emitidas || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.emitidas||0), 0) * uf)],
+                                            [],
+                                            ['GASTOS OPERACIONALES'],
+                                            ['  Proveedores (+ IVA)', ...data.map(m => Math.round((m.gastos || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.gastos||0), 0) * uf)],
+                                            ['  Honorarios (bruto)', ...data.map(m => Math.round((m.honorarios || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.honorarios||0), 0) * uf)],
+                                            ['  Caja Chica (boletas)', ...data.map(m => Math.round((m.cajaChica || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.cajaChica||0), 0) * uf)],
+                                            ['TOTAL GASTOS', ...data.map(m => Math.round(((m.gastos||0) + (m.honorarios||0) + (m.cajaChica||0)) * uf)), Math.round(data.reduce((s,m) => s + (m.gastos||0) + (m.honorarios||0) + (m.cajaChica||0), 0) * uf)],
+                                            [],
+                                            ['UTILIDAD OPERACIONAL', ...data.map(m => Math.round((m.utilidadOperacional || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.utilidadOperacional||0), 0) * uf)],
+                                            [],
+                                            ['  Retención Boletas (12,25%)', ...data.map(m => Math.round((m.retenciones || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.retenciones||0), 0) * uf)],
+                                            [],
+                                            ['UTILIDAD NETA', ...data.map(m => Math.round((m.utilidadNeta || 0) * uf)), Math.round(data.reduce((s,m) => s + (m.utilidadNeta||0), 0) * uf)],
+                                        ];
+                                        
+                                        const wb = XLSX.utils.book_new();
+                                        const ws = XLSX.utils.aoa_to_sheet(rows);
+                                        
+                                        // Column widths
+                                        ws['!cols'] = [{ wch: 28 }, ...Array(13).fill({ wch: 14 })];
+                                        
+                                        // Merge title cells
+                                        ws['!merges'] = [
+                                            { s: {r:0,c:0}, e: {r:0,c:13} },
+                                            { s: {r:1,c:0}, e: {r:1,c:13} },
+                                            { s: {r:2,c:0}, e: {r:2,c:13} },
+                                        ];
+                                        
+                                        // Number formatting for CLP
+                                        const range = XLSX.utils.decode_range(ws['!ref']);
+                                        for (let R = 7; R <= range.e.r; R++) {
+                                            for (let C = 1; C <= range.e.c; C++) {
+                                                const cell = ws[XLSX.utils.encode_cell({r:R, c:C})];
+                                                if (cell && typeof cell.v === 'number') {
+                                                    cell.z = '#,##0';
+                                                }
+                                            }
+                                        }
+                                        
+                                        XLSX.utils.book_append_sheet(wb, ws, `EERR ${añoSeleccionado}`);
+                                        XLSX.writeFile(wb, `THO_Estado_Resultados_${añoSeleccionado}.xlsx`);
+                                        showToast(`✅ Estado de Resultados ${añoSeleccionado} exportado en CLP`, 'success');
+                                    }} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm whitespace-nowrap hover:bg-green-700 transition">📊 Excel Profesional</button>
                                 </div>
                                 
                                 {/* Resumen anual */}

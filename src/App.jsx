@@ -82,7 +82,7 @@ function CRMApp() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterTipo, setFilterTipo] = useState('todos');
     const [ufActual, setUfActual] = useState(38000); // Valor UF del día
-    const [monedaPreferida, setMonedaPreferida] = useState('UF'); // Toggle global UF/CLP
+    const [monedaPreferida, setMonedaPreferida] = useState('CLP'); // Toggle global UF/CLP
     const [darkMode, setDarkMode] = useState(() => {
         const saved = localStorage.getItem('darkMode');
         return saved === 'true';
@@ -2330,53 +2330,52 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-            <header className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 sticky top-0 z-10 transition-colors">
-                <div className="max-w-7xl mx-auto px-4 py-4">
+            <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 transition-colors shadow-sm">
+                <div className="max-w-7xl mx-auto px-3 md:px-4 py-3">
                     <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-naranja">CRM THO</h1>
-                            <div className="flex items-center space-x-2">
-                                <p className="text-sm text-gray-600 dark:text-gray-400">The Human Org</p>
-                                <span className="text-xs text-gray-400 dark:text-gray-600">•</span>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">UF: ${ufActual.toLocaleString('es-CL')}</p>
-                                <span className="text-xs text-gray-400 dark:text-gray-600">•</span>
-                                {/* Toggle UF/CLP */}
-                                <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                                    <button
-                                        onClick={() => setMonedaPreferida('UF')}
-                                        className={`px-2 py-1 text-xs font-medium rounded transition ${
-                                            monedaPreferida === 'UF'
-                                                ? 'bg-verde text-white'
-                                                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                                        }`}
-                                    >
-                                        UF
-                                    </button>
-                                    <button
-                                        onClick={() => setMonedaPreferida('CLP')}
-                                        className={`px-2 py-1 text-xs font-medium rounded transition ${
-                                            monedaPreferida === 'CLP'
-                                                ? 'bg-verde text-white'
-                                                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                                        }`}
-                                    >
-                                        $
-                                    </button>
-                                </div>
-                                <span className="text-xs text-gray-400">•</span>
-                                <button
-                                    onClick={() => setDarkMode(!darkMode)}
-                                    className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-lg"
-                                    title={darkMode ? 'Modo claro' : 'Modo oscuro'}
-                                >
-                                    {darkMode ? '☀️' : '🌙'}
-                                </button>
+                        <div className="flex items-center gap-3">
+                            <img src="/logo-tho.png" alt="THO" className="h-9 w-9 object-contain dark:invert" />
+                            <div className="hidden sm:block">
+                                <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 leading-tight">CRM</h1>
+                                <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest leading-tight">The Human Org</p>
                             </div>
                         </div>
-                        <div className="flex items-center space-x-4">
+                        <div className="flex items-center gap-2 md:gap-3">
+                            <div className="hidden md:flex items-center text-xs text-gray-500 dark:text-gray-400">
+                                UF: ${ufActual.toLocaleString('es-CL')}
+                            </div>
+                            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+                                <button
+                                    onClick={() => setMonedaPreferida('UF')}
+                                    className={`px-2 py-1 text-xs font-medium rounded transition ${
+                                        monedaPreferida === 'UF'
+                                            ? 'bg-verde text-white shadow-sm'
+                                            : 'text-gray-500 dark:text-gray-300 hover:text-gray-900'
+                                    }`}
+                                >
+                                    UF
+                                </button>
+                                <button
+                                    onClick={() => setMonedaPreferida('CLP')}
+                                    className={`px-2 py-1 text-xs font-medium rounded transition ${
+                                        monedaPreferida === 'CLP'
+                                            ? 'bg-verde text-white shadow-sm'
+                                            : 'text-gray-500 dark:text-gray-300 hover:text-gray-900'
+                                    }`}
+                                >
+                                    CLP
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => setDarkMode(!darkMode)}
+                                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title={darkMode ? 'Modo claro' : 'Modo oscuro'}
+                            >
+                                {darkMode ? '☀️' : '🌙'}
+                            </button>
                             {user && (
                                 <>
-                                    <button onClick={() => { setEditingItem(null); setModalType('prospecto'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg font-medium">+ Nuevo Prospecto</button>
+                                    <button onClick={() => { setEditingItem(null); setModalType('prospecto'); setShowModal(true); }} className="hidden md:inline-flex px-3 py-1.5 color-naranja text-white rounded-lg text-sm font-medium">+ Prospecto</button>
                                     <button onClick={() => {
                                         const data = { prospectos, cerrados, tickets, keyAccounts };
                                         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2385,17 +2384,17 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                         a.href = url;
                                         a.download = `crm-tho-${new Date().toISOString().split('T')[0]}.json`;
                                         a.click();
-                                    }} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium">📥 Exportar</button>
+                                    }} className="hidden md:inline-flex px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm" title="Exportar datos">📥</button>
                                 </>
                             )}
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm">
                                 {user ? (
-                                    <div className="flex items-center space-x-2">
-                                        <span>{user.email}</span>
-                                        <button onClick={() => { localStorage.removeItem('crm_tho_email'); setUser(null); }} className="text-xs text-gray-400 hover:text-gray-600">Salir</button>
+                                    <div className="flex items-center gap-2">
+                                        <span className="hidden md:inline text-xs text-gray-500 dark:text-gray-400">{user.email.split('@')[0]}</span>
+                                        <button onClick={() => { localStorage.removeItem('crm_tho_email'); setUser(null); }} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Salir</button>
                                     </div>
                                 ) : (
-                                    <button onClick={() => setShowLoginModal(true)} className="px-4 py-2 color-naranja text-white rounded-lg font-medium">Ingresar</button>
+                                    <button onClick={() => setShowLoginModal(true)} className="px-3 py-1.5 color-naranja text-white rounded-lg text-sm font-medium">Ingresar</button>
                                 )}
                             </div>
                         </div>
