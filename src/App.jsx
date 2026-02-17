@@ -70,7 +70,7 @@ function exportToCSV(data, filename = 'export.csv') {
 function CRMApp() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('pipeline');
+    const [activeTab, setActiveTab] = useState('dashboard');
     const [prospectos, setProspectos] = useState([]);
     const [cerrados, setCerrados] = useState([]);
     const [tickets, setTickets] = useState([]);
@@ -80,6 +80,8 @@ function CRMApp() {
     const [modalType, setModalType] = useState('prospecto');
     const [editingItem, setEditingItem] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [globalSearch, setGlobalSearch] = useState('');
+    const [showGlobalSearch, setShowGlobalSearch] = useState(false);
     const [filterTipo, setFilterTipo] = useState('todos');
     const [ufActual, setUfActual] = useState(38000); // Valor UF del día
     const [monedaPreferida, setMonedaPreferida] = useState('CLP'); // Toggle global UF/CLP
@@ -94,6 +96,23 @@ function CRMApp() {
         document.documentElement.classList.toggle('dark', darkMode);
         localStorage.setItem('darkMode', darkMode);
     }, [darkMode]);
+
+    // Keyboard shortcut: Cmd/Ctrl+K for global search
+    useEffect(() => {
+        const handler = (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                setShowGlobalSearch(prev => !prev);
+            }
+            if (e.key === 'Escape' && showGlobalSearch) {
+                setShowGlobalSearch(false);
+                setGlobalSearch('');
+            }
+        };
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+    }, [showGlobalSearch]);
+
     const [actividadReciente, setActividadReciente] = useState([]);
 
     // Modal de archivos
@@ -318,7 +337,17 @@ function CRMApp() {
                     return { ...evento, titulo_mejorado: texto, icono_mejorado: icono };
                 });
                 
-                setActividadReciente(procesados);
+                // Deduplicar: si 2 eventos tienen el mismo titulo_mejorado dentro de 2 min, quedarse con el más reciente
+                const deduped = procesados.filter((item, idx) => {
+                    return !procesados.some((other, oidx) => {
+                        if (oidx >= idx) return false;
+                        if (other.titulo_mejorado !== item.titulo_mejorado) return false;
+                        const diff = Math.abs(new Date(other.created_at) - new Date(item.created_at));
+                        return diff < 120000; // 2 minutos
+                    });
+                });
+                
+                setActividadReciente(deduped);
             }
         } catch (e) {
             console.warn('Error cargando actividad:', e);
@@ -2402,21 +2431,100 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                 </div>
             </header>
 
-            <div className="bg-white border-b overflow-hidden">
-                <div className="max-w-7xl mx-auto">
-                    <nav className="flex space-x-4 md:space-x-8 overflow-x-auto scrollbar-hide px-4">
+            {/* Navigation with sections */}
+            <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700">
+                <div className="max-w-7xl mx-auto px-4">
+                    <nav className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-1">
+                        {/* Dashboard */}
+                        <button onClick={() => setActiveTab('dashboard')} className={`py-3 px-3 border-b-2 font-medium text-xs whitespace-nowrap flex-shrink-0 transition ${activeTab === 'dashboard' ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>📊 Dashboard</button>
+                        
+                        {/* Separator */}
+                        <span className="text-gray-300 dark:text-gray-600 mx-1 flex-shrink-0 hidden md:inline">|</span>
+                        <span className="text-[9px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-bold flex-shrink-0 hidden md:inline mr-1">Comercial</span>
+                        
+                        {/* Comercial tabs */}
                         {[
-                            { id: 'dashboard', nombre: '📊 Dashboard' },
                             { id: 'pipeline', nombre: '🎯 Pipeline' },
-                            { id: 'reportes', nombre: '📈 Reportes' },
-                            { id: 'contabilidad', nombre: '💰 Contabilidad' },
-                            { id: 'cerrados', nombre: '📜 Historial' },
                             { id: 'tickets', nombre: '🎫 Tickets' },
-                            { id: 'keyaccounts', nombre: '🔑 Key Accounts' }
+                            { id: 'keyaccounts', nombre: '🔑 Key Accounts' },
+                            { id: 'cerrados', nombre: '📜 Historial' },
+                            { id: 'reportes', nombre: '📈 Reportes' },
                         ].map(tab => (
-                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`py-4 px-2 md:px-1 border-b-2 font-medium text-sm whitespace-nowrap flex-shrink-0 ${activeTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500'}`}>{tab.nombre}</button>
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`py-3 px-3 border-b-2 font-medium text-xs whitespace-nowrap flex-shrink-0 transition ${activeTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{tab.nombre}</button>
                         ))}
+                        
+                        {/* Separator */}
+                        <span className="text-gray-300 dark:text-gray-600 mx-1 flex-shrink-0 hidden md:inline">|</span>
+                        <span className="text-[9px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-bold flex-shrink-0 hidden md:inline mr-1">Finanzas</span>
+                        
+                        {/* Finanzas tab */}
+                        <button onClick={() => setActiveTab('contabilidad')} className={`py-3 px-3 border-b-2 font-medium text-xs whitespace-nowrap flex-shrink-0 transition ${activeTab === 'contabilidad' ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>💰 Contabilidad</button>
+                        
+                        {/* Spacer + Global Search */}
+                        <div className="flex-1"></div>
+                        <button onClick={() => setShowGlobalSearch(!showGlobalSearch)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0 transition" title="Búsqueda global">🔍</button>
                     </nav>
+                </div>
+            </div>
+
+            {/* Global Search Bar */}
+            {showGlobalSearch && (
+                <div className="bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-700 py-3">
+                    <div className="max-w-7xl mx-auto px-4">
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                placeholder="Buscar en prospectos, tickets, key accounts, historial..." 
+                                value={globalSearch} 
+                                onChange={(e) => setGlobalSearch(e.target.value)}
+                                className="w-full px-4 py-2.5 pl-10 border dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-naranja focus:border-naranja"
+                                autoFocus
+                            />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                            {globalSearch && (
+                                <button onClick={() => setGlobalSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>
+                            )}
+                        </div>
+                        {globalSearch.length >= 2 && (() => {
+                            const q = globalSearch.toLowerCase();
+                            const results = [
+                                ...prospectos.filter(p => (p.organizacion||'').toLowerCase().includes(q) || (p.contacto||'').toLowerCase().includes(q) || (p.notas||'').toLowerCase().includes(q)).map(p => ({ type: 'prospecto', label: p.organizacion, sub: `${p.estado} · ${p.valor || 0} UF`, tab: 'pipeline', item: p })),
+                                ...tickets.filter(t => (t.ticket||'').toLowerCase().includes(q) || (t.organizacion||'').toLowerCase().includes(q)).map(t => ({ type: 'ticket', label: t.ticket, sub: `${t.organizacion} · ${t.porcentaje_avance || 0}%`, tab: 'tickets', item: t })),
+                                ...keyAccounts.filter(k => (k.organizacion||'').toLowerCase().includes(q) || (k.servicio||'').toLowerCase().includes(q)).map(k => ({ type: 'keyaccount', label: `${k.organizacion} · ${k.servicio}`, sub: `${k.uf_mes || 0} UF/mes`, tab: 'keyaccounts', item: k })),
+                                ...cerrados.filter(c => (c.organizacion||'').toLowerCase().includes(q) || (c.contacto||'').toLowerCase().includes(q)).map(c => ({ type: 'cerrado', label: c.organizacion, sub: `${c.estado_final} · ${c.valor_total_final || 0} UF`, tab: 'cerrados', item: c })),
+                            ].slice(0, 8);
+                            const typeIcon = { prospecto: '🎯', ticket: '🎫', keyaccount: '🔑', cerrado: '📜' };
+                            return results.length > 0 ? (
+                                <div className="mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 overflow-hidden">
+                                    {results.map((r, i) => (
+                                        <button key={i} onClick={() => { setActiveTab(r.tab); setGlobalSearch(''); setShowGlobalSearch(false); }} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-left border-b dark:border-gray-700 last:border-0 transition">
+                                            <span>{typeIcon[r.type]}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{r.label}</div>
+                                                <div className="text-xs text-gray-500">{r.sub}</div>
+                                            </div>
+                                            <span className="text-[10px] text-gray-400 uppercase">{r.type}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="mt-2 text-sm text-gray-400 text-center py-3">Sin resultados para "{globalSearch}"</div>
+                            );
+                        })()}
+                    </div>
+                </div>
+            )}
+
+            {/* Breadcrumb */}
+            <div className="max-w-7xl mx-auto px-4 pt-3">
+                <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
+                    <span>CRM</span>
+                    <span>›</span>
+                    <span>{['pipeline','tickets','keyaccounts','cerrados','reportes'].includes(activeTab) ? 'Comercial' : activeTab === 'contabilidad' ? 'Finanzas' : 'General'}</span>
+                    <span>›</span>
+                    <span className="text-gray-600 dark:text-gray-300 font-medium">
+                        {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', contabilidad: 'Contabilidad' }[activeTab]}
+                    </span>
                 </div>
             </div>
 
