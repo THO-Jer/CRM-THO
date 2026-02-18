@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react'
 import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
+import { generateProposal } from '../../utils/proposalPDF'
 
 const tipoIcons = { nota: '📝', llamada: '📞', reunion: '🤝', email: '📧', tarea: '✅' };
 const tipoLabels = { nota: 'Nota', llamada: 'Llamada', reunion: 'Reunión', email: 'Email', tarea: 'Tarea' };
 const tableMap = { prospecto: 'prospectos', cerrado: 'cerrados', ticket: 'tickets', keyaccount: 'key_accounts' };
 const servicioOptions = ['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG', 'Key Account Nivel 1', 'Key Account Nivel 2', 'Key Account Nivel 3', 'Gestión de Contenido'];
 
-export default function EntityDetail({ entity, onClose, contactos, notas, user, keyAccounts = [], onRefresh }) {
+export default function EntityDetail({ entity, onClose, contactos, notas, user, keyAccounts = [], ufActual = 38000, onRefresh }) {
     const { type, item } = entity;
     const [activeSection, setActiveSection] = useState('ficha');
     const [formData, setFormData] = useState({ ...item });
@@ -125,6 +126,23 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                             )}
                         </div>
                         <div className="flex items-center gap-2 ml-4">
+                            {(type === 'prospecto' || type === 'keyaccount') && (
+                                <button onClick={() => {
+                                    const valor = type === 'keyaccount' ? formData.uf_mes : formData.valor;
+                                    generateProposal({
+                                        organizacion: formData.organizacion,
+                                        contacto: formData.contacto,
+                                        tipo: formData.tipo || formData.servicio || tipo,
+                                        valor: valor,
+                                        moneda: 'UF',
+                                        ufActual,
+                                        notas: formData.notas || formData.proximo_paso || ''
+                                    });
+                                    showToast('PDF generado ✓', 'success');
+                                }} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Generar propuesta PDF">
+                                    📄 Propuesta
+                                </button>
+                            )}
                             {dirty && <button onClick={handleSave} disabled={saving} className="px-4 py-1.5 color-naranja text-white text-xs rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition">{saving ? '...' : 'Guardar'}</button>}
                             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg transition">✕</button>
                         </div>

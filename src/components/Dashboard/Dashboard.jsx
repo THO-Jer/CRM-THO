@@ -1,241 +1,252 @@
 import { useState, useMemo } from 'react'
 
-function MetricCard({ title, value, subtitle, color }) {
-  const colorMap = {
-    naranja: 'border-naranja text-naranja',
-    verde: 'border-verde text-verde',
-    azul: 'border-azul text-azul',
-    fucsia: 'border-fucsia text-fucsia',
-    red: 'border-red-500 text-red-500',
-  }
-  const cls = colorMap[color] || 'border-gray-400 text-gray-800'
+const Metric = ({ title, value, sub, color = 'azul', icon }) => {
+  const colors = {
+    naranja: 'border-naranja text-naranja', verde: 'border-verde text-verde',
+    azul: 'border-azul text-azul', fucsia: 'border-fucsia text-fucsia',
+    red: 'border-red-500 text-red-500', gray: 'border-gray-400 text-gray-600'
+  };
+  const c = colors[color] || colors.gray;
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow p-5 border-l-4 ${cls.split(' ')[0]} hover:shadow-md transition-shadow`}>
-      <div className="text-sm text-gray-600 mb-1">{title}</div>
-      <div className={`text-2xl font-bold ${cls.split(' ')[1]} mb-0.5`}>{value}</div>
-      {subtitle && <div className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">{subtitle}</div>}
+    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow p-4 border-l-4 ${c.split(' ')[0]} hover:shadow-md transition`}>
+      {icon && <div className="text-lg mb-1">{icon}</div>}
+      <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{title}</div>
+      <div className={`text-xl font-bold ${c.split(' ')[1]}`}>{value}</div>
+      {sub && <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{sub}</div>}
     </div>
-  )
-}
+  );
+};
 
 export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyAccounts, user, ufActual, monedaPreferida, setMonedaPreferida, actividadReciente }) {
-  const [showAlertDetails, setShowAlertDetails] = useState(false);
-
+  const [expandedSection, setExpandedSection] = useState(null);
   const m = metrics || {};
-  
-  // Pipeline por etapa
-  const pipelineByStage = useMemo(() => {
-    const stages = [
-      { key: 'Contactado', label: 'Contactado', emoji: '🔵' },
-      { key: 'Reunión agendada', label: 'Reunión', emoji: '🟡' },
-      { key: 'Propuesta enviada', label: 'Propuesta', emoji: '🟠' },
-      { key: 'Negociación', label: 'Negociación', emoji: '🟢' },
-    ];
-    return stages.map(s => ({
-      ...s,
-      count: (prospectos || []).filter(p => p.estado === s.key).length,
-      value: Math.round((prospectos || []).filter(p => p.estado === s.key).reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0))
-    }));
-  }, [prospectos]);
 
-  // Total alertas
-  const totalAlertas = (m.prospectosVencidos || 0) + (m.prospectosSinActividad || 0) + (m.keyAccountsPorRenovar || 0);
+  // ===== HEALTH SCORE: 0-100 composite =====
+  const healthScore = useMemo(() => {
+    let score = 50; // neutral start
+    const details = [];
 
-  // Variación arrow
-  const variacionIcon = m.variacionIngresos > 0 ? '📈' : m.variacionIngresos < 0 ? '📉' : '➡️';
-  const variacionText = m.variacionIngresos !== undefined 
-    ? `${m.variacionIngresos > 0 ? '+' : ''}${Math.round(m.variacionIngresos)}% vs mes anterior`
-    : '';
+    // 1. Pipeline health (0-20 pts)
+    const pipelineValue = m.pipelineTotal || 0;
+    const mrrActual = m.mrrActual || 0;
+    const pipelineRatio = mrrActual > 0 ? pipelineValue / mrrActual : 0;
+    if (pipelineRatio >= 3) { score += 20; details.push({ icon: '✅', text: `Pipeline sano: ${Math.round(pipelineRatio)}x el MRR`, type: 'good' }); }
+    else if (pipelineRatio >= 1.5) { score += 10; details.push({ icon: '🟡', text: `Pipeline aceptable: ${Math.round(pipelineRatio * 10) / 10}x el MRR (ideal: 3x)`, type: 'warn' }); }
+    else { score -= 5; details.push({ icon: '🔴', text: `Pipeline bajo: ${Math.round(pipelineRatio * 10) / 10}x el MRR — necesitas más prospectos`, type: 'bad' }); }
+
+    // 2. Conversion momentum (0-15 pts)
+    const cerradosEsteMes = m.cerradosEsteMes || 0;
+    if (cerradosEsteMes >= 2) { score += 15; details.push({ icon: '✅', text: `${cerradosEsteMes} cierres este mes — buen ritmo`, type: 'good' }); }
+    else if (cerradosEsteMes >= 1) { score += 8; details.push({ icon: '🟡', text: `${cerradosEsteMes} cierre este mes`, type: 'warn' }); }
+    else { score -= 5; details.push({ icon: '⚠️', text: 'Sin cierres este mes', type: 'bad' }); }
+
+    // 3. Revenue trend (-10 to +15 pts)
+    const variacion = m.variacionIngresos || 0;
+    if (variacion > 10) { score += 15; details.push({ icon: '📈', text: `Ingresos creciendo +${Math.round(variacion)}%`, type: 'good' }); }
+    else if (variacion >= -5) { score += 5; details.push({ icon: '➡️', text: `Ingresos estables (${variacion > 0 ? '+' : ''}${Math.round(variacion)}%)`, type: 'neutral' }); }
+    else { score -= 10; details.push({ icon: '📉', text: `Ingresos cayendo ${Math.round(variacion)}%`, type: 'bad' }); }
+
+    // 4. Key Accounts health (0-15 pts)
+    const kaTotal = (keyAccounts || []).length;
+    const kaRiesgo = (keyAccounts || []).filter(ka => ka.salud === 'Riesgo' || ka.salud === 'Crítico').length;
+    if (kaTotal > 0 && kaRiesgo === 0) { score += 15; details.push({ icon: '✅', text: `${kaTotal} Key Accounts, todos saludables`, type: 'good' }); }
+    else if (kaRiesgo > 0) { score -= kaRiesgo * 5; details.push({ icon: '🔴', text: `${kaRiesgo} Key Account${kaRiesgo > 1 ? 's' : ''} en riesgo`, type: 'bad' }); }
+    else { details.push({ icon: '💡', text: 'Sin Key Accounts activos — ¿oportunidad de upsell?', type: 'warn' }); }
+
+    // 5. Pipeline activity (-10 to +10 pts)
+    const vencidos = m.prospectosVencidos || 0;
+    const sinActividad = m.prospectosSinActividad || 0;
+    if (vencidos === 0 && sinActividad === 0) { score += 10; details.push({ icon: '✅', text: 'Pipeline activo, sin prospectos abandonados', type: 'good' }); }
+    else {
+      if (vencidos > 0) { score -= vencidos * 3; details.push({ icon: '🔴', text: `${vencidos} prospecto${vencidos > 1 ? 's' : ''} con fecha límite vencida`, type: 'bad' }); }
+      if (sinActividad > 0) { score -= sinActividad * 2; details.push({ icon: '🟡', text: `${sinActividad} prospecto${sinActividad > 1 ? 's' : ''} sin actividad reciente`, type: 'warn' }); }
+    }
+
+    // 6. Diversification bonus
+    const uniqueClients = new Set([
+      ...(keyAccounts || []).map(ka => ka.organizacion?.toLowerCase()),
+      ...(tickets || []).map(t => t.organizacion?.toLowerCase())
+    ].filter(Boolean)).size;
+    if (uniqueClients >= 5) { score += 5; details.push({ icon: '🌐', text: `${uniqueClients} clientes activos — buena diversificación`, type: 'good' }); }
+    else if (uniqueClients >= 3) { score += 2; }
+    else if (uniqueClients > 0) { details.push({ icon: '⚠️', text: `Solo ${uniqueClients} cliente${uniqueClients > 1 ? 's' : ''} activo${uniqueClients > 1 ? 's' : ''} — riesgo de concentración`, type: 'warn' }); }
+
+    // Clamp
+    score = Math.max(0, Math.min(100, score));
+
+    const label = score >= 80 ? 'Excelente' : score >= 60 ? 'Saludable' : score >= 40 ? 'Requiere atención' : 'Crítico';
+    const color = score >= 80 ? 'verde' : score >= 60 ? 'azul' : score >= 40 ? 'naranja' : 'red';
+    const emoji = score >= 80 ? '🟢' : score >= 60 ? '🔵' : score >= 40 ? '🟡' : '🔴';
+
+    return { score, label, color, emoji, details };
+  }, [m, keyAccounts, tickets]);
+
+  // ===== ACTIONABLE ITEMS =====
+  const actionItems = useMemo(() => {
+    const items = [];
+    const now = new Date();
+
+    // Prospectos vencidos
+    if (m.prospectosVencidosDetalle?.length) {
+      m.prospectosVencidosDetalle.forEach(p => items.push({
+        priority: 1, icon: '🔴', text: `${p.organizacion} — fecha límite vencida`,
+        action: 'Contactar o cerrar', type: 'prospecto'
+      }));
+    }
+
+    // Tickets próximos a vencer (entrega en los próximos 7 días)
+    (tickets || []).forEach(t => {
+      if (t.fecha_entrega) {
+        const entrega = new Date(t.fecha_entrega);
+        const dias = Math.ceil((entrega - now) / (1000 * 60 * 60 * 24));
+        if (dias >= 0 && dias <= 7) {
+          items.push({ priority: 2, icon: '⏰', text: `${t.organizacion} — ${t.ticket} entrega en ${dias} día${dias !== 1 ? 's' : ''}`, action: `${t.porcentaje_avance || 0}% avance`, type: 'ticket' });
+        }
+      }
+    });
+
+    // KA por renovar
+    if (m.keyAccountsPorRenovarDetalle?.length) {
+      m.keyAccountsPorRenovarDetalle.forEach(ka => items.push({
+        priority: 3, icon: '🔄', text: `${ka.organizacion} — ${ka.servicio} por renovar`,
+        action: 'Gestionar renovación', type: 'ka'
+      }));
+    }
+
+    // Prospectos sin actividad
+    if (m.prospectosSinActividadDetalle?.length) {
+      m.prospectosSinActividadDetalle.slice(0, 3).forEach(p => items.push({
+        priority: 4, icon: '💤', text: `${p.organizacion} — sin actividad reciente`,
+        action: 'Hacer seguimiento', type: 'prospecto'
+      }));
+    }
+
+    return items.sort((a, b) => a.priority - b.priority).slice(0, 8);
+  }, [m, tickets]);
+
+  // Pipeline stages
+  const stages = [
+    { key: 'Contactado', label: 'Contactado', emoji: '🔵' },
+    { key: 'Reunión agendada', label: 'Reunión', emoji: '🟡' },
+    { key: 'Propuesta enviada', label: 'Propuesta', emoji: '🟠' },
+    { key: 'Negociación', label: 'Negociación', emoji: '🟢' },
+  ].map(s => ({
+    ...s,
+    count: (prospectos || []).filter(p => p.estado === s.key).length,
+    value: Math.round((prospectos || []).filter(p => p.estado === s.key).reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0))
+  }));
+
+  const scoreBarColor = healthScore.color === 'verde' ? 'bg-verde' : healthScore.color === 'azul' ? 'bg-azul' : healthScore.color === 'naranja' ? 'bg-naranja' : 'bg-red-500';
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
         <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-          Hola, {user?.user_metadata?.name || user?.email?.split('@')[0] || 'Equipo'} 👋
+          Hola, {user?.name || user?.email?.split('@')[0] || 'Equipo'} 👋
         </h2>
-        <div className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">
-          UF: ${ufActual?.toLocaleString('es-CL') || '---'}
+        <div className="text-sm text-gray-500 dark:text-gray-400">UF: ${ufActual?.toLocaleString('es-CL') || '---'}</div>
+      </div>
+
+      {/* Health Score Bar */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{healthScore.emoji}</span>
+            <div>
+              <div className="font-bold text-gray-800 dark:text-gray-200">{healthScore.label}</div>
+              <div className="text-xs text-gray-400">Salud del negocio</div>
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-gray-300 dark:text-gray-600">{healthScore.score}</div>
+        </div>
+        <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 mb-4">
+          <div className={`${scoreBarColor} h-2.5 rounded-full transition-all duration-500`} style={{ width: `${healthScore.score}%` }}></div>
+        </div>
+        <div className="space-y-1.5">
+          {healthScore.details.map((d, i) => (
+            <div key={i} className={`text-sm flex items-start gap-2 ${d.type === 'good' ? 'text-green-600 dark:text-green-400' : d.type === 'bad' ? 'text-red-600 dark:text-red-400' : d.type === 'warn' ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400'}`}>
+              <span className="flex-shrink-0">{d.icon}</span>
+              <span>{d.text}</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Salud del Negocio */}
-      {m.saludNegocio && (
-        <div className={`bg-white dark:bg-gray-800 rounded-lg shadow p-5 border-l-4 ${
-          m.saludColor === 'verde' ? 'border-verde' : 
-          m.saludColor === 'naranja' ? 'border-naranja' : 
-          m.saludColor === 'red' ? 'border-red-500' : 'border-gray-400'
-        }`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-bold text-gray-800 dark:text-gray-200">
-                  {m.saludNegocio === 'Excelente' ? '🟢' : m.saludNegocio === 'Saludable' ? '🟢' : m.saludNegocio === 'Requiere atención' ? '🟡' : '🔴'}
-                  {' '}Estado del Negocio: {m.saludNegocio}
-                </span>
-              </div>
-              <p className="text-sm text-gray-600 mt-1">{m.saludMensaje}</p>
+      {/* Key Metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Metric title="Pipeline" value={`${Math.round(m.pipelineTotal || 0)} UF`} sub={`${m.totalProspectos || 0} prospectos`} color="azul" />
+        <Metric title="MRR" value={`${Math.round(m.mrrActual || 0)} UF`} sub="Recurrente mensual" color="verde" />
+        <Metric title="Ganado mes" value={`${Math.round(m.valorGanadoEsteMes || 0)} UF`} sub={`Anterior: ${Math.round(m.valorGanadoMesAnterior || 0)} UF`} color={m.valorGanadoEsteMes >= (m.valorGanadoMesAnterior || 0) ? 'verde' : 'naranja'} />
+        <Metric title="Tickets Activos" value={`${(tickets || []).length}`} sub={`${Math.round(m.valorTickets || 0)} UF total`} color="naranja" />
+        <Metric title="Conversión" value={`${m.tasaConversion || 0}%`} sub={`Anterior: ${m.tasaConversionMesAnterior || 0}%`} color="azul" />
+        <Metric title="Forecast" value={`${Math.round(m.pipelinePonderado || 0)} UF`} sub="Pipeline ponderado" color="fucsia" />
+      </div>
+
+      {/* Action Items + Pipeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Action Items */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
+          <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-4">🎯 Acciones Pendientes</h3>
+          {actionItems.length === 0 ? (
+            <div className="text-center py-6">
+              <div className="text-3xl mb-2">🎉</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Todo al día — sin acciones pendientes</div>
             </div>
-            {m.saludDetalles && m.saludDetalles.length > 0 && (
-              <button 
-                onClick={() => setShowAlertDetails(!showAlertDetails)}
-                className="text-sm text-azul hover:underline flex-shrink-0"
-              >
-                {showAlertDetails ? 'Ocultar' : 'Ver detalles'}
-              </button>
-            )}
-          </div>
-          {showAlertDetails && m.saludDetalles && (
-            <div className="mt-3 pt-3 border-t space-y-1">
-              {m.saludDetalles.map((d, i) => (
-                <p key={i} className="text-sm text-gray-700 dark:text-gray-300">{d}</p>
+          ) : (
+            <div className="space-y-2">
+              {actionItems.map((item, i) => (
+                <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                  <span className="text-base flex-shrink-0 mt-0.5">{item.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-700 dark:text-gray-300 truncate">{item.text}</div>
+                    <div className="text-[10px] text-gray-400">{item.action}</div>
+                  </div>
+                </div>
               ))}
             </div>
           )}
         </div>
-      )}
 
-      {/* Métricas principales */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <MetricCard title="Pipeline" value={`${Math.round(m.pipelineTotal || 0)} UF`} subtitle={`${m.totalProspectos || 0} prospectos activos`} color="azul" />
-        <MetricCard title="MRR" value={`${Math.round(m.mrrActual || 0)} UF`} subtitle="Ingreso recurrente mensual" color="verde" />
-        <MetricCard title="Ingresos Mes" value={`${Math.round(m.ingresosEsteMes || 0)} UF`} subtitle={variacionText} color={m.variacionIngresos >= 0 ? 'verde' : 'naranja'} />
-        <MetricCard title="Tickets" value={`${Math.round(m.valorTickets || 0)} UF`} subtitle={`${(tickets || []).filter(t => t.status === 'Activo').length} activos`} color="naranja" />
-        <MetricCard title="Conversión" value={`${m.tasaConversion || 0}%`} subtitle={`Anterior: ${m.tasaConversionMesAnterior || 0}%`} color="azul" />
-        <MetricCard title="Hot Leads" value={m.proximosCierres || 0} subtitle=">60% probabilidad" color="fucsia" />
-      </div>
-
-      {/* Pipeline por Etapa + Cerrados este mes */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pipeline funnel */}
+        {/* Pipeline Funnel */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">🎯 Pipeline por Etapa</h3>
+          <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-4">📊 Pipeline</h3>
           <div className="space-y-3">
-            {pipelineByStage.map(stage => (
-              <div key={stage.key} className="flex items-center gap-3">
-                <span className="text-lg">{stage.emoji}</span>
+            {stages.map(s => (
+              <div key={s.key} className="flex items-center gap-3">
+                <span className="text-lg">{s.emoji}</span>
                 <div className="flex-1">
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="font-medium text-gray-700 dark:text-gray-300">{stage.label}</span>
-                    <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500">{stage.count} · {stage.value} UF</span>
+                    <span className="font-medium text-gray-700 dark:text-gray-300">{s.label}</span>
+                    <span className="text-gray-500 dark:text-gray-400">{s.count} · {s.value} UF</span>
                   </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div 
-                      className="bg-azul h-2 rounded-full transition-all"
-                      style={{ width: `${m.pipelineTotal > 0 ? Math.max(4, (stage.value / m.pipelineTotal) * 100) : 0}%` }}
-                    ></div>
+                  <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
+                    <div className="bg-azul h-2 rounded-full transition-all" style={{ width: `${m.pipelineTotal > 0 ? Math.max(4, (s.value / m.pipelineTotal) * 100) : 0}%` }}></div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-          <div className="mt-4 pt-3 border-t text-sm text-gray-600 flex justify-between">
+          <div className="mt-4 pt-3 border-t dark:border-gray-700 text-sm text-gray-500 flex justify-between">
             <span>Total Pipeline</span>
             <span className="font-bold text-azul">{Math.round(m.pipelineTotal || 0)} UF</span>
           </div>
         </div>
-
-        {/* Resumen mensual */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">📊 Resumen del Mes</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between py-2 border-b">
-              <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500">Cerrados este mes</span>
-              <span className="font-bold text-verde">{m.cerradosEsteMes || 0}</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b">
-              <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500">Ingresos (MRR + Tickets)</span>
-              <span className="font-bold text-verde">{Math.round(m.ingresosEsteMes || 0)} UF</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b">
-              <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500">Variación vs mes anterior</span>
-              <span className={`font-bold ${m.variacionIngresos >= 0 ? 'text-verde' : 'text-red-500'}`}>
-                {variacionIcon} {m.variacionIngresos !== undefined ? `${m.variacionIngresos > 0 ? '+' : ''}${Math.round(m.variacionIngresos)}%` : '-'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b">
-              <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500">Key Accounts activos</span>
-              <span className="font-bold text-azul">{(keyAccounts || []).filter(ka => ka.estado === 'Activo').length}</span>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500">Propuestas enviadas</span>
-              <span className="font-bold text-naranja">{m.propuestasEnviadas || 0}</span>
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* Alertas */}
-      {totalAlertas > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5 border-l-4 border-red-400">
-          <h3 className="text-lg font-bold text-gray-800 mb-3">⚠️ Alertas ({totalAlertas})</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {m.prospectosVencidos > 0 && (
-              <div className="bg-red-50 rounded-lg p-3">
-                <div className="font-bold text-red-700 text-sm">🔴 Prospectos vencidos</div>
-                <div className="text-2xl font-bold text-red-600">{m.prospectosVencidos}</div>
-                {m.prospectosVencidosDetalle && m.prospectosVencidosDetalle.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {m.prospectosVencidosDetalle.slice(0, 3).map((p, i) => (
-                      <p key={i} className="text-xs text-red-600 truncate">{p.organizacion}</p>
-                    ))}
-                    {m.prospectosVencidosDetalle.length > 3 && (
-                      <p className="text-xs text-red-400">+{m.prospectosVencidosDetalle.length - 3} más</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-            {m.prospectosSinActividad > 0 && (
-              <div className="bg-orange-50 rounded-lg p-3">
-                <div className="font-bold text-orange-700 text-sm">🟡 Sin actividad reciente</div>
-                <div className="text-2xl font-bold text-orange-600">{m.prospectosSinActividad}</div>
-                {m.prospectosSinActividadDetalle && m.prospectosSinActividadDetalle.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {m.prospectosSinActividadDetalle.slice(0, 3).map((p, i) => (
-                      <p key={i} className="text-xs text-orange-600 truncate">{p.organizacion}</p>
-                    ))}
-                    {m.prospectosSinActividadDetalle.length > 3 && (
-                      <p className="text-xs text-orange-400">+{m.prospectosSinActividadDetalle.length - 3} más</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-            {m.keyAccountsPorRenovar > 0 && (
-              <div className="bg-blue-50 rounded-lg p-3">
-                <div className="font-bold text-blue-700 text-sm">🔄 KA por renovar</div>
-                <div className="text-2xl font-bold text-blue-600">{m.keyAccountsPorRenovar}</div>
-                {m.keyAccountsPorRenovarDetalle && m.keyAccountsPorRenovarDetalle.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {m.keyAccountsPorRenovarDetalle.slice(0, 3).map((p, i) => (
-                      <p key={i} className="text-xs text-blue-600 truncate">{p.organizacion} · {p.servicio}</p>
-                    ))}
-                    {m.keyAccountsPorRenovarDetalle.length > 3 && (
-                      <p className="text-xs text-blue-400">+{m.keyAccountsPorRenovarDetalle.length - 3} más</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Actividad Reciente */}
-      {actividadReciente && actividadReciente.length > 0 && (
+      {/* Recent Activity */}
+      {actividadReciente?.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">📋 Actividad Reciente</h3>
-          <div className="space-y-3">
-            {actividadReciente.slice(0, 10).map((act, i) => (
-              <div key={i} className="flex items-start gap-3 text-sm border-b pb-2 last:border-0">
-                <span className="text-lg flex-shrink-0">{act.icono_mejorado || '📌'}</span>
+          <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-4">📋 Actividad Reciente</h3>
+          <div className="space-y-2">
+            {actividadReciente.slice(0, 8).map((act, i) => (
+              <div key={i} className="flex items-start gap-3 text-sm py-1.5 border-b dark:border-gray-700 last:border-0">
+                <span className="text-base flex-shrink-0">{act.icono_mejorado || '📌'}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-gray-700 dark:text-gray-300">{act.titulo_mejorado || act.title || 'Actividad'}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <span className="text-gray-700 dark:text-gray-300">{act.titulo_mejorado || act.label || 'Actividad'}</span>
+                  <span className="text-[10px] text-gray-400 ml-2">
                     {act.created_at ? new Date(act.created_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
-                    {act.created_by_email ? ` · ${act.created_by_email.split('@')[0]}` : ''}
-                  </p>
+                  </span>
                 </div>
               </div>
             ))}
@@ -243,5 +254,5 @@ export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyA
         </div>
       )}
     </div>
-  )
+  );
 }

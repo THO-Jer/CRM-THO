@@ -36,3 +36,14 @@ export function formatFileSize(bytes) {
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
 }
+
+export async function obtenerUFHoy() {
+    try {
+        const res = await fetch('https://mindicador.cl/api/uf');
+        const data = await res.json();
+        if (data?.serie?.[0]?.valor) return Math.round(data.serie[0].valor);
+    } catch (e) {
+        console.warn('No se pudo obtener UF del día', e);
+    }
+    return 38000;
+}
