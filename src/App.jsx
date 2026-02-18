@@ -2721,19 +2721,19 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             {historyOpen && <HistoryModal open={historyOpen} title={historyTitle} items={historyItems} loading={historyLoading} onClose={() => { setHistoryOpen(false); setHistoryItems([]); }} />}
             {filesModalOpen && <FilesModal open={filesModalOpen} onClose={() => setFilesModalOpen(false)} entityName={filesEntityName} files={filesList} loading={filesLoading} uploading={uploadingFile} onUpload={uploadFile} onDownload={downloadFile} onDelete={deleteFile} getIcon={getFileIcon} formatSize={formatFileSize} />}
             {convertOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6">
                         <div className="flex justify-between items-start">
                             <div>
-                                <h3 className="text-xl font-bold">Convertir prospecto</h3>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Convertir prospecto</h3>
                                 <p className="text-sm text-gray-600">{convertSource?.item?.organizacion}</p>
                             </div>
-                            <button onClick={closeConvert} className="text-gray-500 hover:text-gray-800">✕</button>
+                            <button onClick={closeConvert} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition">✕</button>
                         </div>
 
                         <div className="mt-4">
-                            <label className="text-sm font-medium text-gray-700">Destino</label>
-                            <select value={convertTarget} onChange={(e) => setConvertTarget(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded-lg">
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Destino</label>
+                            <select value={convertTarget} onChange={(e) => setConvertTarget(e.target.value)} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
                                 <option value="ticket">Ticket (ejecución)</option>
                                 <option value="key_account">Key Account (contrato)</option>
                             </select>
@@ -2742,43 +2742,43 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {convertTarget === 'ticket' ? (
                             <div className="mt-4 space-y-3">
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">Nombre del ticket</label>
-                                    <input value={convertForm.ticket} onChange={(e) => setConvertForm({...convertForm, ticket: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" />
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Nombre del ticket</label>
+                                    <input value={convertForm.ticket} onChange={(e) => setConvertForm({...convertForm, ticket: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="text-sm font-medium text-gray-700">Inicio</label>
-                                        <input type="date" value={convertForm.fecha_inicio} onChange={(e) => setConvertForm({...convertForm, fecha_inicio: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" />
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Inicio</label>
+                                        <input type="date" value={convertForm.fecha_inicio} onChange={(e) => setConvertForm({...convertForm, fecha_inicio: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-700">Entrega</label>
-                                        <input type="date" value={convertForm.fecha_entrega} onChange={(e) => setConvertForm({...convertForm, fecha_entrega: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" />
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Entrega</label>
+                                        <input type="date" value={convertForm.fecha_entrega} onChange={(e) => setConvertForm({...convertForm, fecha_entrega: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">Responsable</label>
-                                    <input value={convertForm.responsable} onChange={(e) => setConvertForm({...convertForm, responsable: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" placeholder="Ej: Jere / Vale / ..." />
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Responsable</label>
+                                    <input value={convertForm.responsable} onChange={(e) => setConvertForm({...convertForm, responsable: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Ej: Jere / Vale / ..." />
                                 </div>
                             </div>
                         ) : (
                             <div className="mt-4 space-y-3">
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">Servicio</label>
-                                    <input value={convertForm.servicio} onChange={(e) => setConvertForm({...convertForm, servicio: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" />
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Servicio</label>
+                                    <input value={convertForm.servicio} onChange={(e) => setConvertForm({...convertForm, servicio: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="text-sm font-medium text-gray-700">UF/mes</label>
-                                        <input type="number" step="0.01" value={convertForm.uf_mes} onChange={(e) => setConvertForm({...convertForm, uf_mes: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" />
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">UF/mes</label>
+                                        <input type="number" step="0.01" value={convertForm.uf_mes} onChange={(e) => setConvertForm({...convertForm, uf_mes: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-700">Fin contrato</label>
-                                        <input type="date" value={convertForm.fin_contrato} onChange={(e) => setConvertForm({...convertForm, fin_contrato: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" />
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Fin contrato</label>
+                                        <input type="date" value={convertForm.fin_contrato} onChange={(e) => setConvertForm({...convertForm, fin_contrato: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">Inicio contrato</label>
-                                    <input type="date" value={convertForm.inicio_contrato} onChange={(e) => setConvertForm({...convertForm, inicio_contrato: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" />
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Inicio contrato</label>
+                                    <input type="date" value={convertForm.inicio_contrato} onChange={(e) => setConvertForm({...convertForm, inicio_contrato: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                 </div>
                             </div>
                         )}
@@ -2792,25 +2792,25 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             )}
 
             {renewalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6">
                         <div className="flex justify-between items-start">
                             <div>
-                                <h3 className="text-xl font-bold">{renewalMode === 'cancel' ? 'Cancelar contrato' : 'Renovar contrato'}</h3>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">{renewalMode === 'cancel' ? 'Cancelar contrato' : 'Renovar contrato'}</h3>
                                 <p className="text-sm text-gray-600">{renewalKA?.organizacion}</p>
                             </div>
-                            <button onClick={closeRenewal} className="text-gray-500 hover:text-gray-800">✕</button>
+                            <button onClick={closeRenewal} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition">✕</button>
                         </div>
 
                         {renewalMode === 'cancel' ? (
                             <div className="mt-4 space-y-3">
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">Motivo de cancelación</label>
-                                    <input value={renewalForm.cancel_reason} onChange={(e) => setRenewalForm({...renewalForm, cancel_reason: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" placeholder="Ej: cliente pausó / cambio de foco / ..." />
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Motivo de cancelación</label>
+                                    <input value={renewalForm.cancel_reason} onChange={(e) => setRenewalForm({...renewalForm, cancel_reason: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Ej: cliente pausó / cambio de foco / ..." />
                                 </div>
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">Notas</label>
-                                    <textarea value={renewalForm.notes} onChange={(e) => setRenewalForm({...renewalForm, notes: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" rows="3" />
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Notas</label>
+                                    <textarea value={renewalForm.notes} onChange={(e) => setRenewalForm({...renewalForm, notes: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" rows="3" />
                                 </div>
 
                                 <div className="flex items-center space-x-2 pt-1">
@@ -2825,21 +2825,21 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                             <div className="mt-4 space-y-3">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="text-sm font-medium text-gray-700">Inicio</label>
-                                        <input type="date" value={renewalForm.start_date} onChange={(e) => setRenewalForm({...renewalForm, start_date: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" />
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Inicio</label>
+                                        <input type="date" value={renewalForm.start_date} onChange={(e) => setRenewalForm({...renewalForm, start_date: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-gray-700">Fin</label>
-                                        <input type="date" value={renewalForm.end_date} onChange={(e) => setRenewalForm({...renewalForm, end_date: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" />
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Fin</label>
+                                        <input type="date" value={renewalForm.end_date} onChange={(e) => setRenewalForm({...renewalForm, end_date: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">UF/mes</label>
-                                    <input type="number" step="0.01" value={renewalForm.uf_mes} onChange={(e) => setRenewalForm({...renewalForm, uf_mes: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" />
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">UF/mes</label>
+                                    <input type="number" step="0.01" value={renewalForm.uf_mes} onChange={(e) => setRenewalForm({...renewalForm, uf_mes: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                 </div>
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">Notas</label>
-                                    <textarea value={renewalForm.notes} onChange={(e) => setRenewalForm({...renewalForm, notes: e.target.value})} className="mt-1 w-full px-3 py-2 border rounded-lg" rows="3" />
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Notas</label>
+                                    <textarea value={renewalForm.notes} onChange={(e) => setRenewalForm({...renewalForm, notes: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" rows="3" />
                                 </div>
                             </div>
                         )}

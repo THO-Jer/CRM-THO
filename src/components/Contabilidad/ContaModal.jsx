@@ -73,10 +73,10 @@ export default     function ContaModal({ type, item, ufActual, tickets, keyAccou
         };
         
         return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-                <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-between mb-4">
-                        <h3 className="text-xl font-bold">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                             {item ? 'Editar' : 'Nueva'} {
                                 type === 'emitida' ? 'Factura Emitida' : 
                                 type === 'recibida' ? 'Factura Recibida' : 
@@ -85,7 +85,7 @@ export default     function ContaModal({ type, item, ufActual, tickets, keyAccou
                                 'Gasto Caja Chica'
                             }
                         </h3>
-                        <button onClick={onClose} className="text-2xl">×</button>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl transition">✕</button>
                     </div>
                     
                     <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
@@ -311,7 +311,7 @@ export default     function ContaModal({ type, item, ufActual, tickets, keyAccou
                                 <h4 className="font-bold text-sm text-blue-900">💰 Cálculo de Honorarios</h4>
                                 
                                 {/* Selector de moneda principal */}
-                                <div className="bg-white rounded-lg p-3">
+                                <div className="bg-white dark:bg-gray-700 rounded-lg p-3">
                                     <label className="block text-xs font-medium text-blue-800 mb-2">💱 Moneda de ingreso</label>
                                     <div className="flex gap-2">
                                         <button
@@ -393,7 +393,7 @@ export default     function ContaModal({ type, item, ufActual, tickets, keyAccou
                                     </div>
                                 </div>
                                 
-                                <div className="bg-white rounded p-3 space-y-2 text-sm">
+                                <div className="bg-white dark:bg-gray-700 rounded p-3 space-y-2 text-sm">
                                     <div className="flex justify-between">
                                         <span>Retención ({form.porcentaje_retencion}%):</span>
                                         <span className="font-medium text-naranja">-{form.monto_retencion_uf} UF (${Math.round(form.monto_retencion_clp || 0).toLocaleString('es-CL')})</span>
@@ -413,9 +413,9 @@ export default     function ContaModal({ type, item, ufActual, tickets, keyAccou
                             <InputField label="Proyecto (opcional)" value={form.proyecto || ''} onChange={(e) => setForm({...form, proyecto: e.target.value})} placeholder="CChC, Club34, etc." />
                         </>)}
                         
-                        <div className="flex gap-3 pt-4">
-                            <button type="submit" className="flex-1 px-4 py-2 color-naranja text-white rounded-lg font-medium">Guardar</button>
-                            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-100 rounded-lg font-medium">Cancelar</button>
+                        <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
+                            <button type="submit" className="flex-1 px-4 py-2.5 color-naranja text-white rounded-lg font-medium hover:opacity-90 transition">Guardar</button>
+                            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition">Cancelar</button>
                         </div>
                     </form>
                 </div>

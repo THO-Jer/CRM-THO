@@ -134,7 +134,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                         </div>
                         <div className="flex items-center gap-2 ml-4">
                             {dirty && <button onClick={handleSave} disabled={saving} className="px-4 py-1.5 color-naranja text-white text-xs rounded-lg font-medium disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar'}</button>}
-                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg">✕</button>
                         </div>
                     </div>
                 </div>
@@ -143,7 +143,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                 <div className="flex border-b dark:border-gray-700 px-5">
                     {sections.map(s => (
                         <button key={s.id} onClick={() => setActiveSection(s.id)}
-                            className={`py-2.5 px-3 text-xs font-medium border-b-2 transition ${activeSection === s.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                            className={`py-2.5 px-3 text-xs font-medium border-b-2 transition ${activeSection === s.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>
                             {s.label} {s.count !== undefined ? `(${s.count})` : ''}
                         </button>
                     ))}

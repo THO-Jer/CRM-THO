@@ -238,6 +238,7 @@ export default function ContabilidadView({
         const facturasRecAct = facturasRecibidas.filter(f => f.estado !== 'Reclamado' && f.estado !== 'Reclamada' && estEnRango(f.fecha_emision));
         const boletasAct = boletasHonorarios.filter(b => estEnRango(b.fecha));
         const cajaAct = cajaChica.filter(c => estEnRango(c.fecha));
+        const movBancAct = movimientosBancarios.filter(m => estEnRango(m.fecha));
 
         // Etiqueta del período
         const periodoLabel = () => {
@@ -362,7 +363,8 @@ export default function ContabilidadView({
                         {['pl','emitidas','recibidas','boletas','sueldos','caja'].includes(contaTab) && '📊 Estado de Resultados'}
                     </h2>
 
-                    {/* Selector de período */}
+                    {/* Selector de período - hide for PL (has own year selector) */}
+                    {contaTab !== 'pl' && (
                     <div className="flex items-center gap-2 flex-wrap">
                         <select
                             value={periodo}
@@ -378,16 +380,19 @@ export default function ContabilidadView({
                         </select>
                         {periodo === 'custom' && (
                             <div className="flex items-center gap-1">
-                                <input type="date" value={fechaDesdeCustom} onChange={e => setFechaDesdeCustom(e.target.value)} className="px-2 py-1.5 border rounded-lg text-sm" />
+                                <input type="date" value={fechaDesdeCustom} onChange={e => setFechaDesdeCustom(e.target.value)} className="px-2 py-1.5 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
                                 <span className="text-gray-400 text-sm">→</span>
-                                <input type="date" value={fechaHastaCustom} onChange={e => setFechaHastaCustom(e.target.value)} className="px-2 py-1.5 border rounded-lg text-sm" />
+                                <input type="date" value={fechaHastaCustom} onChange={e => setFechaHastaCustom(e.target.value)} className="px-2 py-1.5 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
                             </div>
                         )}
                     </div>
+                    )}
                 </div>
 
-                {/* Etiqueta período activo */}
+                {/* Etiqueta período activo - hide for PL */}
+                {contaTab !== 'pl' && (
                 <div className="text-sm text-gray-500 dark:text-gray-400 -mt-3 capitalize">{periodoLabel()}</div>
+                )}
                 
                 {/* Métricas resumen - solo en dashboard */}
                 {contaTab === 'dashboard' && (
@@ -1156,7 +1161,7 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-3">
                                         <span className="text-sm text-gray-500 dark:text-gray-400">
-                                            {movimientosBancarios.length} movimientos · {movimientosBancarios.filter(m => m.estado_conciliacion === 'pendiente').length} pendientes
+                                            {movBancAct.length} movimientos · {movBancAct.filter(m => m.estado_conciliacion === 'pendiente').length} pendientes
                                         </span>
                                     </div>
                                     <div className="flex gap-2">
@@ -1180,17 +1185,17 @@ export default function ContabilidadView({
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700">
                                         <div className="text-sm text-gray-600 dark:text-gray-400">⏳ Pendientes por Revisar</div>
-                                        <div className="text-2xl font-bold text-orange-600">{movimientosBancarios.filter(m => m.estado_conciliacion === 'pendiente').length}</div>
+                                        <div className="text-2xl font-bold text-orange-600">{movBancAct.filter(m => m.estado_conciliacion === 'pendiente').length}</div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700">
                                         <div className="text-sm text-gray-600 dark:text-gray-400">✅ Conciliados</div>
-                                        <div className="text-2xl font-bold text-verde">{movimientosBancarios.filter(m => m.estado_conciliacion === 'conciliado').length}</div>
+                                        <div className="text-2xl font-bold text-verde">{movBancAct.filter(m => m.estado_conciliacion === 'conciliado').length}</div>
                                     </div>
                                 </div>
                                 
                                 {/* Lista de movimientos pendientes */}
                                 <div className="space-y-3">
-                                    {movimientosBancarios
+                                    {movBancAct
                                         .filter(m => m.estado_conciliacion === 'pendiente')
                                         .map(mov => {
                                             const resultado = buscarMatches(mov);
@@ -1362,7 +1367,7 @@ export default function ContabilidadView({
                                             );
                                         })}
                                     
-                                    {movimientosBancarios.filter(m => m.estado_conciliacion === 'pendiente').length === 0 && (
+                                    {movBancAct.filter(m => m.estado_conciliacion === 'pendiente').length === 0 && (
                                         <div className="text-center py-8 text-gray-500">
                                             ✅ Todos los movimientos están conciliados o ignorados
                                         </div>
@@ -1370,13 +1375,13 @@ export default function ContabilidadView({
                                 </div>
                                 
                                 {/* Movimientos conciliados */}
-                                {movimientosBancarios.filter(m => m.estado_conciliacion === 'conciliado').length > 0 && (
+                                {movBancAct.filter(m => m.estado_conciliacion === 'conciliado').length > 0 && (
                                     <details className="mt-6">
                                         <summary className="font-medium mb-2 cursor-pointer dark:text-gray-200 hover:text-naranja transition">
-                                            ✅ Conciliados ({movimientosBancarios.filter(m => m.estado_conciliacion === 'conciliado').length})
+                                            ✅ Conciliados ({movBancAct.filter(m => m.estado_conciliacion === 'conciliado').length})
                                         </summary>
                                         <div className="space-y-2 mt-3">
-                                            {movimientosBancarios
+                                            {movBancAct
                                                 .filter(m => m.estado_conciliacion === 'conciliado')
                                                 .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
                                                 .map(mov => (
@@ -1401,13 +1406,13 @@ export default function ContabilidadView({
                                 )}
                                 
                                 {/* Movimientos ignorados */}
-                                {movimientosBancarios.filter(m => m.estado_conciliacion === 'ignorar').length > 0 && (
+                                {movBancAct.filter(m => m.estado_conciliacion === 'ignorar').length > 0 && (
                                     <details className="mt-4">
                                         <summary className="font-medium mb-2 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition text-sm">
-                                            🚫 Ignorados ({movimientosBancarios.filter(m => m.estado_conciliacion === 'ignorar').length})
+                                            🚫 Ignorados ({movBancAct.filter(m => m.estado_conciliacion === 'ignorar').length})
                                         </summary>
                                         <div className="space-y-1 mt-2">
-                                            {movimientosBancarios
+                                            {movBancAct
                                                 .filter(m => m.estado_conciliacion === 'ignorar')
                                                 .map(mov => (
                                                     <div key={mov.id} className="text-xs text-gray-400 dark:text-gray-500 flex justify-between p-2">

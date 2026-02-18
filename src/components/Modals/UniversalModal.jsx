@@ -12,16 +12,15 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
     };
     
     const [formData, setFormData] = useState(item || getDefault(type));
-    
     const titles = { prospecto: 'Prospecto', cerrado: 'Cerrado', ticket: 'Ticket', keyaccount: 'Key Account' };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="p-4 sm:p-6">
-                    <div className="flex justify-between mb-4 sm:mb-6">
-                        <h2 className="text-xl sm:text-2xl font-bold">{item ? 'Editar' : 'Nuevo'} {titles[type]}</h2>
-                        <button onClick={onClose} className="text-2xl">×</button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="p-5 sm:p-6">
+                    <div className="flex justify-between items-center mb-5">
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{item ? 'Editar' : 'Nuevo'} {titles[type]}</h2>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl transition">✕</button>
                     </div>
                     <form onSubmit={(e) => { e.preventDefault(); onSave(formData); }} className="space-y-4">
                         {type === 'prospecto' && (<>
@@ -62,20 +61,9 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <InputField label="Organización" required value={formData.organizacion} onChange={(e) => setFormData({...formData, organizacion: e.target.value})} />
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Ticket *</label>
-                                    <input
-                                        list="ticket-sugerencias"
-                                        required
-                                        value={formData.ticket}
-                                        onChange={(e) => setFormData({...formData, ticket: e.target.value})}
-                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-naranja"
-                                        placeholder="Nombre del ticket..."
-                                    />
-                                    <datalist id="ticket-sugerencias">
-                                        <option value="Ticket RC Express" />
-                                        <option value="Ticket Diag Org" />
-                                        <option value="Ticket ESG" />
-                                    </datalist>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ticket *</label>
+                                    <input list="ticket-sugerencias" required value={formData.ticket} onChange={(e) => setFormData({...formData, ticket: e.target.value})} className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-naranja" placeholder="Nombre del ticket..." />
+                                    <datalist id="ticket-sugerencias"><option value="Ticket RC Express" /><option value="Ticket Diag Org" /><option value="Ticket ESG" /></datalist>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -107,9 +95,9 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
                                 <SelectField label="Salud" value={formData.salud} onChange={(e) => setFormData({...formData, salud: e.target.value})} options={['Excelente', 'Buena', 'Riesgo', 'Crítico']} />
                             </div>
                         </>)}
-                        <div className="flex space-x-3 pt-4">
-                            <button type="submit" className="flex-1 px-4 py-2 color-naranja text-white rounded-lg font-medium">Guardar</button>
-                            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-gray-200 rounded-lg font-medium">Cancelar</button>
+                        <div className="flex space-x-3 pt-4 border-t dark:border-gray-700">
+                            <button type="submit" className="flex-1 px-4 py-2.5 color-naranja text-white rounded-lg font-medium hover:opacity-90 transition">Guardar</button>
+                            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition">Cancelar</button>
                         </div>
                     </form>
                 </div>
