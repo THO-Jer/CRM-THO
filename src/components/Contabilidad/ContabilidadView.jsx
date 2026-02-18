@@ -185,11 +185,14 @@ export default function ContabilidadView({
         };
 
         // Use global dateRange for all tabs except PL (which has its own year selector)
+        const isGlobalEmpty = !dateRange?.desde && !dateRange?.hasta;
         const useGlobalDateRange = contaTab !== 'pl' && dateRange?.desde && dateRange?.hasta;
 
         const rango = useGlobalDateRange 
             ? { desde: new Date(dateRange.desde + 'T00:00:00'), hasta: new Date(dateRange.hasta + 'T23:59:59') }
-            : calcularRango();
+            : isGlobalEmpty && contaTab !== 'pl'
+                ? { desde: new Date(2020, 0, 1), hasta: new Date(2099, 11, 31) } // "Todo" = show all
+                : calcularRango();
 
         const estEnRango = (fechaStr, campo) => {
             const d = new Date(fechaStr);
@@ -447,10 +450,10 @@ export default function ContabilidadView({
                                     <div className="space-y-2">
                                         {alertas.map((a, i) => (
                                             <div key={i} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm ${
-                                                a.tipo === 'danger' ? 'bg-red-50 text-red-700 border border-red-200' :
-                                                a.tipo === 'warning' ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
+                                                a.tipo === 'danger' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' :
+                                                a.tipo === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800' :
                                                 a.tipo === 'fiscal' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
-                                                'bg-blue-50 text-blue-700 border border-blue-200'
+                                                'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
                                             }`}>
                                                 <span>{a.tipo === 'danger' ? '🔴' : a.tipo === 'warning' ? '⚠️' : a.tipo === 'fiscal' ? '💸' : 'ℹ️'}</span>
                                                 <span>{a.msg}</span>
@@ -461,35 +464,35 @@ export default function ContabilidadView({
 
                                 {/* KPIs principales */}
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                                    <div className="bg-white border rounded-xl p-4">
-                                        <div className="text-xs text-gray-500 mb-1">💰 Ingresos</div>
+                                    <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">💰 Ingresos</div>
                                         <DualCurrency amountUF={Math.round(emitidaActual)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
                                         <div className={`text-xs mt-1 ${cambioIngresos === null ? 'text-gray-400' : cambioIngresos >= 0 ? 'text-verde' : 'text-red-500'}`}>
                                             {cambioIngresos === null ? 'Sin datos período anterior' : `${cambioIngresos >= 0 ? '↑' : '↓'} ${Math.abs(Math.round(cambioIngresos))}% vs período anterior`}
                                         </div>
                                     </div>
-                                    <div className="bg-white border rounded-xl p-4">
-                                        <div className="text-xs text-gray-500 mb-1">📥 Gastos Total</div>
+                                    <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">📥 Gastos Total</div>
                                         <DualCurrency amountUF={Math.round(gastosActual + honorariosActual + cajaActual)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
                                         <div className={`text-xs mt-1 ${cambioGastos === null ? 'text-gray-400' : cambioGastos >= 0 ? 'text-red-500' : 'text-verde'}`}>
                                             {cambioGastos === null ? 'Sin datos período anterior' : `${cambioGastos >= 0 ? '↑' : '↓'} ${Math.abs(Math.round(cambioGastos))}% vs período anterior`}
                                         </div>
                                     </div>
-                                    <div className="bg-white border rounded-xl p-4">
-                                        <div className="text-xs text-gray-500 mb-1">📊 Flujo Neto</div>
+                                    <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">📊 Flujo Neto</div>
                                         <DualCurrency amountUF={Math.round(flujoNeto)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
-                                        <div className="text-xs text-gray-400 mt-1">Ingresos - Gastos</div>
+                                        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">Ingresos - Gastos</div>
                                     </div>
-                                    <div className="bg-white border rounded-xl p-4">
-                                        <div className="text-xs text-gray-500 mb-1">💸 Retenciones</div>
+                                    <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">💸 Retenciones</div>
                                         <DualCurrency amountUF={Math.round(retenciones)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
-                                        <div className="text-xs text-gray-400 mt-1">Por pagar al SII</div>
+                                        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">Por pagar al SII</div>
                                     </div>
                                 </div>
 
                                 {/* Pendientes */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+                                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 flex items-center justify-between">
                                         <div>
                                             <div className="text-xs text-green-600 font-medium">📤 Por Cobrar</div>
                                             <DualCurrency amountUF={Math.round(porCobrar)} ufValue={ufActual} size="md" primary={monedaPreferida} />
@@ -497,7 +500,7 @@ export default function ContabilidadView({
                                         </div>
                                         <span className="text-3xl opacity-30">💵</span>
                                     </div>
-                                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-center justify-between">
+                                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 flex items-center justify-between">
                                         <div>
                                             <div className="text-xs text-orange-600 font-medium">📥 Por Pagar</div>
                                             <DualCurrency amountUF={Math.round(porPagar)} ufValue={ufActual} size="md" primary={monedaPreferida} />
@@ -509,7 +512,7 @@ export default function ContabilidadView({
                                 
                                 {/* Alertas de Validación */}
                                 {alertasValidacion.length > 0 && (
-                                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
                                         <div className="flex items-start justify-between mb-2">
                                             <h4 className="font-bold text-yellow-800">⚠️ Alertas de Validación</h4>
                                             <button 
@@ -539,7 +542,7 @@ export default function ContabilidadView({
                                 {/* Gráficos */}
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                                     {/* Gráfico barras: Ingresos vs Gastos 6 meses */}
-                                    <div className="lg:col-span-2 bg-white border rounded-xl p-4">
+                                    <div className="lg:col-span-2 bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
                                         <h4 className="font-bold text-sm mb-3">📈 Ingresos vs Gastos ({datos6Meses.length} {datos6Meses.length === 1 ? 'mes' : 'meses'})</h4>
                                         <div style={{height: '220px', position: 'relative'}}>
                                             <canvas id="chartIngGastos"></canvas>
@@ -547,7 +550,7 @@ export default function ContabilidadView({
                                     </div>
 
                                     {/* Gráfico donut: Composición de gastos */}
-                                    <div className="bg-white border rounded-xl p-4">
+                                    <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
                                         <h4 className="font-bold text-sm mb-3">🥧 Composición Gastos</h4>
                                         <div style={{height: '220px', position: 'relative'}}>
                                             <canvas id="chartDonut"></canvas>
@@ -570,7 +573,7 @@ export default function ContabilidadView({
                                 </div>
 
                                 {/* Accesos rápidos */}
-                                <div className="bg-white border rounded-xl p-4">
+                                <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
                                     <h4 className="font-bold text-sm mb-3">⚡ Acciones Rápidas</h4>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                         <button onClick={() => { setContaTab('emitidas'); setEditing(null); setModalType('emitida'); setShowModal(true); }} className="flex flex-col items-center gap-1 p-3 bg-green-50 hover:bg-green-100 rounded-lg transition">

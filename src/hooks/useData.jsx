@@ -40,7 +40,23 @@ export default function useData(user) {
 
     const loadKeyAccounts = useCallback(async () => {
         const { data } = await supabase.from('key_accounts').select('*').order('organizacion');
-        if (data) setKeyAccounts(data);
+        if (data) {
+            const hoy = new Date().toISOString().split('T')[0];
+            // Auto-expire: mark KAs past fin_contrato as 'Vencido' (unless already Cerrado)
+            const expired = data.filter(ka => 
+                ka.fin_contrato && ka.fin_contrato < hoy && 
+                (ka.salud || '').toLowerCase() !== 'cerrado' && (ka.salud || '').toLowerCase() !== 'vencido'
+            );
+            if (expired.length > 0) {
+                for (const ka of expired) {
+                    await supabase.from('key_accounts').update({ salud: 'Vencido' }).eq('id', ka.id);
+                }
+                // Re-fetch with updated salud
+                const { data: refreshed } = await supabase.from('key_accounts').select('*').order('organizacion');
+                if (refreshed) { setKeyAccounts(refreshed); return; }
+            }
+            setKeyAccounts(data);
+        }
     }, []);
 
     const loadContactos = useCallback(async () => {

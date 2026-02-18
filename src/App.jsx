@@ -136,12 +136,24 @@ function CRMApp() {
         setFacturasEmitidas, setFacturasRecibidas, setCajaChica, setBoletasHonorarios,
         setSueldosSocios, setMovimientosBancarios } = data;
 
+    // Active KAs = exclude Cerrado and Vencido (used everywhere except EntityDetail)
+    const activeKeyAccounts = useMemo(() => 
+        keyAccounts.filter(ka => !['cerrado', 'vencido'].includes((ka.salud || '').toLowerCase())),
+        [keyAccounts]
+    );
+
+    // Active Tickets = exclude Cerrado
+    const activeTickets = useMemo(() => 
+        tickets.filter(t => t.status !== 'Cerrado'),
+        [tickets]
+    );
+
     // ===== SII SYNC HOOK =====
     const sii = useSII({ user, loadBoletasHonorarios, loadFacturasEmitidas, loadFacturasRecibidas });
     const { sincronizarBoletasSII, sincronizarFacturasEmitidas, sincronizarFacturasRecibidas } = sii;
 
     // ===== METRICS HOOK =====
-    const { metrics, estadosKanban, prospectosPorEstado, getEstadoFromKey } = useMetrics({ prospectos, cerrados, tickets, keyAccounts, ufActual });
+    const { metrics, estadosKanban, prospectosPorEstado, getEstadoFromKey } = useMetrics({ prospectos, cerrados, tickets: activeTickets, keyAccounts: activeKeyAccounts, ufActual });
 
     // ===== CRM ACTIONS HOOK =====
     const actions = useCRMActions({
@@ -201,8 +213,8 @@ function CRMApp() {
         });
     };
     const filteredCerrados = filterByDateRange(cerrados, 'fecha_cierre');
-    const filteredTickets = filterByDateRange(tickets, 'fecha_inicio');
-    const filteredKeyAccounts = filterByDateRange(keyAccounts, 'inicio_contrato');
+    const filteredTickets = filterByDateRange(activeTickets, 'fecha_inicio');
+    const filteredKeyAccounts = filterByDateRange(activeKeyAccounts, 'inicio_contrato');
 
     // Destructure actions for render convenience
     const { historyOpen, historyLoading, historyTitle, historyItems, setHistoryItems, openHistory, setHistoryOpen,
@@ -417,7 +429,7 @@ function CRMApp() {
             )}
 
             <main className="max-w-7xl mx-auto px-3 py-4 md:px-4 md:py-8">
-                {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={tickets} keyAccounts={keyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
+                {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={activeTickets} keyAccounts={activeKeyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
                 {activeTab === 'pipeline' && <KanbanBoard onDetail={(p) => openDetail('prospecto', p)} onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                 {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={filteredCerrados} tickets={filteredTickets} keyAccounts={filteredKeyAccounts} ufActual={ufActual} dateRange={dateRange} />}
                 {['finanzas-dashboard', 'contabilidad', 'conciliacion'].includes(activeTab) && (
@@ -456,7 +468,7 @@ function CRMApp() {
                         onFiles={openFilesModal} 
                     />
                 )}
-                {activeTab === 'cerrados' && <CerradosView onDetail={(c) => openDetail('cerrado', c)} onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={filteredCerrados} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
+                {activeTab === 'cerrados' && <CerradosView onDetail={(c) => openDetail('cerrado', c)} onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={filteredCerrados} keyAccounts={activeKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                 {activeTab === 'tickets' && <TicketsView onDetail={(t) => openDetail('ticket', t)} onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={filteredTickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                 {activeTab === 'keyaccounts' && <KeyAccountsView onDetail={(k) => openDetail('keyaccount', k)} onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={filteredKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
             </main>

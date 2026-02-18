@@ -197,7 +197,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                             {type === 'keyaccount' && <>
                                 {renderField('Servicio', inp('servicio'))}
                                 {renderField('UF/mes', inp('uf_mes', 'number', { step: '0.01' }))}
-                                {renderField('Salud', sel('salud', ['Excelente', 'Buena', 'Riesgo', 'Crítico']))}
+                                {renderField('Salud', sel('salud', ['Excelente', 'Buena', 'Riesgo', 'Crítico', 'Vencido', 'Cerrado']))}
                                 {renderField('Renovación', sel('renovacion', ['Confirmada', 'En conversación', 'No renovará', 'Por definir']))}
                                 {renderField('Inicio Contrato', inp('inicio_contrato', 'date'))}
                                 {renderField('Fin Contrato', inp('fin_contrato', 'date'))}
