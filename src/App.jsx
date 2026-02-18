@@ -48,7 +48,8 @@ async function obtenerUFHoy() {
 // Función utilitaria para exportar datos a CSV
 function exportToCSV(data, filename = 'export.csv') {
     if (!data || data.length === 0) return;
-    const headers = Object.keys(data[0]);
+    const excludeFields = ['id', 'created_at', 'created_by_email', 'updated_at'];
+    const headers = Object.keys(data[0]).filter(h => !excludeFields.includes(h));
     const csvContent = [
         headers.join(','),
         ...data.map(row => headers.map(h => {
@@ -2531,14 +2532,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                                 <>
                                     <button onClick={() => { setEditingItem(null); setModalType('prospecto'); setShowModal(true); }} className="hidden md:inline-flex px-3 py-1.5 color-naranja text-white rounded-lg text-sm font-medium">+ Prospecto</button>
                                     <button onClick={() => {
-                                        const data = { prospectos, cerrados, tickets, keyAccounts };
-                                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                                        const url = window.URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = `crm-tho-${new Date().toISOString().split('T')[0]}.json`;
-                                        a.click();
-                                    }} className="hidden md:inline-flex px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm" title="Exportar datos">📥</button>
+                                        exportToCSV(prospectos, `pipeline-${new Date().toISOString().split('T')[0]}.csv`);
+                                    }} className="hidden md:inline-flex px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm" title="Exportar pipeline">📥</button>
                                 </>
                             )}
                             <div className="text-sm">

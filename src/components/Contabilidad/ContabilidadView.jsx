@@ -186,7 +186,7 @@ export default function ContabilidadView({
                     canvasD.chart = null;
                 }
             };
-        }, [contaTab]);
+        }, [contaTab, periodo, fechaDesdeCustom, fechaHastaCustom, facturasEmitidas, facturasRecibidas, boletasHonorarios, cajaChica, sueldosSocios]);
 
         const calcularRango = () => {
             const hoy = new Date();
@@ -681,9 +681,9 @@ export default function ContabilidadView({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y">
-                                            {facturasEmitidas.length === 0 ? (
+                                            {facturasEmiAct.length === 0 ? (
                                                 <tr><td colSpan="7" className="px-4 py-4 text-center text-sm text-gray-500">Sin facturas emitidas</td></tr>
-                                            ) : facturasEmitidas.map(f => (
+                                            ) : facturasEmiAct.map(f => (
                                                 <tr key={f.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-2 py-3 text-center">
                                                         <input
@@ -739,9 +739,9 @@ export default function ContabilidadView({
                                 
                                 {/* Mobile */}
                                 <div className="md:hidden space-y-3">
-                                    {facturasEmitidas.length === 0 ? (
+                                    {facturasEmiAct.length === 0 ? (
                                         <div className="text-center text-sm text-gray-500 py-4">Sin facturas emitidas</div>
-                                    ) : facturasEmitidas.map(f => (
+                                    ) : facturasEmiAct.map(f => (
                                         <div key={f.id} className="border rounded-lg p-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
@@ -795,9 +795,9 @@ export default function ContabilidadView({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y">
-                                            {facturasRecibidas.length === 0 ? (
+                                            {facturasRecAct.length === 0 ? (
                                                 <tr><td colSpan="7" className="px-4 py-4 text-center text-sm text-gray-500">Sin facturas recibidas</td></tr>
-                                            ) : facturasRecibidas.map(f => (
+                                            ) : facturasRecAct.map(f => (
                                                 <tr key={f.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-2 py-3 text-center">
                                                         <input
@@ -851,9 +851,9 @@ export default function ContabilidadView({
                                 </div>
                                 
                                 <div className="md:hidden space-y-3">
-                                    {facturasRecibidas.length === 0 ? (
+                                    {facturasRecAct.length === 0 ? (
                                         <div className="text-center text-sm text-gray-500 py-4">Sin facturas recibidas</div>
-                                    ) : facturasRecibidas.map(f => (
+                                    ) : facturasRecAct.map(f => (
                                         <div key={f.id} className="border rounded-lg p-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
@@ -1021,9 +1021,9 @@ export default function ContabilidadView({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y">
-                                            {cajaChica.length === 0 ? (
+                                            {cajaAct.length === 0 ? (
                                                 <tr><td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">Sin gastos de caja chica</td></tr>
-                                            ) : cajaChica.map(c => (
+                                            ) : cajaAct.map(c => (
                                                 <tr key={c.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-4 py-3 text-sm">{c.fecha}</td>
                                                     <td className="px-4 py-3 text-sm font-medium">{c.concepto}</td>
@@ -1042,9 +1042,9 @@ export default function ContabilidadView({
                                 </div>
                                 
                                 <div className="md:hidden space-y-3">
-                                    {cajaChica.length === 0 ? (
+                                    {cajaAct.length === 0 ? (
                                         <div className="text-center text-sm text-gray-500 py-4">Sin gastos de caja chica</div>
-                                    ) : cajaChica.map(c => (
+                                    ) : cajaAct.map(c => (
                                         <div key={c.id} className="border rounded-lg p-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
@@ -1099,9 +1099,9 @@ export default function ContabilidadView({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y">
-                                            {boletasHonorarios.length === 0 ? (
+                                            {boletasAct.length === 0 ? (
                                                 <tr><td colSpan="7" className="px-4 py-4 text-center text-sm text-gray-500">Sin boletas de honorarios</td></tr>
-                                            ) : boletasHonorarios.map(b => (
+                                            ) : boletasAct.map(b => (
                                                 <tr key={b.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-4 py-3 text-sm font-medium">{b.prestador}</td>
                                                     <td className="px-4 py-3 text-sm">{b.mes_servicio}</td>
@@ -1122,9 +1122,9 @@ export default function ContabilidadView({
                                 
                                 {/* Mobile */}
                                 <div className="md:hidden space-y-3">
-                                    {boletasHonorarios.length === 0 ? (
+                                    {boletasAct.length === 0 ? (
                                         <div className="text-center text-sm text-gray-500 py-4">Sin boletas de honorarios</div>
-                                    ) : boletasHonorarios.map(b => (
+                                    ) : boletasAct.map(b => (
                                         <div key={b.id} className="border rounded-lg p-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
