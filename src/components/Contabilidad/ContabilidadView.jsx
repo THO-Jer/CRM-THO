@@ -32,7 +32,8 @@ export default function ContabilidadView({
     crearGastoCajaChica, 
     ignorarMovimiento, 
     onReload, 
-    onFiles 
+    onFiles,
+    dateRange 
 }) {
         const dashboardDataRef = useRef(null);
         const [showModal, setShowModal] = useState(false);
@@ -186,7 +187,7 @@ export default function ContabilidadView({
                     canvasD.chart = null;
                 }
             };
-        }, [contaTab, periodo, fechaDesdeCustom, fechaHastaCustom, facturasEmitidas, facturasRecibidas, boletasHonorarios, cajaChica, sueldosSocios]);
+        }, [contaTab, periodo, fechaDesdeCustom, fechaHastaCustom, dateRange, facturasEmitidas, facturasRecibidas, boletasHonorarios, cajaChica, sueldosSocios]);
 
         const calcularRango = () => {
             const hoy = new Date();
@@ -222,7 +223,12 @@ export default function ContabilidadView({
             }
         };
 
-        const rango = calcularRango();
+        // Use global dateRange when it has values AND we're on dashboard or conciliacion
+        const useGlobalDateRange = (contaTab === 'dashboard' || contaTab === 'conciliacion') && dateRange?.desde && dateRange?.hasta;
+
+        const rango = useGlobalDateRange 
+            ? { desde: new Date(dateRange.desde + 'T00:00:00'), hasta: new Date(dateRange.hasta + 'T23:59:59') }
+            : calcularRango();
 
         const estEnRango = (fechaStr, campo) => {
             const d = new Date(fechaStr);
@@ -363,8 +369,8 @@ export default function ContabilidadView({
                         {['pl','emitidas','recibidas','boletas','sueldos','caja'].includes(contaTab) && '📊 Estado de Resultados'}
                     </h2>
 
-                    {/* Selector de período - hide for PL (has own year selector) */}
-                    {contaTab !== 'pl' && (
+                    {/* Internal period selector - only for EERR sub-tabs (emitidas/recibidas/boletas/sueldos/caja) */}
+                    {!['pl', 'dashboard', 'conciliacion'].includes(contaTab) && (
                     <div className="flex items-center gap-2 flex-wrap">
                         <select
                             value={periodo}
@@ -389,8 +395,8 @@ export default function ContabilidadView({
                     )}
                 </div>
 
-                {/* Etiqueta período activo - hide for PL */}
-                {contaTab !== 'pl' && (
+                {/* Etiqueta período activo - only for EERR sub-tabs */}
+                {!['pl', 'dashboard', 'conciliacion'].includes(contaTab) && (
                 <div className="text-sm text-gray-500 dark:text-gray-400 -mt-3 capitalize">{periodoLabel()}</div>
                 )}
                 

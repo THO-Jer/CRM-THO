@@ -9,7 +9,7 @@ const tableMap = { prospecto: 'prospectos', cerrado: 'cerrados', ticket: 'ticket
 
 const tipoOptions = ['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG', 'Key Account Nivel 1', 'Key Account Nivel 2', 'Key Account Nivel 3', 'Gestión de Contenido'];
 
-export default function EntityDetail({ entity, onClose, contactos, notas, user, onRefresh }) {
+export default function EntityDetail({ entity, onClose, contactos, notas, user, keyAccounts = [], onRefresh }) {
     const { type, item } = entity;
     const [activeSection, setActiveSection] = useState('ficha');
     const [formData, setFormData] = useState({ ...item });
@@ -213,6 +213,31 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                 </F>
                                 <F label="Responsable"><Input field="responsable" /></F>
                             </>}
+
+                            {/* Other services for this organization (KA multi-service) */}
+                            {type === 'keyaccount' && (() => {
+                                const orgName = (formData.organizacion || '').trim().toLowerCase();
+                                const otherServices = keyAccounts.filter(ka => 
+                                    (ka.organizacion || '').trim().toLowerCase() === orgName && String(ka.id) !== String(formData.id)
+                                );
+                                if (otherServices.length === 0) return null;
+                                return (
+                                    <div className="col-span-2 mt-2">
+                                        <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-2">Otros servicios activos</div>
+                                        <div className="space-y-2">
+                                            {otherServices.map(s => (
+                                                <div key={s.id} className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-2">
+                                                    <div>
+                                                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{s.servicio}</span>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{s.uf_mes} UF/mes</span>
+                                                    </div>
+                                                    <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${s.salud === 'Excelente' || s.salud === 'Buena' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>{s.salud || '-'}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             {/* Cerrado fields */}
                             {type === 'cerrado' && <>

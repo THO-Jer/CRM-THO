@@ -1,10 +1,16 @@
 import { useState } from 'react'
 import MetricCard from '../shared/MetricCard'
 
-export default function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory, onConvertClosed, onFiles, onDetail}) {
+export default function CerradosView({cerrados, onAdd, onEdit, onDelete, onExport, onHistory, onConvertClosed, onFiles, onDetail, keyAccounts = []}) {
     const [filtroAño, setFiltroAño] = useState('todos');
     const años = [...new Set(cerrados.map(c => new Date(c.fecha_cierre).getFullYear()))].sort((a, b) => b - a);
     const cerradosFiltrados = filtroAño === 'todos' ? cerrados : cerrados.filter(c => new Date(c.fecha_cierre).getFullYear() === parseInt(filtroAño));
+    
+    // Check if org still has active KA services
+    const activeServicesFor = (org) => {
+        const name = (org || '').trim().toLowerCase();
+        return keyAccounts.filter(ka => (ka.organizacion || '').trim().toLowerCase() === name);
+    };
     const ganados = cerradosFiltrados.filter(c => c.estado_final === 'Ganado');
     const valorGanado = ganados.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
     
@@ -33,7 +39,6 @@ export default function CerradosView({cerrados, onAdd, onEdit, onDelete, onExpor
                     <thead className="bg-gray-50 dark:bg-gray-700">
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Organización</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Tipo</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Valor</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fecha</th>
@@ -41,10 +46,15 @@ export default function CerradosView({cerrados, onAdd, onEdit, onDelete, onExpor
                         </tr>
                     </thead>
                     <tbody className="divide-y dark:divide-gray-700">
-                        {cerradosFiltrados.length === 0 ? <tr><td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos para {filtroAño === 'todos' ? 'mostrar' : `el año ${filtroAño}`}</td></tr> : cerradosFiltrados.map(c => (
+                        {cerradosFiltrados.length === 0 ? <tr><td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos para {filtroAño === 'todos' ? 'mostrar' : `el año ${filtroAño}`}</td></tr> : cerradosFiltrados.map(c => (
                             <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition" onClick={() => onDetail && onDetail(c)}>
-                                <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-naranja transition">{c.organizacion}</td>
-                                <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{c.tipo}</td>
+                                <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-naranja transition">
+                                    <div>{c.organizacion}</div>
+                                    {c.tipo && <div className="text-xs text-gray-400 dark:text-gray-500 font-normal">{c.tipo}</div>}
+                                    {activeServicesFor(c.organizacion).length > 0 && (
+                                        <div className="text-[10px] text-green-600 dark:text-green-400 font-normal mt-0.5">✓ {activeServicesFor(c.organizacion).map(s => s.servicio).join(', ')} activo{activeServicesFor(c.organizacion).length > 1 ? 's' : ''}</div>
+                                    )}
+                                </td>
                                 <td className="px-6 py-4 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${c.estado_final === 'Ganado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'}`}>{c.estado_final}</span></td>
                                 <td className="px-6 py-4 text-sm dark:text-gray-300">{c.valor} UF</td>
                                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{c.fecha_cierre}</td>
@@ -70,6 +80,9 @@ export default function CerradosView({cerrados, onAdd, onEdit, onDelete, onExpor
                             <div>
                                 <h3 className="font-bold dark:text-gray-100">{c.organizacion}</h3>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">{c.tipo}</p>
+                                {activeServicesFor(c.organizacion).length > 0 && (
+                                    <p className="text-[10px] text-green-600 dark:text-green-400 mt-0.5">✓ {activeServicesFor(c.organizacion).map(s => s.servicio).join(', ')} activo{activeServicesFor(c.organizacion).length > 1 ? 's' : ''}</p>
+                                )}
                             </div>
                             <span className={`px-2 py-1 text-xs rounded-full ${c.estado_final === 'Ganado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'}`}>{c.estado_final}</span>
                         </div>

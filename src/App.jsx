@@ -2652,7 +2652,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', 'finanzas-dashboard': 'Dashboard Financiero', contabilidad: 'Estado de Resultados', conciliacion: 'Conciliación Bancaria' }[activeTab]}
                     </span>
                 </div>
-                {['cerrados', 'tickets', 'keyaccounts', 'reportes'].includes(activeTab) && (
+                {['cerrados', 'tickets', 'keyaccounts', 'reportes', 'finanzas-dashboard', 'conciliacion'].includes(activeTab) && (
                     <DateRangeFilter desde={dateRange.desde} hasta={dateRange.hasta} onChange={setDateRange} className="mt-2" />
                 )}
             </div>
@@ -2683,6 +2683,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         cajaChica={cajaChica} 
                         boletasHonorarios={boletasHonorarios} 
                         sueldosSocios={sueldosSocios} 
+                        dateRange={dateRange} 
                         movimientosBancarios={movimientosBancarios} 
                         tickets={tickets} 
                         keyAccounts={keyAccounts} 
@@ -2711,7 +2712,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         onFiles={openFilesModal} 
                     />
                 )}
-                {activeTab === 'cerrados' && <CerradosView onDetail={(c) => openDetail('cerrado', c)} onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={filteredCerrados} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
+                {activeTab === 'cerrados' && <CerradosView onDetail={(c) => openDetail('cerrado', c)} onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={filteredCerrados} keyAccounts={keyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                 {activeTab === 'tickets' && <TicketsView onDetail={(t) => openDetail('ticket', t)} onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={filteredTickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                 {activeTab === 'keyaccounts' && <KeyAccountsView onDetail={(k) => openDetail('keyaccount', k)} onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={filteredKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
             </main>
@@ -2855,7 +2856,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
             )}
 
             {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
-            {selectedEntity && <EntityDetail entity={selectedEntity} onClose={() => setSelectedEntity(null)} contactos={contactos} notas={notas} user={user} onRefresh={() => { loadNotas(); loadContactos(); loadProspectos(); loadCerrados(); loadTickets(); loadKeyAccounts(); }} />}
+            {selectedEntity && <EntityDetail entity={selectedEntity} onClose={() => setSelectedEntity(null)} contactos={contactos} notas={notas} user={user} keyAccounts={keyAccounts} onRefresh={() => { loadNotas(); loadContactos(); loadProspectos(); loadCerrados(); loadTickets(); loadKeyAccounts(); }} />}
         </div>
     );
 
