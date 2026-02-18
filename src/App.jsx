@@ -2652,7 +2652,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
                         {{ dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts', cerrados: 'Historial', reportes: 'Reportes', 'finanzas-dashboard': 'Dashboard Financiero', contabilidad: 'Estado de Resultados', conciliacion: 'Conciliación Bancaria' }[activeTab]}
                     </span>
                 </div>
-                {['cerrados', 'tickets', 'keyaccounts', 'reportes', 'finanzas-dashboard', 'conciliacion'].includes(activeTab) && (
+                {['cerrados', 'tickets', 'keyaccounts', 'reportes', 'finanzas-dashboard', 'conciliacion', 'contabilidad'].includes(activeTab) && (
                     <DateRangeFilter desde={dateRange.desde} hasta={dateRange.hasta} onChange={setDateRange} className="mt-2" />
                 )}
             </div>

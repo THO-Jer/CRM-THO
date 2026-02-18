@@ -47,46 +47,7 @@ export default function ContabilidadView({
         const [fechaHastaCustom, setFechaHastaCustom] = useState('');
         
         // ===== FILTROS SUELDOS SOCIOS =====
-        const [filtroSueldosPeriodo, setFiltroSueldosPeriodo] = useState('mes-actual');
-        const [filtroSueldosDesde, setFiltroSueldosDesde] = useState('');
-        const [filtroSueldosHasta, setFiltroSueldosHasta] = useState('');
-        
-        // Calcular sueldos filtrados
-        const sueldosSociosFiltrados = useMemo(() => {
-            const hoy = new Date();
-            const mesActual = hoy.getMonth();
-            const añoActual = hoy.getFullYear();
-            
-            return sueldosSocios.filter(s => {
-                const fechaSueldo = new Date(s.fecha);
-                
-                switch (filtroSueldosPeriodo) {
-                    case 'mes-actual':
-                        return fechaSueldo.getMonth() === mesActual && fechaSueldo.getFullYear() === añoActual;
-                    
-                    case 'ultimos-3-meses':
-                        const hace3Meses = new Date();
-                        hace3Meses.setMonth(hace3Meses.getMonth() - 3);
-                        return fechaSueldo >= hace3Meses;
-                    
-                    case 'año-actual':
-                        return fechaSueldo.getFullYear() === añoActual;
-                    
-                    case 'año-anterior':
-                        return fechaSueldo.getFullYear() === (añoActual - 1);
-                    
-                    case 'personalizado':
-                        if (!filtroSueldosDesde || !filtroSueldosHasta) return true;
-                        const desde = new Date(filtroSueldosDesde);
-                        const hasta = new Date(filtroSueldosHasta);
-                        return fechaSueldo >= desde && fechaSueldo <= hasta;
-                    
-                    case 'todo':
-                    default:
-                        return true;
-                }
-            });
-        }, [sueldosSocios, filtroSueldosPeriodo, filtroSueldosDesde, filtroSueldosHasta]);
+        // Retiros now filtered by global dateRange via sueldosAct (defined below with other filtered arrays)
         
         // useEffect para los gráficos del dashboard
         useEffect(() => {
@@ -223,8 +184,8 @@ export default function ContabilidadView({
             }
         };
 
-        // Use global dateRange when it has values AND we're on dashboard or conciliacion
-        const useGlobalDateRange = (contaTab === 'dashboard' || contaTab === 'conciliacion') && dateRange?.desde && dateRange?.hasta;
+        // Use global dateRange for all tabs except PL (which has its own year selector)
+        const useGlobalDateRange = contaTab !== 'pl' && dateRange?.desde && dateRange?.hasta;
 
         const rango = useGlobalDateRange 
             ? { desde: new Date(dateRange.desde + 'T00:00:00'), hasta: new Date(dateRange.hasta + 'T23:59:59') }
@@ -245,6 +206,7 @@ export default function ContabilidadView({
         const boletasAct = boletasHonorarios.filter(b => estEnRango(b.fecha));
         const cajaAct = cajaChica.filter(c => estEnRango(c.fecha));
         const movBancAct = movimientosBancarios.filter(m => estEnRango(m.fecha));
+        const sueldosAct = sueldosSocios.filter(s => estEnRango(s.fecha));
 
         // Etiqueta del período
         const periodoLabel = () => {
@@ -368,37 +330,7 @@ export default function ContabilidadView({
                         {contaTab === 'conciliacion' && '🏦 Conciliación Bancaria'}
                         {['pl','emitidas','recibidas','boletas','sueldos','caja'].includes(contaTab) && '📊 Estado de Resultados'}
                     </h2>
-
-                    {/* Internal period selector - only for EERR sub-tabs (emitidas/recibidas/boletas/sueldos/caja) */}
-                    {!['pl', 'dashboard', 'conciliacion'].includes(contaTab) && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <select
-                            value={periodo}
-                            onChange={(e) => setPeriodo(e.target.value)}
-                            className="px-3 py-1.5 border rounded-lg text-sm font-medium bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                        >
-                            <option value="mes_actual">Mes actual</option>
-                            <option value="mes_anterior">Mes anterior</option>
-                            <option value="trimestre">Último trimestre</option>
-                            <option value="semestre">Último semestre</option>
-                            <option value="anual">Año actual</option>
-                            <option value="custom">Rango personalizado</option>
-                        </select>
-                        {periodo === 'custom' && (
-                            <div className="flex items-center gap-1">
-                                <input type="date" value={fechaDesdeCustom} onChange={e => setFechaDesdeCustom(e.target.value)} className="px-2 py-1.5 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
-                                <span className="text-gray-400 text-sm">→</span>
-                                <input type="date" value={fechaHastaCustom} onChange={e => setFechaHastaCustom(e.target.value)} className="px-2 py-1.5 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
-                            </div>
-                        )}
-                    </div>
-                    )}
                 </div>
-
-                {/* Etiqueta período activo - only for EERR sub-tabs */}
-                {!['pl', 'dashboard', 'conciliacion'].includes(contaTab) && (
-                <div className="text-sm text-gray-500 dark:text-gray-400 -mt-3 capitalize">{periodoLabel()}</div>
-                )}
                 
                 {/* Métricas resumen - solo en dashboard */}
                 {contaTab === 'dashboard' && (
@@ -899,39 +831,8 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center flex-wrap gap-3">
                                     <h3 className="font-bold dark:text-gray-200">Retiros Socios</h3>
                                     <div className="flex gap-2 flex-wrap">
-                                        {/* Filtros de período */}
-                                        <select 
-                                            className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-                                            value={filtroSueldosPeriodo}
-                                            onChange={(e) => setFiltroSueldosPeriodo(e.target.value)}
-                                        >
-                                            <option value="mes-actual">Mes actual</option>
-                                            <option value="ultimos-3-meses">Últimos 3 meses</option>
-                                            <option value="año-actual">Año actual ({new Date().getFullYear()})</option>
-                                            <option value="año-anterior">Año anterior ({new Date().getFullYear() - 1})</option>
-                                            <option value="personalizado">Período personalizado</option>
-                                            <option value="todo">Todo</option>
-                                        </select>
-                                        
-                                        {filtroSueldosPeriodo === 'personalizado' && (
-                                            <>
-                                                <input 
-                                                    type="date" 
-                                                    className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-                                                    value={filtroSueldosDesde}
-                                                    onChange={(e) => setFiltroSueldosDesde(e.target.value)}
-                                                />
-                                                <input 
-                                                    type="date" 
-                                                    className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-                                                    value={filtroSueldosHasta}
-                                                    onChange={(e) => setFiltroSueldosHasta(e.target.value)}
-                                                />
-                                            </>
-                                        )}
-                                        
                                         <button 
-                                            onClick={() => exportarSueldosExcel(sueldosSociosFiltrados, filtroSueldosPeriodo)}
+                                            onClick={() => exportarSueldosExcel(sueldosAct, 'periodo')}
                                             className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition"
                                         >
                                             📊 Exportar Excel
@@ -954,9 +855,9 @@ export default function ContabilidadView({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y">
-                                            {sueldosSociosFiltrados.length === 0 ? (
+                                            {sueldosAct.length === 0 ? (
                                                 <tr><td colSpan="6" className="text-center text-sm text-gray-500 py-4">Sin retiros en el período seleccionado</td></tr>
-                                            ) : sueldosSociosFiltrados.map(s => (
+                                            ) : sueldosAct.map(s => (
                                                 <tr key={s.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                     <td className="px-4 py-3 text-sm font-medium">{s.socio}</td>
                                                     <td className="px-4 py-3 text-sm">{s.mes_servicio}</td>
@@ -981,9 +882,9 @@ export default function ContabilidadView({
                                 
                                 {/* Mobile */}
                                 <div className="md:hidden space-y-3">
-                                    {sueldosSociosFiltrados.length === 0 ? (
+                                    {sueldosAct.length === 0 ? (
                                         <div className="text-center text-sm text-gray-500 py-4">Sin retiros en el período seleccionado</div>
-                                    ) : sueldosSociosFiltrados.map(s => (
+                                    ) : sueldosAct.map(s => (
                                         <div key={s.id} className="border rounded-lg p-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
