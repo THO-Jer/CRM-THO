@@ -2,48 +2,54 @@ import { useState, useEffect, useMemo } from 'react'
 import { Chart } from 'chart.js'
 
 export default function ReportesView({ prospectos, cerrados, tickets, keyAccounts, ufActual, dateRange }) {
-    const [periodo, setPeriodo] = useState('6meses');
-    
+    // Filter active prospectos (exclude converted)
+    const prospectosActivos = useMemo(() => prospectos.filter(p => p.estado !== 'Convertido'), [prospectos]);
+
     const prepararDatosIngresos = () => {
         const hoy = new Date();
-        const meses = [], mrrData = [], ticketsData = [];
+        const meses = [], mrrData = [], ticketsData = [], cerradosData = [];
         for (let i = 5; i >= 0; i--) {
-            const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+            const mesStart = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
             const mesEnd = new Date(hoy.getFullYear(), hoy.getMonth() - i + 1, 0);
-            const mesKey = `${fecha.getFullYear()}-${String(fecha.getMonth()+1).padStart(2,'0')}`;
-            meses.push(fecha.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' }));
+            meses.push(mesStart.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' }));
             
-            // MRR: sum KA uf_mes only if the account was active during this month
+            // MRR: KA uf_mes only if active during this month (started before end, not ended before start)
             const mrrTotal = keyAccounts.reduce((sum, ka) => {
-                const inicio = ka.fecha_inicio_contrato || ka.created_at;
-                if (!inicio) return sum;
-                const kaStart = new Date(inicio);
-                if (kaStart > mesEnd) return sum; // Not yet started
+                const kaStart = new Date(ka.inicio_contrato || ka.created_at);
+                const kaEnd = ka.fin_contrato ? new Date(ka.fin_contrato) : new Date(2099, 11, 31);
+                if (kaStart > mesEnd || kaEnd < mesStart) return sum;
                 return sum + (parseFloat(ka.uf_mes) || 0);
             }, 0);
             
-            // Tickets: distribute value across active months (fecha_inicio to fecha_entrega)
+            // Tickets: distribute value across active months
             const ticketsTotal = tickets.reduce((sum, t) => {
                 const tStart = new Date(t.fecha_inicio || t.created_at);
                 const tEnd = t.fecha_entrega ? new Date(t.fecha_entrega) : hoy;
-                if (tStart > mesEnd || tEnd < fecha) return sum; // Not active this month
+                if (tStart > mesEnd || tEnd < mesStart) return sum;
                 const monto = parseFloat(t.valor_monto) || 0;
                 const montoUF = t.valor_moneda === 'CLP' ? monto / (ufActual || 38000) : monto;
-                // Distribute evenly across months of service
-                const totalMonths = Math.max(1, Math.ceil((tEnd - tStart) / (30*86400000)));
+                const totalMonths = Math.max(1, Math.ceil((tEnd - tStart) / (30 * 86400000)));
                 return sum + (montoUF / totalMonths);
             }, 0);
+
+            // Cerrados ganados: one-time revenue in their close month
+            const cerradosMes = cerrados.filter(c => {
+                if (c.estado_final !== 'Ganado') return false;
+                const f = new Date(c.fecha_cierre);
+                return f.getMonth() === mesStart.getMonth() && f.getFullYear() === mesStart.getFullYear();
+            }).reduce((sum, c) => sum + (parseFloat(c.valor_total_final || c.valor) || 0), 0);
             
             mrrData.push(Math.round(mrrTotal));
             ticketsData.push(Math.round(ticketsTotal));
+            cerradosData.push(Math.round(cerradosMes));
         }
-        return { labels: meses, mrr: mrrData, tickets: ticketsData };
+        return { labels: meses, mrr: mrrData, tickets: ticketsData, cerrados: cerradosData };
     };
     
     const prepararDatosPipeline = () => {
         const etapas = ['Contactado', 'Reunión agendada', 'Propuesta enviada', 'Negociación'];
-        const valores = etapas.map(e => Math.round(prospectos.filter(p => p.estado === e).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)));
-        const counts = etapas.map(e => prospectos.filter(p => p.estado === e).length);
+        const valores = etapas.map(e => Math.round(prospectosActivos.filter(p => p.estado === e).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)));
+        const counts = etapas.map(e => prospectosActivos.filter(p => p.estado === e).length);
         return { labels: etapas, data: valores, counts };
     };
     
@@ -76,16 +82,18 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
     const datosAging = useMemo(() => {
         const hoy = new Date();
         const buckets = { '0-15d': 0, '16-30d': 0, '31-60d': 0, '61-90d': 0, '+90d': 0 };
-        prospectos.forEach(p => {
+        prospectosActivos.forEach(p => {
             const dias = Math.floor((hoy - new Date(p.created_at)) / 86400000);
             if (dias <= 15) buckets['0-15d']++; else if (dias <= 30) buckets['16-30d']++; else if (dias <= 60) buckets['31-60d']++; else if (dias <= 90) buckets['61-90d']++; else buckets['+90d']++;
         });
         return { labels: Object.keys(buckets), data: Object.values(buckets) };
-    }, [prospectos]);
+    }, [prospectosActivos]);
 
     const datosTickets = useMemo(() => {
-        return tickets.filter(t => t.status === 'Activo').map(t => ({
-            nombre: `${t.ticket || ''}`.substring(0, 25), avance: t.porcentaje_avance || 0, org: t.organizacion || ''
+        return tickets.filter(t => t.status !== 'Cerrado').map(t => ({
+            nombre: t.ticket ? `${t.ticket}`.substring(0, 25) : '', 
+            org: t.organizacion || '', 
+            avance: t.porcentaje_avance || 0
         })).sort((a, b) => b.avance - a.avance).slice(0, 8);
     }, [tickets]);
 
@@ -107,7 +115,8 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
             make('chartIngresos', {
                 type: 'bar', data: { labels: datosIngresos.labels, datasets: [
                     { label: 'MRR (Key Accounts)', data: datosIngresos.mrr, backgroundColor: '#10B981', borderRadius: 4 },
-                    { label: 'Tickets', data: datosIngresos.tickets, backgroundColor: '#F97316', borderRadius: 4 }
+                    { label: 'Tickets', data: datosIngresos.tickets, backgroundColor: '#F97316', borderRadius: 4 },
+                    { label: 'Cierres ganados', data: datosIngresos.cerrados, backgroundColor: '#8B5CF6', borderRadius: 4 }
                 ]}, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y} UF` } } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { callback: v => v + ' UF' } } } }
             });
             make('chartPipeline', {
@@ -130,9 +139,9 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
             });
         }, 50);
         return () => { clearTimeout(timeout); ['chartIngresos','chartPipeline','chartConversion','chartWinLoss','chartAging'].forEach(id => { const c = document.getElementById(id); if (c?.chart) { c.chart.destroy(); c.chart = null; } }); };
-    }, [periodo, prospectos, cerrados]);
+    }, [prospectosActivos, cerrados, tickets, keyAccounts]);
 
-    const totalPipeline = Math.round(prospectos.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0));
+    const totalPipeline = Math.round(prospectosActivos.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0));
     const mrrActual = Math.round(keyAccounts.reduce((s, ka) => s + (parseFloat(ka.uf_mes) || 0), 0));
     const ticketsValor = Math.round(tickets.reduce((s, t) => { const m = parseFloat(t.valor_monto) || 0; return s + (t.valor_moneda === 'CLP' ? m / (ufActual || 38000) : m); }, 0));
     const razonesPerdida = useMemo(() => {
@@ -144,71 +153,74 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
     
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800">📈 Reportes y Análisis</h2>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">📈 Reportes y Análisis</h2>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow">
                     <div className="text-2xl font-bold text-verde">{totalPipeline} UF</div>
-                    <div className="text-xs text-gray-600">Pipeline Total</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">Pipeline Total</div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow">
                     <div className="text-2xl font-bold text-azul">{mrrActual} UF</div>
-                    <div className="text-xs text-gray-600">MRR Actual</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">MRR Actual</div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow">
                     <div className="text-2xl font-bold text-naranja">{ticketsValor} UF</div>
-                    <div className="text-xs text-gray-600">Tickets Activos</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">Tickets Activos</div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow">
-                    <div className="text-2xl font-bold text-fucsia">{prospectos.length}</div>
-                    <div className="text-xs text-gray-600">Prospectos Activos</div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow">
+                    <div className="text-2xl font-bold text-fucsia">{prospectosActivos.length}</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">Prospectos Activos</div>
                 </div>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">💰 Ingresos Mensuales</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">💰 Ingresos Mensuales</h3>
                     <div style={{height: '250px', position: 'relative'}}><canvas id="chartIngresos"></canvas></div>
-                    <div className="text-xs text-gray-500 mt-2 text-center">MRR + Tickets · Últimos 6 meses</div>
+                    <div className="text-xs text-gray-500 mt-2 text-center">MRR + Tickets + Cierres · Últimos 6 meses</div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">🎯 Pipeline por Etapa</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">🎯 Pipeline por Etapa</h3>
                     <div style={{height: '250px', position: 'relative'}}><canvas id="chartPipeline"></canvas></div>
-                    <div className="text-xs text-gray-500 mt-2 text-center">Valor acumulado por etapa</div>
+                    <div className="text-xs text-gray-500 mt-2 text-center">Solo prospectos activos (excluye convertidos)</div>
                 </div>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">📊 Tasa de Conversión</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">📊 Tasa de Conversión</h3>
                     <div style={{height: '250px', position: 'relative'}}><canvas id="chartConversion"></canvas></div>
                     <div className="text-xs text-gray-500 mt-2 text-center">% prospectos ganados por mes</div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">🏆 Ganados vs Perdidos</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">🏆 Ganados vs Perdidos</h3>
                     <div style={{height: '250px', position: 'relative'}}><canvas id="chartWinLoss"></canvas></div>
                     <div className="text-xs text-gray-500 mt-2 text-center">Cierres por mes · Últimos 6 meses</div>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">⏳ Antigüedad Pipeline</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">⏳ Antigüedad Pipeline</h3>
                     <div style={{height: '220px', position: 'relative'}}><canvas id="chartAging"></canvas></div>
-                    <div className="text-xs text-gray-500 mt-2 text-center">Días desde creación</div>
+                    <div className="text-xs text-gray-500 mt-2 text-center">Solo prospectos activos · Días desde creación</div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">🎫 Avance Tickets</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">🎫 Avance Tickets</h3>
                     <div className="space-y-3">
                         {datosTickets.length === 0 && <p className="text-sm text-gray-400 text-center py-8">Sin tickets activos</p>}
                         {datosTickets.map((t, i) => (
                             <div key={i}>
                                 <div className="flex justify-between text-xs mb-1">
-                                    <span className="text-gray-700 font-medium truncate mr-2" title={t.nombre}>{t.nombre}</span>
-                                    <span className="text-gray-500 flex-shrink-0">{t.avance}%</span>
+                                    <div className="flex-1 min-w-0 mr-2">
+                                        <span className="text-gray-700 dark:text-gray-300 font-medium truncate block" title={`${t.org} — ${t.nombre}`}>{t.org}</span>
+                                        <span className="text-gray-400 text-[10px] truncate block">{t.nombre}</span>
+                                    </div>
+                                    <span className="text-gray-500 flex-shrink-0 font-bold">{t.avance}%</span>
                                 </div>
-                                <div className="w-full bg-gray-100 rounded-full h-2">
+                                <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
                                     <div className={`h-2 rounded-full transition-all ${t.avance >= 75 ? 'bg-verde' : t.avance >= 50 ? 'bg-azul' : t.avance >= 25 ? 'bg-naranja' : 'bg-gray-300'}`} style={{ width: `${Math.max(4, t.avance)}%` }}></div>
                                 </div>
                             </div>
@@ -216,29 +228,29 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">📋 Resumen Comercial</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">📋 Resumen Comercial</h3>
                     <div className="mb-5">
-                        <div className="text-sm font-medium text-gray-600 mb-2">Salud Key Accounts</div>
+                        <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Salud Key Accounts</div>
                         <div className="flex gap-2">
-                            <div className="flex-1 bg-green-50 rounded-lg p-3 text-center"><div className="text-xl font-bold text-verde">{datosKAHealth.Activo}</div><div className="text-[10px] text-gray-500">Activos</div></div>
-                            <div className="flex-1 bg-yellow-50 rounded-lg p-3 text-center"><div className="text-xl font-bold text-naranja">{datosKAHealth.Riesgo}</div><div className="text-[10px] text-gray-500">Riesgo</div></div>
-                            <div className="flex-1 bg-red-50 rounded-lg p-3 text-center"><div className="text-xl font-bold text-red-500">{datosKAHealth.Crítico}</div><div className="text-[10px] text-gray-500">Crítico</div></div>
+                            <div className="flex-1 bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center"><div className="text-xl font-bold text-verde">{datosKAHealth.Activo}</div><div className="text-[10px] text-gray-500">Activos</div></div>
+                            <div className="flex-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 text-center"><div className="text-xl font-bold text-naranja">{datosKAHealth.Riesgo}</div><div className="text-[10px] text-gray-500">Riesgo</div></div>
+                            <div className="flex-1 bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center"><div className="text-xl font-bold text-red-500">{datosKAHealth.Crítico}</div><div className="text-[10px] text-gray-500">Crítico</div></div>
                         </div>
                     </div>
                     <div className="mb-5">
-                        <div className="text-sm font-medium text-gray-600 mb-2">Historial Cierres</div>
+                        <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Historial Cierres</div>
                         <div className="flex gap-2">
-                            <div className="flex-1 bg-green-50 rounded-lg p-3 text-center"><div className="text-xl font-bold text-verde">{totalGanados}</div><div className="text-[10px] text-gray-500">Ganados</div></div>
-                            <div className="flex-1 bg-red-50 rounded-lg p-3 text-center"><div className="text-xl font-bold text-red-500">{totalPerdidos}</div><div className="text-[10px] text-gray-500">Perdidos</div></div>
+                            <div className="flex-1 bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center"><div className="text-xl font-bold text-verde">{totalGanados}</div><div className="text-[10px] text-gray-500">Ganados</div></div>
+                            <div className="flex-1 bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center"><div className="text-xl font-bold text-red-500">{totalPerdidos}</div><div className="text-[10px] text-gray-500">Perdidos</div></div>
                         </div>
                     </div>
                     {razonesPerdida.length > 0 && (
                         <div>
-                            <div className="text-sm font-medium text-gray-600 mb-2">Top Razones de Pérdida</div>
+                            <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Top Razones de Pérdida</div>
                             <div className="space-y-1.5">
                                 {razonesPerdida.map(([razon, count], i) => (
-                                    <div key={i} className="flex justify-between text-xs"><span className="text-gray-600 truncate mr-2">{razon}</span><span className="text-gray-500 font-medium">{count}</span></div>
+                                    <div key={i} className="flex justify-between text-xs"><span className="text-gray-600 dark:text-gray-400 truncate mr-2">{razon}</span><span className="text-gray-500 font-medium">{count}</span></div>
                                 ))}
                             </div>
                         </div>

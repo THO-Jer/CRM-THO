@@ -66,9 +66,13 @@ export default function useSII({ user, loadBoletasHonorarios, loadFacturasEmitid
                     });
                     
                     if (!response.ok) {
-                        const errorData = await response.json();
-                        console.error(`Error en ${getNombreMes(mesActual)}:`, errorData);
+                        let errorMsg = `HTTP ${response.status}`;
+                        try { const errorData = await response.json(); errorMsg = errorData.error || errorData.message || errorMsg; } catch(e) {}
+                        if (response.status === 401) errorMsg = 'API Key inválida o expirada. Verifica tu clave de SimpleAPI.';
+                        if (response.status === 429) errorMsg = 'Límite de consultas alcanzado. Espera antes de reintentar.';
+                        console.error(`Error en ${getNombreMes(mesActual)}:`, errorMsg);
                         totalErrores++;
+                        if (response.status === 401) { showToast(`❌ Error de autenticación: ${errorMsg}`, 'error'); return; }
                         continue; // Continuar con el siguiente mes
                     }
                     
@@ -200,11 +204,20 @@ export default function useSII({ user, loadBoletasHonorarios, loadFacturasEmitid
                     });
                     
                     if (!response.ok) {
-                        const errorData = await response.json();
-                        console.error(`Error en ${getNombreMes(mesActual)}:`, errorData);
+                        let errorMsg = `HTTP ${response.status}`;
+                        try { const errorData = await response.json(); errorMsg = errorData.error || errorData.message || errorMsg; } catch(e) {}
+                        if (response.status === 401) errorMsg = 'API Key inválida o expirada.';
+                        console.error(`Error en ${getNombreMes(mesActual)}:`, errorMsg);
                         totalErrores++;
+                        if (response.status === 401) { showToast(`❌ ${errorMsg}`, 'error'); return; }
                         continue;
                     }
+
+
+
+
+
+
                     
                     const result = await response.json();
                     const documentos = result.documentos || [];
@@ -339,12 +352,14 @@ export default function useSII({ user, loadBoletasHonorarios, loadFacturasEmitid
                     });
                     
                     if (!response.ok) {
-                        const errorData = await response.json();
-                        console.error(`Error en ${getNombreMes(mesActual)}:`, errorData);
+                        let errorMsg = `HTTP ${response.status}`;
+                        try { const errorData = await response.json(); errorMsg = errorData.error || errorData.message || errorMsg; } catch(e) {}
+                        if (response.status === 401) errorMsg = 'API Key inválida o expirada.';
+                        console.error(`Error en ${getNombreMes(mesActual)}:`, errorMsg);
                         totalErrores++;
+                        if (response.status === 401) { showToast(`❌ ${errorMsg}`, 'error'); return; }
                         continue;
                     }
-                    
                     const result = await response.json();
                     const documentos = result.documentos || [];
                     
