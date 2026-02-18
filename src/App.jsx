@@ -205,9 +205,9 @@ function CRMApp() {
     const filteredKeyAccounts = filterByDateRange(keyAccounts, 'inicio_contrato');
 
     // Destructure actions for render convenience
-    const { historyOpen, historyLoading, historyTitle, historyItems, openHistory, setHistoryOpen,
-        convertOpen, convertSource, convertTarget, convertForm, openConvert, openConvertFromCerrado, closeConvert, setConvertTarget, setConvertForm,
-        renewalOpen, renewalKA, renewalMode, renewalForm, cancelAlsoRegisterLoss, openRenewal, openCancelKA, closeRenewal, setRenewalForm, setCancelAlsoRegisterLoss,
+    const { historyOpen, historyLoading, historyTitle, historyItems, setHistoryItems, openHistory, setHistoryOpen,
+        convertOpen, convertSource, convertTarget, convertForm, openConvert, openConvertFromCerrado, closeConvert, setConvertTarget, setConvertForm, submitConvert,
+        renewalOpen, renewalKA, renewalMode, renewalForm, cancelAlsoRegisterLoss, openRenewal, openCancelKA, closeRenewal, setRenewalForm, setCancelAlsoRegisterLoss, submitRenewal,
         filesModalOpen, filesEntityName, filesList, filesLoading, uploadingFile, openFilesModal, setFilesModalOpen,
         selectedEntity, openDetail, setSelectedEntity,
         handleSaveProspecto, handleDeleteProspecto, handleMoveProspecto, handleCerrarProspecto,

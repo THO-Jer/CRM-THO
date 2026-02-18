@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import MetricCard from '../shared/MetricCard'
 
-export default function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles, onDetail}) {
+export default function KeyAccountsView({keyAccounts: allKA, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles, onDetail}) {
+    // Filter out cancelled/closed KAs
+    const keyAccounts = allKA.filter(ka => (ka.salud || '').toLowerCase() !== 'cerrado');
     const totalMRR = keyAccounts.reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
     const saludBadge = (s) => s === 'Excelente' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : s === 'Buena' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : s === 'Riesgo' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
     

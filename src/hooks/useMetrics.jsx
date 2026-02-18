@@ -14,7 +14,7 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
     const ganadosMesAnterior = cerradosMesAnterior.filter(c => c.estado_final === 'Ganado');
 
     // --- MRR ---
-    const mrrActual = keyAccounts.reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
+    const mrrActual = keyAccounts.filter(ka => (ka.salud || '').toLowerCase() !== 'cerrado').reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
 
     // --- Tickets activos ---
     const valorTickets = tickets.reduce((sum, t) => {
@@ -22,10 +22,13 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
         return sum + (t.valor_moneda === 'CLP' ? monto / (ufActual || 38000) : monto);
     }, 0);
 
+    // Exclude converted prospectos from active pipeline
+    const prospectosActivos = prospectos.filter(p => p.estado !== 'Convertido');
+
     // --- Pipeline ---
-    const pipelineTotal = prospectos.reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0);
+    const pipelineTotal = prospectosActivos.reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0);
     // Weighted pipeline = value × probability for each prospect
-    const pipelinePonderado = prospectos.reduce((sum, p) => sum + ((parseFloat(p.valor) || 0) * ((parseFloat(p.probabilidad) || 10) / 100)), 0);
+    const pipelinePonderado = prospectosActivos.reduce((sum, p) => sum + ((parseFloat(p.valor) || 0) * ((parseFloat(p.probabilidad) || 10) / 100)), 0);
 
     // --- Ingresos reales este mes (cierres ganados del mes + MRR + tickets) ---
     const valorGanadoEsteMes = ganadosEsteMes.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
@@ -36,8 +39,8 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
         : valorGanadoEsteMes > 0 ? 100 : 0;
 
     // --- Alertas ---
-    const prospectosVencidos = prospectos.filter(p => p.fecha_limite && new Date(p.fecha_limite) < hoy);
-    const prospectosSinActividad = prospectos.filter(p => {
+    const prospectosVencidos = prospectosActivos.filter(p => p.fecha_limite && new Date(p.fecha_limite) < hoy);
+    const prospectosSinActividad = prospectosActivos.filter(p => {
         if (!p.updated_at) return false;
         return Math.floor((hoy - new Date(p.updated_at)) / (1000 * 60 * 60 * 24)) > 14;
     });
@@ -57,10 +60,10 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
     const tasaConversionMesAnterior = cerradosMesAnterior.length > 0 ? Math.round((ganadosMesAnterior.length / cerradosMesAnterior.length) * 100) : 0;
 
     const metrics = {
-        totalProspectos: prospectos.length,
+        totalProspectos: prospectosActivos.length,
         pipelineTotal,
         pipelinePonderado,
-        proximosCierres: prospectos.filter(p => (parseFloat(p.probabilidad) || 0) > 60).length,
+        proximosCierres: prospectosActivos.filter(p => (parseFloat(p.probabilidad) || 0) > 60).length,
         ingresosEsteMes,
         valorTickets,
         variacionIngresos,
@@ -88,9 +91,9 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
         { id: 'propuesta', nombre: 'Propuesta enviada', emoji: '🟠' },
         { id: 'negociacion', nombre: 'Negociación', emoji: '🟢' }
     ];
-    const getEstadoKey = (estado) => ({ 'Contactado': 'contactado', 'Reunión agendada': 'reunion', 'Propuesta enviada': 'propuesta', 'Negociación': 'negociacion' }[estado] || 'contactado');
+    const getEstadoKey = (estado) => ({ 'Contactado': 'contactado', 'Reunión agendada': 'reunion', 'Propuesta enviada': 'propuesta', 'Negociación': 'negociacion' }[estado] || null);
     const getEstadoFromKey = (key) => ({ contactado: 'Contactado', reunion: 'Reunión agendada', propuesta: 'Propuesta enviada', negociacion: 'Negociación' }[key] || 'Contactado');
-    const prospectosPorEstado = (estadoKey) => prospectos.filter(p => getEstadoKey(p.estado) === estadoKey);
+    const prospectosPorEstado = (estadoKey) => prospectosActivos.filter(p => getEstadoKey(p.estado) === estadoKey);
 
     return { metrics, estadosKanban, prospectosPorEstado, getEstadoFromKey };
 }

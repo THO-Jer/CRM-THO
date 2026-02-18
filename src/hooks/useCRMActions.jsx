@@ -819,14 +819,14 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
 
     return {
         // History
-        historyOpen, historyLoading, historyTitle, historyItems,
+        historyOpen, historyLoading, historyTitle, historyItems, setHistoryItems,
         openHistory, setHistoryOpen,
         // Convert
         convertOpen, convertSource, convertTarget, convertForm,
-        openConvert, openConvertFromCerrado, closeConvert, setConvertTarget, setConvertForm,
+        openConvert, openConvertFromCerrado, closeConvert, setConvertTarget, setConvertForm, submitConvert,
         // Renewal
         renewalOpen, renewalKA, renewalMode, renewalForm, cancelAlsoRegisterLoss,
-        openRenewal, openCancelKA, closeRenewal, setRenewalForm, setCancelAlsoRegisterLoss,
+        openRenewal, openCancelKA, closeRenewal, setRenewalForm, setCancelAlsoRegisterLoss, submitRenewal,
         // Files
         filesModalOpen, filesEntityType, filesEntityId, filesEntityName,
         filesList, filesLoading, uploadingFile,

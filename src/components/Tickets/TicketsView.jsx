@@ -1,4 +1,6 @@
-export default function TicketsView({tickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose, onFiles, onDetail}) {
+export default function TicketsView({tickets: allTickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose, onFiles, onDetail}) {
+    // Filter out closed/finalized tickets
+    const tickets = allTickets.filter(t => t.status !== 'Cerrado');
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between gap-3">
