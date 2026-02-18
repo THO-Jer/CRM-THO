@@ -212,7 +212,7 @@ function CRMApp() {
         selectedEntity, openDetail, setSelectedEntity,
         handleSaveProspecto, handleDeleteProspecto, handleMoveProspecto, handleCerrarProspecto,
         handleSaveOther, handleDeleteOther, handleCloseTicket,
-        handleUploadFile, handleDownloadFile, handleDeleteFile } = actions;
+        uploadFile, downloadFile, deleteFile, getFileIcon } = actions;
 
     const { importarCartola, buscarMatches, aplicarConciliacion, crearGastoCajaChica, ignorarMovimiento } = finanzas;
 

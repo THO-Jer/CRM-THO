@@ -837,6 +837,6 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
         handleSaveProspecto, handleDeleteProspecto, handleMoveProspecto,
         handleCerrarProspecto, handleSaveOther, handleDeleteOther, handleCloseTicket,
         // File operations
-        handleUploadFile, handleDownloadFile, handleDeleteFile
+        uploadFile, downloadFile, deleteFile, getFileIcon
     };
 }
