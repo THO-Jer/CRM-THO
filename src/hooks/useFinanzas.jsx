@@ -1,7 +1,7 @@
 import { supabase } from '../utils/supabase'
 import { showToast } from '../utils/toast'
 
-export default function useFinanzas({ user, movimientosBancarios, setMovimientosBancarios, facturasEmitidas, facturasRecibidas, boletasHonorarios, sueldosSocios, loadMovimientosBancarios, loadCajaChica }) {
+export default function useFinanzas({ user, movimientosBancarios, setMovimientosBancarios, facturasEmitidas, facturasRecibidas, boletasHonorarios, sueldosSocios, cajaChica, loadMovimientosBancarios, loadCajaChica }) {
     // ============================================
     // CONCILIACIÓN BANCARIA - FUNCIONES
     // ============================================

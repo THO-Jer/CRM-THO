@@ -165,7 +165,7 @@ function CRMApp() {
     // ===== FINANZAS HOOK =====
     const finanzas = useFinanzas({
         user, movimientosBancarios, setMovimientosBancarios,
-        facturasEmitidas, facturasRecibidas, boletasHonorarios, sueldosSocios,
+        facturasEmitidas, facturasRecibidas, boletasHonorarios, sueldosSocios, cajaChica,
         loadMovimientosBancarios, loadCajaChica
     });
 
