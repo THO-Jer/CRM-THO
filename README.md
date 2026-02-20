@@ -78,3 +78,17 @@ npm run dev
 
 ## 4) Supabase keys
 Están en `src/supabaseClient.js` (publicables).
+
+## 5) Captación de leads desde THO Web
+
+Se agregó un endpoint serverless para captación:
+
+- `POST /api/public/leads`
+
+Documentación completa de contrato, seguridad, CORS, ENVs y ejemplos:
+
+- `docs/leads-api.md`
+
+Antes de usarlo, ejecutar también la migración SQL:
+
+- `sql/leads-captacion-migration.sql`
