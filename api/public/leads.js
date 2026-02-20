@@ -89,6 +89,18 @@ function isEmailValid(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function decodeJwtPayload(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = Buffer.from(payload, 'base64').toString('utf8');
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
 function normalizePayload(raw) {
   const email = typeof raw.email === 'string' ? raw.email.trim().toLowerCase() : '';
   const serviceInterest = SERVICE_INTERESTS.has(raw.service_interest) ? raw.service_interest : 'no_definido';
@@ -173,10 +185,17 @@ export default async function handler(req, res) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const leadsOwnerUserId = process.env.LEADS_OWNER_USER_ID;
+  const supabaseTokenRole = decodeJwtPayload(supabaseServiceRoleKey || '')?.role;
 
   if (!supabaseUrl || !supabaseServiceRoleKey || !leadsOwnerUserId) {
     return res.status(500).json({
       error: 'Server misconfigured: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and LEADS_OWNER_USER_ID are required'
+    });
+  }
+
+  if (supabaseTokenRole && supabaseTokenRole !== 'service_role') {
+    return res.status(500).json({
+      error: 'Server misconfigured: SUPABASE_SERVICE_ROLE_KEY must be the service_role key (not anon key)'
     });
   }
 
