@@ -1,7 +1,8 @@
 # API de Captación de Leads (THO Web -> CRM)
 
 ## Endpoint
-- **Producción CRM**: `POST https://crm-tho.vercel.app/api/public/leads`
+- **Producción CRM (recomendado)**: `POST https://crm-tho.vercel.app/api/public/leads`
+- **Alias compatible**: `POST https://crm-tho.vercel.app/api/leads`
 - **Staging CRM** (si existe): `POST https://crm-tho-staging.vercel.app/api/public/leads`
 
 
@@ -16,6 +17,7 @@ Puedes usar cualquiera de estos mecanismos (el endpoint acepta ambos):
 
 - `Authorization: Bearer <LEADS_API_KEY>`
 - `x-api-key: <LEADS_API_KEY>`
+- `apiKey` dentro del body (compatibilidad temporal)
 
 > Guardar `LEADS_API_KEY` en variables de entorno (Vercel), nunca en el repo.
 
@@ -28,6 +30,7 @@ Puedes usar cualquiera de estos mecanismos (el endpoint acepta ambos):
 ## CORS habilitado
 Dominios permitidos por defecto:
 - `https://tho-web.vercel.app`
+- `https://www.tho-web.vercel.app`
 - `https://tho.cl`
 - `https://www.tho.cl`
 
@@ -148,3 +151,11 @@ curl -X POST 'https://crm-tho.vercel.app/api/public/leads' \
 
 ## Nota de seguridad sobre secretos compartidos
 Si una key se compartió por chat, se recomienda rotarla en Supabase/Vercel y reemplazarla por una nueva antes de producción final.
+
+
+## Diagnóstico rápido si no llega al pipeline
+1. Verifica que THO Web llame exactamente a `https://crm-tho.vercel.app/api/public/leads` (o alias `/api/leads`).
+2. Verifica que el request incluya `Authorization: Bearer <LEADS_API_KEY>` o `x-api-key`.
+3. Revisa en Vercel (CRM) que existan `LEADS_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`/`SERVICE_ROLE_KEY` y `LEADS_OWNER_USER_ID`.
+4. Si el navegador muestra error CORS, valida el `Origin` real (ej: `https://www.tho-web.vercel.app`) y agrégalo a `LEADS_ALLOWED_ORIGINS`.
+5. Prueba directa con cURL desde tu máquina para confirmar respuesta `201`.

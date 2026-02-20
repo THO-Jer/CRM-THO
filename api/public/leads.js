@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://tho-web.vercel.app',
+  'https://www.tho-web.vercel.app',
   'https://tho.cl',
   'https://www.tho.cl'
 ];
@@ -20,7 +21,7 @@ function getAllowedOrigins() {
 }
 
 function setCorsHeaders(req, res) {
-  const origin = req.headers.origin;
+  const origin = typeof req.headers.origin === 'string' ? req.headers.origin.replace(/\/$/, '') : '';
   const allowedOrigins = getAllowedOrigins();
 
   if (origin && allowedOrigins.has(origin)) {
@@ -38,7 +39,14 @@ function extractApiKey(req) {
     return authHeader.slice('Bearer '.length).trim();
   }
 
-  return req.headers['x-api-key'];
+  if (req.headers['x-api-key']) return req.headers['x-api-key'];
+
+  const body = asJson(req.body);
+  if (typeof body.apiKey === 'string' && body.apiKey.trim()) {
+    return body.apiKey.trim();
+  }
+
+  return '';
 }
 
 function getClientIp(req) {
