@@ -183,19 +183,19 @@ export default async function handler(req, res) {
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY;
   const leadsOwnerUserId = process.env.LEADS_OWNER_USER_ID;
   const supabaseTokenRole = decodeJwtPayload(supabaseServiceRoleKey || '')?.role;
 
   if (!supabaseUrl || !supabaseServiceRoleKey || !leadsOwnerUserId) {
     return res.status(500).json({
-      error: 'Server misconfigured: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and LEADS_OWNER_USER_ID are required'
+      error: 'Server misconfigured: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (or SERVICE_ROLE_KEY) and LEADS_OWNER_USER_ID are required'
     });
   }
 
   if (supabaseTokenRole && supabaseTokenRole !== 'service_role') {
     return res.status(500).json({
-      error: 'Server misconfigured: SUPABASE_SERVICE_ROLE_KEY must be the service_role key (not anon key)'
+      error: 'Server misconfigured: SUPABASE_SERVICE_ROLE_KEY/SERVICE_ROLE_KEY must be the service_role key (not anon key)'
     });
   }
 

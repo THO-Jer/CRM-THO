@@ -89,7 +89,7 @@ Adicionalmente puedes sumar dominios con `LEADS_ALLOWED_ORIGINS` (CSV).
 ## Variables de entorno requeridas (CRM)
 - `LEADS_API_KEY=<secret_largo_y_unico>`
 - `SUPABASE_URL=<https://...supabase.co>`
-- `SUPABASE_SERVICE_ROLE_KEY=<service_role_key>`
+- `SUPABASE_SERVICE_ROLE_KEY=<service_role_key>` (o `SERVICE_ROLE_KEY`)
 - `LEADS_OWNER_USER_ID=<uuid_del_usuario_dueno_del_pipeline>`
 
 Opcionales:
@@ -137,10 +137,14 @@ curl -X POST 'https://crm-tho.vercel.app/api/public/leads' \
 3. En Vercel CRM configurar:
    - `LEADS_API_KEY`
    - `SUPABASE_URL=https://bepifbenblkqjuplvylh.supabase.co`
-   - `SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY>` (**no usar anon key**)
+   - `SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY>` (**o `SERVICE_ROLE_KEY`; no usar anon key**)
    - `LEADS_OWNER_USER_ID=<uuid de hola@tho.cl>`
 4. En Vercel THO Web configurar:
    - `CRM_LEADS_ENDPOINT=https://crm-tho.vercel.app/api/public/leads`
    - `CRM_LEADS_API_KEY=<mismo LEADS_API_KEY>`
 5. Probar con el cURL de este documento y validar respuesta `201`.
 
+
+
+## Nota de seguridad sobre secretos compartidos
+Si una key se compartió por chat, se recomienda rotarla en Supabase/Vercel y reemplazarla por una nueva antes de producción final.
