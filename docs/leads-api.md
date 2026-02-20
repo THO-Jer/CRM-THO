@@ -144,7 +144,8 @@ curl -X POST 'https://crm-tho.vercel.app/api/public/leads' \
    - `LEADS_OWNER_USER_ID=<uuid de hola@tho.cl>`
 4. En Vercel THO Web configurar:
    - `CRM_LEADS_ENDPOINT=https://crm-tho.vercel.app/api/public/leads`
-   - `CRM_LEADS_API_KEY=<mismo LEADS_API_KEY>`
+   - `LEADS_API_KEY=<mismo LEADS_API_KEY del CRM>` (si tu web ya usa este nombre)
+   - `CRM_LEADS_API_KEY=<mismo LEADS_API_KEY>` (si tu web espera este nombre)
 5. Probar con el cURL de este documento y validar respuesta `201`.
 
 
@@ -159,3 +160,8 @@ Si una key se compartió por chat, se recomienda rotarla en Supabase/Vercel y re
 3. Revisa en Vercel (CRM) que existan `LEADS_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`/`SERVICE_ROLE_KEY` y `LEADS_OWNER_USER_ID`.
 4. Si el navegador muestra error CORS, valida el `Origin` real (ej: `https://www.tho-web.vercel.app`) y agrégalo a `LEADS_ALLOWED_ORIGINS`.
 5. Prueba directa con cURL desde tu máquina para confirmar respuesta `201`.
+
+
+## Nota sobre nombres de ENV en THO Web
+En tu caso, la web usa `LEADS_API_KEY` como nombre de variable (no `CRM_LEADS_API_KEY`).
+Eso está bien siempre que el código de THO Web lea `process.env.LEADS_API_KEY` al llamar al endpoint del CRM.
