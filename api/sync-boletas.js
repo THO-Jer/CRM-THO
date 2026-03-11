@@ -110,14 +110,27 @@ export default async function handler(req, res) {
     });
 
     if (result.statusCode !== 200) {
+      console.error('[sync-boletas] Error SimpleAPI', {
+        statusCode: result.statusCode,
+        urlPath,
+        resultData: result.data
+      });
+
       const detailMessage = typeof result.data === 'string'
         ? result.data
-        : (result.data?.message || result.data?.error || result.data?.descripcion || null);
+        : (
+            result.data?.message ||
+            result.data?.error ||
+            result.data?.descripcion ||
+            result.data?.detail ||
+            null
+          );
 
       return res.status(result.statusCode).json({
         error: detailMessage || 'Error desde SimpleAPI',
         statusCode: result.statusCode,
-        details: result.data
+        details: result.data,
+        urlPath
       });
     }
 
