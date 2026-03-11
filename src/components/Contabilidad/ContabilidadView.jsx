@@ -23,14 +23,8 @@ export default function ContabilidadView({
     monedaPreferida, 
     alertasValidacion, 
     setAlertasValidacion, 
-    sincronizarBoletasSII, 
     sincronizarFacturasEmitidas, 
     sincronizarFacturasRecibidas, 
-    onCertificadoFileSelected,
-    onCertificadoManual,
-    onCertificadoClear,
-    certificadoCargado,
-    certificadoNombreCertificado,
     importarCartola, 
     buscarMatches, 
     aplicarConciliacion, 
@@ -41,7 +35,7 @@ export default function ContabilidadView({
     dateRange 
 }) {
         const dashboardDataRef = useRef(null);
-        const certificadoInputRef = useRef(null);
+        const boletasFileInputRef = useRef(null);
         const [showModal, setShowModal] = useState(false);
         const [modalType, setModalType] = useState(null);
         const [editing, setEditing] = useState(null);
@@ -287,6 +281,140 @@ export default function ContabilidadView({
                          'caja_chica';
             await supabase.from(table).delete().eq('id', id);
             onReload();
+        };
+
+
+        const normalizarTexto = (value) => String(value || '')
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .toLowerCase()
+            .trim();
+
+        const parseMontoCLP = (value) => {
+            if (typeof value === 'number') return Math.round(value);
+            const cleaned = String(value || '')
+                .replace(/\./g, '')
+                .replace(/,/g, '.')
+                .replace(/[^\d.-]/g, '');
+            const num = parseFloat(cleaned);
+            return Number.isFinite(num) ? Math.round(num) : 0;
+        };
+
+        const parseFechaSII = (value) => {
+            const txt = String(value || '').trim();
+            const m = txt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (!m) return txt || null;
+            const dd = m[1].padStart(2, '0');
+            const mm = m[2].padStart(2, '0');
+            const yyyy = m[3];
+            return `${yyyy}-${mm}-${dd}`;
+        };
+
+        const mesServicioDesdeFecha = (fechaISO) => {
+            if (!fechaISO) return '';
+            const [y, m] = String(fechaISO).split('-');
+            const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            const idx = Number(m) - 1;
+            return `${meses[idx] || ''} ${y || ''}`.trim();
+        };
+
+        const importarBoletasDesdeXls = async (file) => {
+            if (!file) return;
+            const name = (file.name || '').toLowerCase();
+            if (!(name.endsWith('.xls') || name.endsWith('.xlsx'))) {
+                showToast('El archivo debe ser .xls o .xlsx', 'info');
+                return;
+            }
+
+            try {
+                const buffer = await file.arrayBuffer();
+                const wb = XLSX.read(buffer, { type: 'array' });
+                const sheet = wb.Sheets[wb.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+                const headerIndex = rows.findIndex((row) => {
+                    const norm = row.map(normalizarTexto);
+                    return norm.includes('n°') && norm.includes('rut') && norm.includes('nombre o razon social') && norm.includes('brutos');
+                });
+
+                if (headerIndex === -1) {
+                    throw new Error('No se detectó el formato esperado de Boletas Recibidas del SII.');
+                }
+
+                const headerNorm = rows[headerIndex].map(normalizarTexto);
+                const colN = headerNorm.findIndex((h) => h === 'n°' || h === 'nº' || h === 'n');
+                const colFecha = headerNorm.findIndex((h) => h === 'fecha');
+                const colRut = headerNorm.findIndex((h) => h === 'rut');
+                const colNombre = headerNorm.findIndex((h) => h === 'nombre o razon social');
+                const colBruto = headerNorm.findIndex((h) => h === 'brutos');
+                const colRet = headerNorm.findIndex((h) => h === 'retenido');
+                const colPag = headerNorm.findIndex((h) => h === 'pagado');
+
+                if ([colFecha, colRut, colNombre, colBruto, colRet, colPag].some((idx) => idx === -1)) {
+                    throw new Error('No se pudieron mapear columnas clave (Fecha, Rut, Nombre, Brutos, Retenido, Pagado).');
+                }
+
+                const ufDia = Number(ufActual) > 0 ? Number(ufActual) : 38000;
+                const existentesMap = new Set((boletasHonorarios || []).map((b) => `${b.prestador}-${b.fecha}-${b.monto_bruto_clp}`));
+
+                const nuevas = [];
+                let duplicadas = 0;
+
+                for (let i = headerIndex + 1; i < rows.length; i++) {
+                    const row = rows[i] || [];
+                    const first = normalizarTexto(row[0]);
+                    if (first.includes('totales')) break;
+
+                    const folio = String(row[colN] || '').trim();
+                    const prestador = String(row[colNombre] || '').trim();
+                    if (!prestador && !folio) continue;
+
+                    const fecha = parseFechaSII(row[colFecha]);
+                    const rut = String(row[colRut] || '').trim();
+                    const bruto = parseMontoCLP(row[colBruto]);
+                    const retenido = parseMontoCLP(row[colRet]);
+                    const pagado = parseMontoCLP(row[colPag]);
+
+                    const key = `${prestador}-${fecha}-${bruto}`;
+                    if (existentesMap.has(key)) {
+                        duplicadas++;
+                        continue;
+                    }
+
+                    nuevas.push({
+                        fecha,
+                        prestador: prestador || 'Sin nombre',
+                        rut,
+                        monto_bruto_clp: bruto,
+                        monto_bruto_uf: (bruto / ufDia).toFixed(2),
+                        monto_retencion_clp: retenido,
+                        monto_retencion_uf: (retenido / ufDia).toFixed(2),
+                        monto_liquido_clp: pagado,
+                        monto_liquido_uf: (pagado / ufDia).toFixed(2),
+                        porcentaje_retencion: bruto > 0 ? ((retenido / bruto) * 100).toFixed(2) : 0,
+                        uf_dia: ufDia,
+                        descripcion: `Importado XLS SII (${file.name})`,
+                        mes_servicio: mesServicioDesdeFecha(fecha),
+                        proyecto: '',
+                        moneda_principal: 'CLP'
+                    });
+                    existentesMap.add(key);
+                }
+
+                if (nuevas.length === 0) {
+                    showToast(`No se encontraron boletas nuevas para importar. Duplicadas: ${duplicadas}`, 'info');
+                    return;
+                }
+
+                const { error } = await supabase.from('boletas_honorarios').insert(nuevas);
+                if (error) throw error;
+
+                showToast(`✅ Importación completada: ${nuevas.length} boletas nuevas (${duplicadas} duplicadas)`, 'success');
+                onReload();
+            } catch (error) {
+                console.error('Error importando XLS de boletas:', error);
+                showToast(`❌ Error importando XLS: ${error.message}`, 'error');
+            }
         };
         
         // Calcular métricas del período
@@ -617,10 +745,6 @@ export default function ContabilidadView({
                                         <button onClick={() => { setEditing(null); setModalType('emitida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                     </div>
                                 </div>
-                                <div className="text-xs text-gray-500">
-                                    Estado certificado: {certificadoCargado ? `✅ Cargado (${certificadoNombreCertificado || 'archivo local'})` : '❌ No cargado'}
-                                </div>
-                                
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">
@@ -852,10 +976,6 @@ export default function ContabilidadView({
                                         <button onClick={() => { setEditing(null); setModalType('sueldo'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Retiro</button>
                                     </div>
                                 </div>
-                                <div className="text-xs text-gray-500">
-                                    Estado certificado: {certificadoCargado ? `✅ Cargado (${certificadoNombreCertificado || 'archivo local'})` : '❌ No cargado'}
-                                </div>
-                                
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">
@@ -1002,45 +1122,21 @@ export default function ContabilidadView({
                                     <h3 className="font-bold dark:text-gray-200">Boletas de Honorarios</h3>
                                     <div className="flex gap-2 flex-wrap justify-end">
                                         <input
-                                            ref={certificadoInputRef}
+                                            ref={boletasFileInputRef}
                                             type="file"
-                                            accept=".pfx,.p12,application/x-pkcs12"
+                                            accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                             className="hidden"
-                                            onChange={(e) => onCertificadoFileSelected && onCertificadoFileSelected(e.target.files?.[0] || null)}
+                                            onChange={(e) => importarBoletasDesdeXls(e.target.files?.[0] || null)}
                                         />
                                         <button
-                                            onClick={() => certificadoInputRef.current?.click()}
-                                            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm"
-                                        >
-                                            📁 Cargar certificado
-                                        </button>
-                                        <button
-                                            onClick={onCertificadoManual}
-                                            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm"
-                                        >
-                                            ✍️ Pegar CertificadoB64
-                                        </button>
-                                        {certificadoCargado && (
-                                            <button
-                                                onClick={onCertificadoClear}
-                                                className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm"
-                                            >
-                                                🗑️ Quitar certificado
-                                            </button>
-                                        )}
-                                        <button 
-                                            onClick={sincronizarBoletasSII} 
+                                            onClick={() => boletasFileInputRef.current?.click()}
                                             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
                                         >
-                                            🔄 Sincronizar SII
+                                            📥 Importar XLS SII
                                         </button>
                                         <button onClick={() => { setEditing(null); setModalType('boleta'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Boleta</button>
                                     </div>
                                 </div>
-                                <div className="text-xs text-gray-500">
-                                    Estado certificado: {certificadoCargado ? `✅ Cargado (${certificadoNombreCertificado || 'archivo local'})` : '❌ No cargado'}
-                                </div>
-                                
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">

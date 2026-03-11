@@ -150,7 +150,7 @@ function CRMApp() {
 
     // ===== SII SYNC HOOK =====
     const sii = useSII({ user, ufActual, loadBoletasHonorarios, loadFacturasEmitidas, loadFacturasRecibidas });
-    const { sincronizarBoletasSII, sincronizarFacturasEmitidas, sincronizarFacturasRecibidas, cargarCertificadoArchivo, cargarCertificadoManual, limpiarCertificado, certificadoCargado, certificadoNombreCertificado } = sii;
+    const { sincronizarFacturasEmitidas, sincronizarFacturasRecibidas } = sii;
 
     // ===== METRICS HOOK =====
     const { metrics, estadosKanban, prospectosPorEstado, getEstadoFromKey } = useMetrics({ prospectos, cerrados, tickets: activeTickets, keyAccounts: activeKeyAccounts, ufActual });
@@ -449,14 +449,8 @@ function CRMApp() {
                         monedaPreferida={monedaPreferida} 
                         alertasValidacion={alertasValidacion} 
                         setAlertasValidacion={setAlertasValidacion} 
-                        sincronizarBoletasSII={sincronizarBoletasSII} 
                         sincronizarFacturasEmitidas={sincronizarFacturasEmitidas} 
                         sincronizarFacturasRecibidas={sincronizarFacturasRecibidas} 
-                        onCertificadoFileSelected={cargarCertificadoArchivo} 
-                        onCertificadoManual={cargarCertificadoManual} 
-                        onCertificadoClear={limpiarCertificado} 
-                        certificadoCargado={certificadoCargado} 
-                        certificadoNombreCertificado={certificadoNombreCertificado} 
                         importarCartola={importarCartola} 
                         buscarMatches={buscarMatches} 
                         aplicarConciliacion={aplicarConciliacion} 
