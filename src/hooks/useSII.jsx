@@ -116,7 +116,6 @@ export default function useSII({ user, ufActual = 38000, loadBoletasHonorarios, 
                     // Usar Vercel Serverless Function
                     const payload = {
                         apiKey: apiKey,
-                        mode: mode,
                         rutUsuario: rutUsuario,
                         passwordCertificado: passwordCertificado,
                         certificadoB64: certificadoDigital.certificadoB64,
@@ -287,7 +286,6 @@ Detalle: ${detailsText}` : '';
                     
                     const payload = {
                         apiKey: apiKey,
-                        mode: mode,
                         rutUsuario: rutUsuario,
                         passwordSII: passwordSII,
                         año: año,
@@ -437,7 +435,6 @@ Detalle: ${detailsText}` : '';
                     
                     const payload = {
                         apiKey: apiKey,
-                        mode: mode,
                         rutUsuario: rutUsuario,
                         passwordSII: passwordSII,
                         año: año,
