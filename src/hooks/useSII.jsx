@@ -69,6 +69,7 @@ const pickAllowedColumns = (payload, allowedColumns) => Object.fromEntries(
 
 const mapFacturaEmitidaPayload = ({ row, fileName, ufDiaActual }) => {
   const total = Number(row.total_monto_clp || 0)
+  const clienteFinal = sanitize(row.razon_social_receptor) || sanitize(row.cliente) || sanitize(row.rut_receptor) || 'Cliente sin nombre'
   const [anio, mes] = String(row.fecha_emision || '').split('-')
 
   return pickAllowedColumns({
@@ -80,7 +81,7 @@ const mapFacturaEmitidaPayload = ({ row, fileName, ufDiaActual }) => {
     import_batch_id: null,
     // compat legacy emitidas
     numero_factura: row.folio,
-    cliente: row.razon_social_receptor,
+    cliente: clienteFinal,
     rut_cliente: row.rut_receptor,
     monto_clp: total,
     monto_uf: total > 0 ? (total / ufDiaActual).toFixed(2) : '0.00',
@@ -97,6 +98,8 @@ const mapFacturaRecibidaPayload = ({ row, fileName, ufDiaActual }) => {
   const total = Number(row.total_monto_clp || 0)
   const neto = Number(row.total_neto_clp || 0)
   const iva = Number(row.total_iva_clp || 0)
+  const proveedorFinal = sanitize(row.razon_social_emisor) || sanitize(row.proveedor) || sanitize(row.rut_emisor) || 'Proveedor sin nombre'
+  const categoriaFinal = sanitize(row.categoria) || 'Sin categorizar'
   const [anio, mes] = String(row.fecha_emision || '').split('-')
 
   return pickAllowedColumns({
@@ -108,8 +111,9 @@ const mapFacturaRecibidaPayload = ({ row, fileName, ufDiaActual }) => {
     import_batch_id: null,
     // compat legacy recibidas (sin cliente)
     numero_factura: row.folio,
-    proveedor: row.razon_social_emisor,
+    proveedor: proveedorFinal,
     rut_proveedor: row.rut_emisor,
+    categoria: categoriaFinal,
     monto_clp: total,
     monto_neto: neto,
     monto_iva: iva,
