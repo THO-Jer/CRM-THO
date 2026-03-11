@@ -50,6 +50,34 @@ const extractRemoteErrorMessage = (remoteData) => {
   return remoteData?.message || remoteData?.error || remoteData?.descripcion || remoteData?.detail || null;
 };
 
+const pickRecordArray = (remoteData) => {
+  if (Array.isArray(remoteData)) return remoteData;
+  if (!remoteData || typeof remoteData !== 'object') return [];
+
+  const candidates = [
+    remoteData.boletas,
+    remoteData.data,
+    remoteData.result,
+    remoteData.items,
+    remoteData.registros,
+    remoteData.documentos
+  ];
+
+  for (const value of candidates) {
+    if (Array.isArray(value)) return value;
+  }
+
+  return [];
+};
+
+const buildRecordPreview = (records) => records.slice(0, 3).map((r) => ({
+  prestador: r?.emisor?.razonSocial || r?.prestador || null,
+  rutEmisor: r?.emisor?.rut || r?.rut || null,
+  fecha: r?.encabezado?.fechaBoleta || r?.fecha || r?.fechaEmision || null,
+  monto: r?.honorarios?.brutos || r?.monto_bruto_clp || r?.total || null
+}));
+
+
 const requestSimpleApi = ({ urlPath, options, bodyBuffer }) => new Promise((resolve, reject) => {
   const request = https.request(options, (response) => {
     let data = '';
@@ -267,24 +295,38 @@ export default async function handler(req, res) {
       });
 
       const detailMessage = extractRemoteErrorMessage(result.data);
+      const records = pickRecordArray(result.data);
+      const recordCount = records.length;
+      const recordPreview = buildRecordPreview(records);
+
       return res.status(result.statusCode).json({
         error: detailMessage || 'Error desde SimpleAPI',
         statusCode: result.statusCode,
         details: result.data,
-        remoteBody: result.rawBody,
+        remoteBody: result.data,
+        remoteBodyRaw: result.rawBody,
         urlPath,
         mode: modeToUse,
+        recordCount,
+        recordPreview,
         sentInput
       });
     }
 
     // Respuesta diagnóstica pedida (sin tocar inserción en Supabase del frontend)
+    const records = pickRecordArray(result.data);
+    const recordCount = records.length;
+    const recordPreview = buildRecordPreview(records);
+
     return res.status(200).json({
-      statusCode: result.statusCode,
-      body: result.data,
-      remoteBody: result.rawBody,
+      mode: modeToUse,
       urlPath,
-      mode: modeToUse
+      statusCode: result.statusCode,
+      remoteBody: result.data,
+      remoteBodyRaw: result.rawBody,
+      recordCount,
+      recordPreview,
+      body: result.data
     });
   } catch (error) {
     console.error('[sync-boletas] Error interno', { message: error.message });

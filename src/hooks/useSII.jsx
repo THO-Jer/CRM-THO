@@ -72,6 +72,15 @@ export default function useSII({ user, ufActual = 38000, loadBoletasHonorarios, 
         if (!año) return;
         
         const mes = prompt('¿Qué mes? (1-12, o deja vacío para TODO el año)');
+
+        const modeInput = prompt(`Modo diagnóstico para BHE:
+
+1 = legacy
+2 = cert
+
+(Enter = cert)`, '2');
+        const mode = modeInput === '1' ? 'legacy' : 'cert';
+        const isDiagnosticMode = ['legacy', 'cert'].includes(mode);
         
         // Validar mes solo si se ingresó
         if (mes && (parseInt(mes) < 1 || parseInt(mes) > 12)) {
@@ -107,6 +116,7 @@ export default function useSII({ user, ufActual = 38000, loadBoletasHonorarios, 
                     // Usar Vercel Serverless Function
                     const payload = {
                         apiKey: apiKey,
+                        mode: mode,
                         rutUsuario: rutUsuario,
                         passwordCertificado: passwordCertificado,
                         certificadoB64: certificadoDigital.certificadoB64,
@@ -129,10 +139,12 @@ export default function useSII({ user, ufActual = 38000, loadBoletasHonorarios, 
                         let detailsText = '';
                         try {
                             const errorData = await response.json();
+                            const remoteBodyText = typeof errorData.remoteBody === 'string' ? errorData.remoteBody : '';
                             detailsText = typeof errorData.details === 'string'
                                 ? errorData.details
-                                : (errorData.details?.message || errorData.details?.error || errorData.details?.detail || JSON.stringify(errorData.details || ''));
-                            errorMsg = errorData.error || errorData.message || detailsText || errorMsg;
+                                : (errorData.details?.message || errorData.details?.error || errorData.details?.detail || remoteBodyText || JSON.stringify(errorData.details || ''));
+                            const meta = `[mode=${errorData.mode || mode}] [url=${errorData.urlPath || 'n/a'}] [status=${errorData.statusCode || response.status}]`;
+                            errorMsg = `${errorData.error || errorData.message || detailsText || errorMsg} ${meta}`;
                         } catch(e) {}
                         if (response.status === 401) errorMsg = 'API Key inválida o expirada. Verifica tu clave de SimpleAPI.';
                         if (response.status === 429) errorMsg = 'Límite de consultas alcanzado. Espera antes de reintentar.';
@@ -146,10 +158,24 @@ Detalle: ${detailsText}` : '';
                     }
                     
                     const result = await response.json();
-                    const boletas = result.boletas || result.data || [];
-                    
+                    const remoteBody = result.remoteBody || result.body || {};
+                    const boletas = remoteBody.boletas || remoteBody.data || (Array.isArray(remoteBody) ? remoteBody : []);
+                    const recordCount = Number.isFinite(result.recordCount) ? result.recordCount : boletas.length;
+
+                    console.log(`[BHE ${mode}] ${getNombreMes(mesActual)} status=${result.statusCode} count=${recordCount}`, {
+                        mode: result.mode,
+                        urlPath: result.urlPath,
+                        recordPreview: result.recordPreview,
+                        remoteBodyRaw: result.remoteBodyRaw
+                    });
+
+                    if (isDiagnosticMode) {
+                        showToast(`🧪 [${result.mode}] ${getNombreMes(mesActual)}: status ${result.statusCode} · ${recordCount} registros`, 'info');
+                        continue;
+                    }
+
                     console.log(`${getNombreMes(mesActual)}: ${boletas.length} boletas encontradas`);
-                    
+
                     for (const boleta of boletas) {
                         try {
                             // Extraer campos de la estructura anidada de SimpleAPI
@@ -160,14 +186,14 @@ Detalle: ${detailsText}` : '';
                             const retenido = parseFloat(boleta.honorarios?.retenido) || 0;
                             const liquido = parseFloat(boleta.honorarios?.pagado) || 0;
                             const ufDia = ufDiaActual;
-                            
+
                             // Detectar duplicados
                             const key = `${prestador}-${fecha}-${montoBruto}`;
                             if (existentesMap.has(key)) {
                                 totalDuplicadas++;
                                 continue;
                             }
-                            
+
                             const nuevaBoleta = {
                                 fecha: fecha,
                                 prestador: prestador,
@@ -185,17 +211,17 @@ Detalle: ${detailsText}` : '';
                                 proyecto: '',
                                 moneda_principal: 'CLP'
                             };
-                            
+
                             const { error: insertError } = await supabase
                                 .from('boletas_honorarios')
                                 .insert([nuevaBoleta]);
-                            
+
                             if (insertError) {
                                 console.error('Error insertando boleta:', insertError);
                                 totalErrores++;
                             } else {
                                 totalInsertadas++;
-                                existentesMap.add(key); // Agregar al set para evitar duplicados en la misma sincronización
+                                existentesMap.add(key);
                             }
                         } catch (boletaError) {
                             console.error('Error procesando boleta individual:', boletaError);
@@ -261,6 +287,7 @@ Detalle: ${detailsText}` : '';
                     
                     const payload = {
                         apiKey: apiKey,
+                        mode: mode,
                         rutUsuario: rutUsuario,
                         passwordSII: passwordSII,
                         año: año,
@@ -410,6 +437,7 @@ Detalle: ${detailsText}` : '';
                     
                     const payload = {
                         apiKey: apiKey,
+                        mode: mode,
                         rutUsuario: rutUsuario,
                         passwordSII: passwordSII,
                         año: año,
