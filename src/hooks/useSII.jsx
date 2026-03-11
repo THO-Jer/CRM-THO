@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { supabase } from '../utils/supabase'
 import { showToast } from '../utils/toast'
 
 export default function useSII({ user, ufActual = 38000, loadBoletasHonorarios, loadFacturasEmitidas, loadFacturasRecibidas }) {
     const ufDiaActual = Number(ufActual) > 0 ? Number(ufActual) : 38000;
+    const [certificadoDigital, setCertificadoDigital] = useState(null);
 
     const readFileAsBase64 = (file) => new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -11,41 +13,46 @@ export default function useSII({ user, ufActual = 38000, loadBoletasHonorarios, 
             const base64 = result.includes(',') ? result.split(',')[1] : result;
             resolve(base64);
         };
-        reader.onerror = () => reject(new Error('No se pudo leer el certificado .pfx'));
+        reader.onerror = () => reject(new Error('No se pudo leer el certificado .pfx/.p12'));
         reader.readAsDataURL(file);
     });
 
-    const solicitarCertificadoPfx = async () => {
-        const usarArchivo = confirm(`Boletas BHE requieren certificado digital.\n\nOK = cargar archivo .pfx\nCancelar = pegar CertificadoB64 manualmente`);
-
-        if (!usarArchivo) {
-            const base64Manual = prompt('Pega aquí CertificadoB64 del .pfx (sin exponerlo en logs):');
-            if (!base64Manual) return null;
-            return {
-                certificadoB64: base64Manual.trim(),
-                certificadoNombre: 'certificado-manual.pfx',
-                certificadoMimeType: 'application/x-pkcs12'
-            };
+    const cargarCertificadoArchivo = async (file) => {
+        if (!file) return;
+        const fileName = (file.name || '').toLowerCase();
+        if (!(fileName.endsWith('.pfx') || fileName.endsWith('.p12'))) {
+            showToast('El certificado debe ser .pfx o .p12', 'info');
+            return;
         }
 
-        const file = await new Promise((resolve) => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.pfx,application/x-pkcs12';
-            input.onchange = () => resolve(input.files?.[0] || null);
-            input.click();
-        });
-
-        if (!file) return null;
-
-        const certificadoB64 = await readFileAsBase64(file);
-        return {
-            certificadoB64,
-            certificadoNombre: file.name || 'certificado.pfx',
-            certificadoMimeType: file.type || 'application/x-pkcs12'
-        };
+        try {
+            const certificadoB64 = await readFileAsBase64(file);
+            setCertificadoDigital({
+                certificadoB64,
+                certificadoNombre: file.name || 'certificado.pfx',
+                certificadoMimeType: file.type || 'application/x-pkcs12'
+            });
+            showToast('✅ Certificado digital cargado', 'success');
+        } catch (error) {
+            showToast(`❌ ${error.message}`, 'error');
+        }
     };
 
+    const cargarCertificadoManual = () => {
+        const base64Manual = prompt('Pega aquí CertificadoB64 del .pfx/.p12:');
+        if (!base64Manual) return;
+        setCertificadoDigital({
+            certificadoB64: base64Manual.trim(),
+            certificadoNombre: 'certificado-manual.pfx',
+            certificadoMimeType: 'application/x-pkcs12'
+        });
+        showToast('✅ Certificado B64 cargado manualmente', 'success');
+    };
+
+    const limpiarCertificado = () => {
+        setCertificadoDigital(null);
+        showToast('Certificado eliminado de memoria local', 'info');
+    };
     const sincronizarBoletasSII = async () => {
         const apiKey = prompt('Ingresa tu API Key de SimpleAPI:');
         if (!apiKey) return;
@@ -53,15 +60,14 @@ export default function useSII({ user, ufActual = 38000, loadBoletasHonorarios, 
         const rutUsuario = prompt('Ingresa tu RUT (con guión, ej: 12345678-9):');
         if (!rutUsuario) return;
         
-        const passwordCertificado = prompt('Ingresa la contraseña del certificado digital (.pfx):');
+        const passwordCertificado = prompt('Ingresa la contraseña del certificado digital (.pfx/.p12):');
         if (!passwordCertificado) return;
 
-        const certificadoData = await solicitarCertificadoPfx();
-        if (!certificadoData?.certificadoB64) {
-            showToast('Debes cargar o pegar un certificado digital (.pfx) para consultar BHE', 'info');
+        if (!certificadoDigital?.certificadoB64) {
+            showToast('Debes cargar el certificado digital antes de sincronizar boletas', 'error');
             return;
         }
-        
+
         const año = prompt('¿Qué año deseas sincronizar? (ejemplo: 2025)');
         if (!año) return;
         
@@ -103,9 +109,9 @@ export default function useSII({ user, ufActual = 38000, loadBoletasHonorarios, 
                         apiKey: apiKey,
                         rutUsuario: rutUsuario,
                         passwordCertificado: passwordCertificado,
-                        certificadoB64: certificadoData.certificadoB64,
-                        certificadoNombre: certificadoData.certificadoNombre,
-                        certificadoMimeType: certificadoData.certificadoMimeType,
+                        certificadoB64: certificadoDigital.certificadoB64,
+                        certificadoNombre: certificadoDigital.certificadoNombre,
+                        certificadoMimeType: certificadoDigital.certificadoMimeType,
                         año: año,
                         mes: mesActual
                     };
@@ -219,15 +225,10 @@ Detalle: ${detailsText}` : '';
         const rutUsuario = prompt('Ingresa tu RUT (con guión, ej: 12345678-9):');
         if (!rutUsuario) return;
         
-        const passwordCertificado = prompt('Ingresa la contraseña del certificado digital (.pfx):');
-        if (!passwordCertificado) return;
+        const passwordSII = prompt('Ingresa tu contraseña del SII:');
+        if (!passwordSII) return;
 
-        const certificadoData = await solicitarCertificadoPfx();
-        if (!certificadoData?.certificadoB64) {
-            showToast('Debes cargar o pegar un certificado digital (.pfx) para consultar BHE', 'info');
-            return;
-        }
-        
+
         const año = prompt('¿Qué año deseas sincronizar? (ejemplo: 2025)');
         if (!año) return;
         
@@ -261,10 +262,7 @@ Detalle: ${detailsText}` : '';
                     const payload = {
                         apiKey: apiKey,
                         rutUsuario: rutUsuario,
-                        passwordCertificado: passwordCertificado,
-                        certificadoB64: certificadoData.certificadoB64,
-                        certificadoNombre: certificadoData.certificadoNombre,
-                        certificadoMimeType: certificadoData.certificadoMimeType,
+                        passwordSII: passwordSII,
                         año: año,
                         mes: mesActual
                     };
@@ -376,15 +374,10 @@ Detalle: ${detailsText}` : '';
         const rutUsuario = prompt('Ingresa tu RUT (con guión, ej: 12345678-9):');
         if (!rutUsuario) return;
         
-        const passwordCertificado = prompt('Ingresa la contraseña del certificado digital (.pfx):');
-        if (!passwordCertificado) return;
+        const passwordSII = prompt('Ingresa tu contraseña del SII:');
+        if (!passwordSII) return;
 
-        const certificadoData = await solicitarCertificadoPfx();
-        if (!certificadoData?.certificadoB64) {
-            showToast('Debes cargar o pegar un certificado digital (.pfx) para consultar BHE', 'info');
-            return;
-        }
-        
+
         const año = prompt('¿Qué año deseas sincronizar? (ejemplo: 2025)');
         if (!año) return;
         
@@ -418,10 +411,7 @@ Detalle: ${detailsText}` : '';
                     const payload = {
                         apiKey: apiKey,
                         rutUsuario: rutUsuario,
-                        passwordCertificado: passwordCertificado,
-                        certificadoB64: certificadoData.certificadoB64,
-                        certificadoNombre: certificadoData.certificadoNombre,
-                        certificadoMimeType: certificadoData.certificadoMimeType,
+                        passwordSII: passwordSII,
                         año: año,
                         mes: mesActual
                     };
@@ -525,5 +515,5 @@ Detalle: ${detailsText}` : '';
     };
 
 
-    return { sincronizarBoletasSII, sincronizarFacturasEmitidas, sincronizarFacturasRecibidas };
+    return { sincronizarBoletasSII, sincronizarFacturasEmitidas, sincronizarFacturasRecibidas, cargarCertificadoArchivo, cargarCertificadoManual, limpiarCertificado, certificadoCargado: Boolean(certificadoDigital?.certificadoB64), certificadoNombreCertificado: certificadoDigital?.certificadoNombre || '' };
 }

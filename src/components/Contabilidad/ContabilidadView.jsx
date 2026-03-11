@@ -26,6 +26,11 @@ export default function ContabilidadView({
     sincronizarBoletasSII, 
     sincronizarFacturasEmitidas, 
     sincronizarFacturasRecibidas, 
+    onCertificadoFileSelected,
+    onCertificadoManual,
+    onCertificadoClear,
+    certificadoCargado,
+    certificadoNombreCertificado,
     importarCartola, 
     buscarMatches, 
     aplicarConciliacion, 
@@ -36,6 +41,7 @@ export default function ContabilidadView({
     dateRange 
 }) {
         const dashboardDataRef = useRef(null);
+        const certificadoInputRef = useRef(null);
         const [showModal, setShowModal] = useState(false);
         const [modalType, setModalType] = useState(null);
         const [editing, setEditing] = useState(null);
@@ -611,6 +617,9 @@ export default function ContabilidadView({
                                         <button onClick={() => { setEditing(null); setModalType('emitida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                     </div>
                                 </div>
+                                <div className="text-xs text-gray-500">
+                                    Estado certificado: {certificadoCargado ? `✅ Cargado (${certificadoNombreCertificado || 'archivo local'})` : '❌ No cargado'}
+                                </div>
                                 
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
@@ -843,6 +852,9 @@ export default function ContabilidadView({
                                         <button onClick={() => { setEditing(null); setModalType('sueldo'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Retiro</button>
                                     </div>
                                 </div>
+                                <div className="text-xs text-gray-500">
+                                    Estado certificado: {certificadoCargado ? `✅ Cargado (${certificadoNombreCertificado || 'archivo local'})` : '❌ No cargado'}
+                                </div>
                                 
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
@@ -988,7 +1000,34 @@ export default function ContabilidadView({
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Boletas de Honorarios</h3>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 flex-wrap justify-end">
+                                        <input
+                                            ref={certificadoInputRef}
+                                            type="file"
+                                            accept=".pfx,.p12,application/x-pkcs12"
+                                            className="hidden"
+                                            onChange={(e) => onCertificadoFileSelected && onCertificadoFileSelected(e.target.files?.[0] || null)}
+                                        />
+                                        <button
+                                            onClick={() => certificadoInputRef.current?.click()}
+                                            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm"
+                                        >
+                                            📁 Cargar certificado
+                                        </button>
+                                        <button
+                                            onClick={onCertificadoManual}
+                                            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm"
+                                        >
+                                            ✍️ Pegar CertificadoB64
+                                        </button>
+                                        {certificadoCargado && (
+                                            <button
+                                                onClick={onCertificadoClear}
+                                                className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm"
+                                            >
+                                                🗑️ Quitar certificado
+                                            </button>
+                                        )}
                                         <button 
                                             onClick={sincronizarBoletasSII} 
                                             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
@@ -997,6 +1036,9 @@ export default function ContabilidadView({
                                         </button>
                                         <button onClick={() => { setEditing(null); setModalType('boleta'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Boleta</button>
                                     </div>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                    Estado certificado: {certificadoCargado ? `✅ Cargado (${certificadoNombreCertificado || 'archivo local'})` : '❌ No cargado'}
                                 </div>
                                 
                                 {/* Desktop */}
