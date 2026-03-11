@@ -69,6 +69,7 @@ const pickAllowedColumns = (payload, allowedColumns) => Object.fromEntries(
 
 const mapFacturaEmitidaPayload = ({ row, fileName, ufDiaActual }) => {
   const total = Number(row.total_monto_clp || 0)
+  const numeroFacturaFinal = String(sanitize(row.folio) || sanitize(row.numero_folio) || sanitize(row.numero_factura) || 'SIN-FOLIO')
   const clienteFinal = sanitize(row.razon_social_receptor) || sanitize(row.cliente) || sanitize(row.rut_receptor) || 'Cliente sin nombre'
   const [anio, mes] = String(row.fecha_emision || '').split('-')
 
@@ -80,7 +81,7 @@ const mapFacturaEmitidaPayload = ({ row, fileName, ufDiaActual }) => {
     nombre_archivo_origen: fileName,
     import_batch_id: null,
     // compat legacy emitidas
-    numero_factura: row.folio,
+    numero_factura: numeroFacturaFinal,
     cliente: clienteFinal,
     rut_cliente: row.rut_receptor,
     monto_clp: total,
@@ -110,7 +111,7 @@ const mapFacturaRecibidaPayload = ({ row, fileName, ufDiaActual }) => {
     nombre_archivo_origen: fileName,
     import_batch_id: null,
     // compat legacy recibidas (sin cliente)
-    numero_factura: row.folio,
+    numero_factura: numeroFacturaFinal,
     proveedor: proveedorFinal,
     rut_proveedor: row.rut_emisor,
     categoria: categoriaFinal,
@@ -262,6 +263,13 @@ export default function useSII({ ufActual = 38000, loadBoletasHonorarios, loadFa
           : mapFacturaRecibidaPayload({ row, fileName: file.name, ufDiaActual })
 
         console.log(`[sii-import] ${table} payload keys`, Object.keys(facturaPayload))
+        if (isEmitidas) {
+          console.log('[sii-import] facturas_emitidas required fields', {
+            numero_factura: facturaPayload.numero_factura,
+            cliente: facturaPayload.cliente,
+            fecha_emision: facturaPayload.fecha_emision
+          })
+        }
         nuevas.push(facturaPayload)
         existingKeys.add(key)
       }
