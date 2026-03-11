@@ -3,18 +3,27 @@ import https from 'https';
 
 const maskPassword = (value) => (value ? '***' : '');
 
+const toBufferFromUnknown = (value) => {
+  if (!value) return null;
+  if (Buffer.isBuffer(value)) return value;
+  if (Array.isArray(value)) return Buffer.from(value);
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return Buffer.from(trimmed, 'base64');
+  }
+  return null;
+};
+
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // OPTIONS preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Solo POST
   if (req.method !== 'POST') {
     return res.status(405).json({
       error: 'Method not allowed',
@@ -23,27 +32,50 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { apiKey, año, mes, rutUsuario, passwordSII } = req.body || {};
+    const {
+      apiKey,
+      año,
+      mes,
+      rutUsuario,
+      passwordCertificado,
+      certificadoB64,
+      certificadoNombre,
+      certificadoMimeType,
+      certificadoBuffer
+    } = req.body || {};
+
     const anioNum = Number(año);
     const mesNum = (mes === '' || mes === null || mes === undefined || mes === 'null' || mes === 'undefined') ? null : Number(mes);
 
-    // Log de request entrante (sin secretos)
+    const certificadoB64Sanitized = typeof certificadoB64 === 'string' ? certificadoB64.trim() : '';
+    const hasCertificadoB64 = certificadoB64Sanitized.length > 0;
+    const certFileBuffer = hasCertificadoB64 ? null : toBufferFromUnknown(certificadoBuffer);
+    const hasCertificadoFile = Boolean(certFileBuffer && certFileBuffer.length > 0);
+
     console.info('[sync-boletas] Body recibido desde frontend', {
       hasApiKey: Boolean(apiKey),
       hasRutUsuario: Boolean(rutUsuario),
-      hasPasswordSII: Boolean(passwordSII),
+      hasPasswordCertificado: Boolean(passwordCertificado),
       anio: anioNum,
-      mes: mesNum
+      mes: mesNum,
+      hasCertificadoB64,
+      hasCertificadoFile,
+      certificadoNombre: certificadoNombre || null,
+      certificadoMimeType: certificadoMimeType || null
     });
 
-    // Validar parámetros requeridos
-    if (!apiKey || !rutUsuario || !passwordSII || !Number.isInteger(anioNum) || (mesNum !== null && (!Number.isInteger(mesNum) || mesNum < 1 || mesNum > 12))) {
+    if (!apiKey || !rutUsuario || !passwordCertificado || !Number.isInteger(anioNum) || (mesNum !== null && (!Number.isInteger(mesNum) || mesNum < 1 || mesNum > 12))) {
       return res.status(400).json({
-        error: 'Parámetros inválidos: apiKey, rutUsuario, passwordSII, año numérico y mes opcional (1-12)'
+        error: 'Parámetros inválidos: apiKey, rutUsuario, passwordCertificado, año numérico y mes opcional (1-12)'
       });
     }
 
-    // Determinar si pedir mes específico o todo el año
+    if (!hasCertificadoB64 && !hasCertificadoFile) {
+      return res.status(400).json({
+        error: 'Falta certificado digital para consultar BHE en SimpleAPI'
+      });
+    }
+
     let urlPath;
     if (mesNum !== null) {
       const mesPad = String(mesNum).padStart(2, '0');
@@ -52,31 +84,50 @@ export default async function handler(req, res) {
       urlPath = `/api/bhe/listado/recibidas/${anioNum}`;
     }
 
+    const inputPayload = {
+      RutCertificado: rutUsuario,
+      Password: passwordCertificado
+    };
+
+    if (hasCertificadoB64) {
+      inputPayload.CertificadoB64 = certificadoB64Sanitized;
+    }
+
     const sentInput = {
       RutCertificado: rutUsuario,
-      Password: maskPassword(passwordSII)
+      Password: maskPassword(passwordCertificado),
+      CertificadoB64: hasCertificadoB64 ? '[base64]' : undefined
     };
 
     console.info('[sync-boletas] urlPath final', { urlPath });
-    console.info('[sync-boletas] payload enviado a SimpleAPI', { input: sentInput });
-
-    // SimpleAPI requiere multipart/form-data con campo `input` (JSON string)
-    const inputPayload = JSON.stringify({
-      RutCertificado: rutUsuario,
-      Password: passwordSII
+    console.info('[sync-boletas] payload enviado a SimpleAPI', {
+      input: sentInput,
+      adjuntoArchivo: hasCertificadoFile,
+      nombreArchivo: hasCertificadoFile ? (certificadoNombre || 'certificado.pfx') : null
     });
 
     const boundary = `----crm-tho-${Date.now().toString(16)}`;
-    const multipartBody = [
-      `--${boundary}`,
-      'Content-Disposition: form-data; name="input"',
-      '',
-      inputPayload,
-      `--${boundary}--`,
-      ''
-    ].join('\r\n');
+    const chunks = [];
 
-    const postDataBuffer = Buffer.from(multipartBody, 'utf8');
+    chunks.push(Buffer.from(`--${boundary}\r\n`));
+    chunks.push(Buffer.from('Content-Disposition: form-data; name="input"\r\n\r\n'));
+    chunks.push(Buffer.from(JSON.stringify(inputPayload), 'utf8'));
+    chunks.push(Buffer.from('\r\n'));
+
+    if (!hasCertificadoB64 && hasCertificadoFile) {
+      const fileName = certificadoNombre || 'certificado.pfx';
+      const fileMime = certificadoMimeType || 'application/x-pkcs12';
+
+      chunks.push(Buffer.from(`--${boundary}\r\n`));
+      chunks.push(Buffer.from(`Content-Disposition: form-data; name="files"; filename="${fileName}"\r\n`));
+      chunks.push(Buffer.from(`Content-Type: ${fileMime}\r\n\r\n`));
+      chunks.push(certFileBuffer);
+      chunks.push(Buffer.from('\r\n'));
+    }
+
+    chunks.push(Buffer.from(`--${boundary}--\r\n`));
+
+    const postDataBuffer = Buffer.concat(chunks);
 
     const options = {
       hostname: 'servicios.simpleapi.cl',
