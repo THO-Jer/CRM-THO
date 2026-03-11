@@ -67,6 +67,21 @@ const pickAllowedColumns = (payload, allowedColumns) => Object.fromEntries(
   Object.entries(payload).filter(([key]) => allowedColumns.has(key))
 )
 
+
+const CATEGORIAS_FACTURAS_RECIBIDAS_PERMITIDAS = new Set([
+  'Servicios',
+  'Oficina',
+  'Marketing',
+  'Tecnología',
+  'Sueldos',
+  'Otros'
+])
+
+const normalizeCategoriaRecibida = (value) => {
+  const categoria = sanitize(value)
+  return CATEGORIAS_FACTURAS_RECIBIDAS_PERMITIDAS.has(categoria) ? categoria : 'Otros'
+}
+
 const mapFacturaEmitidaPayload = ({ row, fileName, ufDiaActual }) => {
   const total = Number(row.total_monto_clp || 0)
   const numeroFacturaFinal = String(sanitize(row.folio) || sanitize(row.numero_folio) || sanitize(row.numero_factura) || 'SIN-FOLIO')
@@ -101,7 +116,7 @@ const mapFacturaRecibidaPayload = ({ row, fileName, ufDiaActual }) => {
   const iva = Number(row.total_iva_clp || 0)
   const numeroFacturaFinal = String(sanitize(row.folio) || sanitize(row.numero_folio) || sanitize(row.numero_factura) || 'SIN-FOLIO')
   const proveedorFinal = sanitize(row.razon_social_emisor) || sanitize(row.proveedor) || sanitize(row.rut_emisor) || 'Proveedor sin nombre'
-  const categoriaFinal = sanitize(row.categoria) || 'Sin categorizar'
+  const categoriaFinal = normalizeCategoriaRecibida(row.categoria)
   const [anio, mes] = String(row.fecha_emision || '').split('-')
 
   return pickAllowedColumns({
