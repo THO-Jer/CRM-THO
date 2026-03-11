@@ -68,12 +68,19 @@ export default function useSII({ user, ufActual = 38000, loadBoletasHonorarios, 
                     
                     if (!response.ok) {
                         let errorMsg = `HTTP ${response.status}`;
-                        try { const errorData = await response.json(); errorMsg = errorData.error || errorData.message || errorMsg; } catch(e) {}
+                        try {
+                            const errorData = await response.json();
+                            const detailsText = typeof errorData.details === 'string'
+                                ? errorData.details
+                                : (errorData.details?.message || errorData.details?.error || '');
+                            errorMsg = errorData.error || errorData.message || detailsText || errorMsg;
+                        } catch(e) {}
                         if (response.status === 401) errorMsg = 'API Key inválida o expirada. Verifica tu clave de SimpleAPI.';
                         if (response.status === 429) errorMsg = 'Límite de consultas alcanzado. Espera antes de reintentar.';
                         console.error(`Error en ${getNombreMes(mesActual)}:`, errorMsg);
                         totalErrores++;
                         if (response.status === 401) { showToast(`❌ Error de autenticación: ${errorMsg}`, 'error'); return; }
+                        showToast(`⚠️ ${getNombreMes(mesActual)}: ${errorMsg}`, 'info');
                         continue; // Continuar con el siguiente mes
                     }
                     

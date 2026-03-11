@@ -64,6 +64,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: {
         'Authorization': apiKey,
+        'apikey': apiKey,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData)
       }
@@ -109,8 +110,12 @@ export default async function handler(req, res) {
     });
 
     if (result.statusCode !== 200) {
+      const detailMessage = typeof result.data === 'string'
+        ? result.data
+        : (result.data?.message || result.data?.error || result.data?.descripcion || null);
+
       return res.status(result.statusCode).json({
-        error: 'Error desde SimpleAPI',
+        error: detailMessage || 'Error desde SimpleAPI',
         statusCode: result.statusCode,
         details: result.data
       });
