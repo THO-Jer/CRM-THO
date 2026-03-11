@@ -20,6 +20,93 @@ const dedupeBy = (items, buildKey) => {
   })
 }
 
+const FACTURAS_EMITIDAS_ALLOWED_COLUMNS = new Set([
+  'tipo_dte', 'folio', 'fecha_emision', 'tipo_despacho', 'forma_pago',
+  'rut_emisor', 'razon_social_emisor', 'giro_emisor', 'acteco_emisor', 'codigo_sii_sucursal',
+  'direccion_emisor', 'comuna_emisor', 'ciudad_emisor',
+  'rut_receptor', 'razon_social_receptor', 'giro_receptor', 'direccion_receptor', 'comuna_receptor', 'ciudad_receptor',
+  'total_neto_clp', 'total_exento_clp', 'total_iva_clp', 'total_monto_clp',
+  'monto_periodo_clp', 'monto_no_facturable_clp', 'saldo_anterior_clp', 'valor_pagar_clp',
+  'detalle_descripcion', 'detalle_cantidad', 'detalle_precio_clp', 'detalle_monto_item_clp',
+  'periodo_anio', 'periodo_mes', 'fuente', 'nombre_archivo_origen', 'import_batch_id',
+  // compat legacy permitida para emitidas
+  'numero_factura', 'cliente', 'rut_cliente', 'monto_clp', 'monto_neto_clp', 'monto_uf', 'descripcion', 'estado', 'uf_dia'
+])
+
+const FACTURAS_RECIBIDAS_ALLOWED_COLUMNS = new Set([
+  'tipo_dte', 'folio', 'fecha_emision', 'tipo_despacho', 'forma_pago',
+  'rut_emisor', 'razon_social_emisor', 'giro_emisor', 'acteco_emisor', 'codigo_sii_sucursal',
+  'direccion_emisor', 'comuna_emisor', 'ciudad_emisor',
+  'rut_receptor', 'razon_social_receptor', 'giro_receptor', 'direccion_receptor', 'comuna_receptor', 'ciudad_receptor',
+  'total_neto_clp', 'total_exento_clp', 'total_iva_clp', 'total_monto_clp',
+  'monto_periodo_clp', 'monto_no_facturable_clp', 'saldo_anterior_clp', 'valor_pagar_clp',
+  'detalle_descripcion', 'detalle_cantidad', 'detalle_precio_clp', 'detalle_monto_item_clp',
+  'periodo_anio', 'periodo_mes', 'fuente', 'nombre_archivo_origen', 'import_batch_id',
+  // compat legacy permitida para recibidas (sin cliente)
+  'numero_factura', 'proveedor', 'rut_proveedor', 'monto_clp', 'monto_neto_clp', 'monto_iva', 'incluye_iva',
+  'monto_uf', 'descripcion', 'estado', 'uf_dia'
+])
+
+const pickAllowedColumns = (payload, allowedColumns) => Object.fromEntries(
+  Object.entries(payload).filter(([key]) => allowedColumns.has(key))
+)
+
+const mapFacturaEmitidaPayload = ({ row, fileName, ufDiaActual }) => {
+  const total = Number(row.total_monto_clp || 0)
+  const neto = Number(row.total_neto_clp || 0)
+  const iva = Number(row.total_iva_clp || 0)
+  const [anio, mes] = String(row.fecha_emision || '').split('-')
+
+  return pickAllowedColumns({
+    ...row,
+    periodo_anio: anio ? Number(anio) : null,
+    periodo_mes: mes ? Number(mes) : null,
+    fuente: 'sii_xls',
+    nombre_archivo_origen: fileName,
+    import_batch_id: null,
+    // compat legacy emitidas
+    numero_factura: row.folio,
+    cliente: row.razon_social_receptor,
+    rut_cliente: row.rut_receptor,
+    monto_neto_clp: neto,
+    monto_clp: total,
+    monto_iva: iva,
+    incluye_iva: iva > 0,
+    monto_uf: total > 0 ? (total / ufDiaActual).toFixed(2) : '0.00',
+    descripcion: row.detalle_descripcion || `DTE ${row.tipo_dte}`,
+    estado: 'Pendiente',
+    uf_dia: ufDiaActual
+  }, FACTURAS_EMITIDAS_ALLOWED_COLUMNS)
+}
+
+const mapFacturaRecibidaPayload = ({ row, fileName, ufDiaActual }) => {
+  const total = Number(row.total_monto_clp || 0)
+  const neto = Number(row.total_neto_clp || 0)
+  const iva = Number(row.total_iva_clp || 0)
+  const [anio, mes] = String(row.fecha_emision || '').split('-')
+
+  return pickAllowedColumns({
+    ...row,
+    periodo_anio: anio ? Number(anio) : null,
+    periodo_mes: mes ? Number(mes) : null,
+    fuente: 'sii_xls',
+    nombre_archivo_origen: fileName,
+    import_batch_id: null,
+    // compat legacy recibidas (sin cliente)
+    numero_factura: row.folio,
+    proveedor: row.razon_social_emisor,
+    rut_proveedor: row.rut_emisor,
+    monto_neto_clp: neto,
+    monto_clp: total,
+    monto_iva: iva,
+    incluye_iva: iva > 0,
+    monto_uf: total > 0 ? (total / ufDiaActual).toFixed(2) : '0.00',
+    descripcion: row.detalle_descripcion || `DTE ${row.tipo_dte}`,
+    estado: 'Pendiente',
+    uf_dia: ufDiaActual
+  }, FACTURAS_RECIBIDAS_ALLOWED_COLUMNS)
+}
+
 export default function useSII({ ufActual = 38000, loadBoletasHonorarios, loadFacturasEmitidas, loadFacturasRecibidas }) {
   const [loadingType, setLoadingType] = useState(null)
   const ufDiaActual = Number(ufActual) > 0 ? Number(ufActual) : 38000
@@ -142,30 +229,11 @@ export default function useSII({ ufActual = 38000, loadBoletasHonorarios, loadFa
           continue
         }
 
-        const total = Number(row.total_monto_clp || 0)
-        const neto = Number(row.total_neto_clp || 0)
-        const [anio, mes] = String(row.fecha_emision || '').split('-')
-        nuevas.push({
-          ...row,
-          periodo_anio: anio ? Number(anio) : null,
-          periodo_mes: mes ? Number(mes) : null,
-          fuente: 'sii_xls',
-          nombre_archivo_origen: file.name,
-          import_batch_id: null,
-          // compat legacy UI
-          numero_factura: row.folio,
-          cliente: row.razon_social_receptor,
-          rut_cliente: row.rut_receptor,
-          proveedor: row.razon_social_emisor,
-          rut_proveedor: row.rut_emisor,
-          monto_neto_clp: neto,
-          monto_clp: total,
-          monto_uf: total > 0 ? (total / ufDiaActual).toFixed(2) : '0.00',
-          descripcion: row.detalle_descripcion || `DTE ${row.tipo_dte}`,
-          estado: 'Pendiente',
-          uf_dia: ufDiaActual
-        })
+        const facturaPayload = isEmitidas
+          ? mapFacturaEmitidaPayload({ row, fileName: file.name, ufDiaActual })
+          : mapFacturaRecibidaPayload({ row, fileName: file.name, ufDiaActual })
 
+        nuevas.push(facturaPayload)
         existingKeys.add(key)
       }
 
