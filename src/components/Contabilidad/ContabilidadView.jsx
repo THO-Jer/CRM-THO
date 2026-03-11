@@ -23,8 +23,10 @@ export default function ContabilidadView({
     monedaPreferida, 
     alertasValidacion, 
     setAlertasValidacion, 
-    sincronizarFacturasEmitidas, 
-    sincronizarFacturasRecibidas, 
+    siiLoadingType, 
+    importarBoletasRecibidasSII, 
+    importarFacturasEmitidasSII, 
+    importarFacturasRecibidasSII, 
     importarCartola, 
     buscarMatches, 
     aplicarConciliacion, 
@@ -36,6 +38,8 @@ export default function ContabilidadView({
 }) {
         const dashboardDataRef = useRef(null);
         const boletasFileInputRef = useRef(null);
+        const facturasEmitidasFileInputRef = useRef(null);
+        const facturasRecibidasFileInputRef = useRef(null);
         const [showModal, setShowModal] = useState(false);
         const [modalType, setModalType] = useState(null);
         const [editing, setEditing] = useState(null);
@@ -282,141 +286,72 @@ export default function ContabilidadView({
             await supabase.from(table).delete().eq('id', id);
             onReload();
         };
-
-
-        const normalizarTexto = (value) => String(value || '')
-            .normalize('NFD')
-            .replace(/[̀-ͯ]/g, '')
-            .toLowerCase()
-            .trim();
-
-        const parseMontoCLP = (value) => {
-            if (typeof value === 'number') return Math.round(value);
-            const cleaned = String(value || '')
-                .replace(/\./g, '')
-                .replace(/,/g, '.')
-                .replace(/[^\d.-]/g, '');
-            const num = parseFloat(cleaned);
-            return Number.isFinite(num) ? Math.round(num) : 0;
+        const validarArchivoSii = (file) => {
+            const name = String(file?.name || '').toLowerCase();
+            return name.endsWith('.xls') || name.endsWith('.xlsx');
         };
 
-        const parseFechaSII = (value) => {
-            const txt = String(value || '').trim();
-            const m = txt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-            if (!m) return txt || null;
-            const dd = m[1].padStart(2, '0');
-            const mm = m[2].padStart(2, '0');
-            const yyyy = m[3];
-            return `${yyyy}-${mm}-${dd}`;
+        const mostrarResumenImportacion = (titulo, resumen) => {
+            const msg = `✅ ${titulo}
+
+• Leídos: ${resumen.leidos}
+• Nuevos insertados: ${resumen.insertados}
+• Duplicados omitidos: ${resumen.duplicados}
+• Errores detectados: ${resumen.errores}`;
+            showToast(msg, resumen.errores > 0 ? 'info' : 'success');
         };
 
-        const mesServicioDesdeFecha = (fechaISO) => {
-            if (!fechaISO) return '';
-            const [y, m] = String(fechaISO).split('-');
-            const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-            const idx = Number(m) - 1;
-            return `${meses[idx] || ''} ${y || ''}`.trim();
-        };
-
-        const importarBoletasDesdeXls = async (file) => {
+        const handleImportBoletas = async (file) => {
             if (!file) return;
-            const name = (file.name || '').toLowerCase();
-            if (!(name.endsWith('.xls') || name.endsWith('.xlsx'))) {
+            if (!validarArchivoSii(file)) {
                 showToast('El archivo debe ser .xls o .xlsx', 'info');
                 return;
             }
-
             try {
-                const buffer = await file.arrayBuffer();
-                const wb = XLSX.read(buffer, { type: 'array' });
-                const sheet = wb.Sheets[wb.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-
-                const headerIndex = rows.findIndex((row) => {
-                    const norm = row.map(normalizarTexto);
-                    return norm.includes('n°') && norm.includes('rut') && norm.includes('nombre o razon social') && norm.includes('brutos');
-                });
-
-                if (headerIndex === -1) {
-                    throw new Error('No se detectó el formato esperado de Boletas Recibidas del SII.');
-                }
-
-                const headerNorm = rows[headerIndex].map(normalizarTexto);
-                const colN = headerNorm.findIndex((h) => h === 'n°' || h === 'nº' || h === 'n');
-                const colFecha = headerNorm.findIndex((h) => h === 'fecha');
-                const colRut = headerNorm.findIndex((h) => h === 'rut');
-                const colNombre = headerNorm.findIndex((h) => h === 'nombre o razon social');
-                const colBruto = headerNorm.findIndex((h) => h === 'brutos');
-                const colRet = headerNorm.findIndex((h) => h === 'retenido');
-                const colPag = headerNorm.findIndex((h) => h === 'pagado');
-
-                if ([colFecha, colRut, colNombre, colBruto, colRet, colPag].some((idx) => idx === -1)) {
-                    throw new Error('No se pudieron mapear columnas clave (Fecha, Rut, Nombre, Brutos, Retenido, Pagado).');
-                }
-
-                const ufDia = Number(ufActual) > 0 ? Number(ufActual) : 38000;
-                const existentesMap = new Set((boletasHonorarios || []).map((b) => `${b.prestador}-${b.fecha}-${b.monto_bruto_clp}`));
-
-                const nuevas = [];
-                let duplicadas = 0;
-
-                for (let i = headerIndex + 1; i < rows.length; i++) {
-                    const row = rows[i] || [];
-                    const first = normalizarTexto(row[0]);
-                    if (first.includes('totales')) break;
-
-                    const folio = String(row[colN] || '').trim();
-                    const prestador = String(row[colNombre] || '').trim();
-                    if (!prestador && !folio) continue;
-
-                    const fecha = parseFechaSII(row[colFecha]);
-                    const rut = String(row[colRut] || '').trim();
-                    const bruto = parseMontoCLP(row[colBruto]);
-                    const retenido = parseMontoCLP(row[colRet]);
-                    const pagado = parseMontoCLP(row[colPag]);
-
-                    const key = `${prestador}-${fecha}-${bruto}`;
-                    if (existentesMap.has(key)) {
-                        duplicadas++;
-                        continue;
-                    }
-
-                    nuevas.push({
-                        fecha,
-                        prestador: prestador || 'Sin nombre',
-                        rut,
-                        monto_bruto_clp: bruto,
-                        monto_bruto_uf: (bruto / ufDia).toFixed(2),
-                        monto_retencion_clp: retenido,
-                        monto_retencion_uf: (retenido / ufDia).toFixed(2),
-                        monto_liquido_clp: pagado,
-                        monto_liquido_uf: (pagado / ufDia).toFixed(2),
-                        porcentaje_retencion: bruto > 0 ? ((retenido / bruto) * 100).toFixed(2) : 0,
-                        uf_dia: ufDia,
-                        descripcion: `Importado XLS SII (${file.name})`,
-                        mes_servicio: mesServicioDesdeFecha(fecha),
-                        proyecto: '',
-                        moneda_principal: 'CLP'
-                    });
-                    existentesMap.add(key);
-                }
-
-                if (nuevas.length === 0) {
-                    showToast(`No se encontraron boletas nuevas para importar. Duplicadas: ${duplicadas}`, 'info');
-                    return;
-                }
-
-                const { error } = await supabase.from('boletas_honorarios').insert(nuevas);
-                if (error) throw error;
-
-                showToast(`✅ Importación completada: ${nuevas.length} boletas nuevas (${duplicadas} duplicadas)`, 'success');
+                const resumen = await importarBoletasRecibidasSII(file);
+                if (!resumen) return;
+                mostrarResumenImportacion('Importar Boletas Recibidas SII', resumen);
                 onReload();
             } catch (error) {
-                console.error('Error importando XLS de boletas:', error);
-                showToast(`❌ Error importando XLS: ${error.message}`, 'error');
+                console.error('Error importando boletas SII:', error);
+                showToast(`❌ Error importando boletas: ${error.message}`, 'error');
             }
         };
-        
+
+        const handleImportFacturasEmitidas = async (file) => {
+            if (!file) return;
+            if (!validarArchivoSii(file)) {
+                showToast('El archivo debe ser .xls o .xlsx', 'info');
+                return;
+            }
+            try {
+                const resumen = await importarFacturasEmitidasSII(file);
+                if (!resumen) return;
+                mostrarResumenImportacion('Importar Facturas Emitidas SII', resumen);
+                onReload();
+            } catch (error) {
+                console.error('Error importando facturas emitidas SII:', error);
+                showToast(`❌ Error importando facturas emitidas: ${error.message}`, 'error');
+            }
+        };
+
+        const handleImportFacturasRecibidas = async (file) => {
+            if (!file) return;
+            if (!validarArchivoSii(file)) {
+                showToast('El archivo debe ser .xls o .xlsx', 'info');
+                return;
+            }
+            try {
+                const resumen = await importarFacturasRecibidasSII(file);
+                if (!resumen) return;
+                mostrarResumenImportacion('Importar Facturas Recibidas SII', resumen);
+                onReload();
+            } catch (error) {
+                console.error('Error importando facturas recibidas SII:', error);
+                showToast(`❌ Error importando facturas recibidas: ${error.message}`, 'error');
+            }
+        };
+
         // Calcular métricas del período
         const totalEmitidas = facturasEmiAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
         const totalRecibidas = facturasRecAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
@@ -741,7 +676,14 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Facturas Emitidas</h3>
                                     <div className="flex gap-2">
-                                        <button onClick={sincronizarFacturasEmitidas} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🔄 Sincronizar SII</button>
+                                        <input
+                                            ref={facturasEmitidasFileInputRef}
+                                            type="file"
+                                            accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                            className="hidden"
+                                            onChange={(e) => { handleImportFacturasEmitidas(e.target.files?.[0] || null); e.target.value = ''; }}
+                                        />
+                                        <button onClick={() => facturasEmitidasFileInputRef.current?.click()} disabled={siiLoadingType === 'emitidas'} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-60">📥 Importar Facturas Emitidas SII</button>
                                         <button onClick={() => { setEditing(null); setModalType('emitida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                     </div>
                                 </div>
@@ -855,7 +797,14 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Facturas Recibidas (Gastos)</h3>
                                     <div className="flex gap-2">
-                                        <button onClick={sincronizarFacturasRecibidas} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🔄 Sincronizar SII</button>
+                                        <input
+                                            ref={facturasRecibidasFileInputRef}
+                                            type="file"
+                                            accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                            className="hidden"
+                                            onChange={(e) => { handleImportFacturasRecibidas(e.target.files?.[0] || null); e.target.value = ''; }}
+                                        />
+                                        <button onClick={() => facturasRecibidasFileInputRef.current?.click()} disabled={siiLoadingType === 'recibidas'} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-60">📥 Importar Facturas Recibidas SII</button>
                                         <button onClick={() => { setEditing(null); setModalType('recibida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                     </div>
                                 </div>
@@ -1126,13 +1075,14 @@ export default function ContabilidadView({
                                             type="file"
                                             accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                             className="hidden"
-                                            onChange={(e) => importarBoletasDesdeXls(e.target.files?.[0] || null)}
+                                            onChange={(e) => { handleImportBoletas(e.target.files?.[0] || null); e.target.value = ''; }}
                                         />
                                         <button
                                             onClick={() => boletasFileInputRef.current?.click()}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                                            disabled={siiLoadingType === 'boletas'}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-60"
                                         >
-                                            📥 Importar XLS SII
+                                            📥 Importar Boletas Recibidas SII
                                         </button>
                                         <button onClick={() => { setEditing(null); setModalType('boleta'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Boleta</button>
                                     </div>
