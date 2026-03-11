@@ -44,6 +44,25 @@ export default function useCRMActions({ user, data, loaders }) {
         return false;
     };
 
+
+    const logEvent = async (entityType, entityId, eventType, title, payload = {}) => {
+        try {
+            if (!user || !entityType || !entityId || !eventType || !title) return;
+
+            await supabase.from('crm_events').insert([{
+                entity_type: entityType,
+                entity_id: entityId,
+                event_type: eventType,
+                title,
+                payload,
+                created_by: user?.id || null,
+                created_by_email: user?.email || null
+            }]);
+        } catch (e) {
+            console.warn('logEvent failed', e?.message || e);
+        }
+    };
+
     const openConvert = (prospecto, targetType = 'ticket') => {
         setConvertSource({ type: 'prospecto', item: prospecto });
         const today = new Date().toISOString().split('T')[0];
