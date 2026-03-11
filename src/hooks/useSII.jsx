@@ -247,12 +247,18 @@ Detalle: ${detailsText}` : '';
         const apiKey = prompt('Ingresa tu API Key de SimpleAPI:');
         if (!apiKey) return;
         
-        const rutUsuario = prompt('Ingresa tu RUT (con guión, ej: 12345678-9):');
-        if (!rutUsuario) return;
-        
-        const passwordSII = prompt('Ingresa tu contraseña del SII:');
-        if (!passwordSII) return;
+        const rutEmpresa = prompt('Ingresa el RUT empresa (con guión, ej: 77667083-9):');
+        if (!rutEmpresa) return;
 
+        const rutCertificado = prompt('Ingresa el RUT del certificado digital (persona natural):', rutEmpresa) || rutEmpresa;
+        const passwordCertificado = prompt('Ingresa la contraseña del certificado digital (.pfx/.p12):');
+        if (!passwordCertificado) return;
+
+        const certificadoB64 = prompt('Pega CertificadoB64 del certificado .pfx/.p12:');
+        if (!certificadoB64) return;
+
+        const ambiente = prompt('Ambiente RCV (1=producción, 0=certificación):', '1') || '1';
+        const procesaBoletas = (prompt('¿Procesar boletas en ventas? (si/no)', 'no') || 'no').toLowerCase().startsWith('s');
 
         const año = prompt('¿Qué año deseas sincronizar? (ejemplo: 2025)');
         if (!año) return;
@@ -286,8 +292,12 @@ Detalle: ${detailsText}` : '';
                     
                     const payload = {
                         apiKey: apiKey,
-                        rutUsuario: rutUsuario,
-                        passwordSII: passwordSII,
+                        rutCertificado: rutCertificado,
+                        rutEmpresa: rutEmpresa,
+                        passwordCertificado: passwordCertificado,
+                        certificadoB64: certificadoB64.trim(),
+                        ambiente: Number(ambiente) || 1,
+                        procesaBoletas: procesaBoletas,
                         año: año,
                         mes: mesActual
                     };
@@ -315,7 +325,8 @@ Detalle: ${detailsText}` : '';
 
                     
                     const result = await response.json();
-                    const documentos = result.documentos || [];
+                    const remote = result.details || result.remoteBody || result;
+                    const documentos = remote.documentos || remote.data || [];
                     
                     console.log(`${getNombreMes(mesActual)}: ${documentos.length} documentos encontrados`);
                     
@@ -396,12 +407,17 @@ Detalle: ${detailsText}` : '';
         const apiKey = prompt('Ingresa tu API Key de SimpleAPI:');
         if (!apiKey) return;
         
-        const rutUsuario = prompt('Ingresa tu RUT (con guión, ej: 12345678-9):');
-        if (!rutUsuario) return;
-        
-        const passwordSII = prompt('Ingresa tu contraseña del SII:');
-        if (!passwordSII) return;
+        const rutEmpresa = prompt('Ingresa el RUT empresa (con guión, ej: 77667083-9):');
+        if (!rutEmpresa) return;
 
+        const rutCertificado = prompt('Ingresa el RUT del certificado digital (persona natural):', rutEmpresa) || rutEmpresa;
+        const passwordCertificado = prompt('Ingresa la contraseña del certificado digital (.pfx/.p12):');
+        if (!passwordCertificado) return;
+
+        const certificadoB64 = prompt('Pega CertificadoB64 del certificado .pfx/.p12:');
+        if (!certificadoB64) return;
+
+        const ambiente = prompt('Ambiente RCV (1=producción, 0=certificación):', '1') || '1';
 
         const año = prompt('¿Qué año deseas sincronizar? (ejemplo: 2025)');
         if (!año) return;
@@ -435,8 +451,11 @@ Detalle: ${detailsText}` : '';
                     
                     const payload = {
                         apiKey: apiKey,
-                        rutUsuario: rutUsuario,
-                        passwordSII: passwordSII,
+                        rutCertificado: rutCertificado,
+                        rutEmpresa: rutEmpresa,
+                        passwordCertificado: passwordCertificado,
+                        certificadoB64: certificadoB64.trim(),
+                        ambiente: Number(ambiente) || 1,
                         año: año,
                         mes: mesActual
                     };
@@ -457,7 +476,8 @@ Detalle: ${detailsText}` : '';
                         continue;
                     }
                     const result = await response.json();
-                    const documentos = result.documentos || [];
+                    const remote = result.details || result.remoteBody || result;
+                    const documentos = remote.documentos || remote.data || [];
                     
                     console.log(`${getNombreMes(mesActual)}: ${documentos.length} documentos encontrados`);
                     
