@@ -163,7 +163,6 @@ export default function useSII({ ufActual = 38000, loadBoletasHonorarios, loadFa
           monto_uf: total > 0 ? (total / ufDiaActual).toFixed(2) : '0.00',
           descripcion: row.detalle_descripcion || `DTE ${row.tipo_dte}`,
           estado: 'Pendiente',
-          moneda_principal: 'CLP',
           uf_dia: ufDiaActual
         })
 
