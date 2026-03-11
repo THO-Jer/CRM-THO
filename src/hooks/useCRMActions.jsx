@@ -38,6 +38,12 @@ export default function useCRMActions({ user, data, loaders }) {
     const [selectedEntity, setSelectedEntity] = useState(null);
     const openDetail = (type, item) => setSelectedEntity({ type, item });
 
+    const requireAuth = () => {
+        if (user) return true;
+        showToast('Debes iniciar sesión para realizar esta acción', 'error');
+        return false;
+    };
+
     const openConvert = (prospecto, targetType = 'ticket') => {
         setConvertSource({ type: 'prospecto', item: prospecto });
         const today = new Date().toISOString().split('T')[0];
