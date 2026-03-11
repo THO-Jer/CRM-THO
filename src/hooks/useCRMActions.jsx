@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
-import { showToast } from '../utils/toast'
+import { showToast, confirmModal } from '../utils/toast'
 
 export default function useCRMActions({ user, data, loaders }) {
     const { prospectos, setProspectos, cerrados, setCerrados, tickets, setTickets, keyAccounts, setKeyAccounts } = data;
@@ -624,12 +624,43 @@ export default function useCRMActions({ user, data, loaders }) {
         }
     };
 
-    const handleDeleteProspecto = async (id) => {
+    const handleDeleteProspecto = async (prospectoOrId) => {
         if (!requireAuth()) return;
-        if (!(await confirmModal('¿Eliminar?'))) return;
-        const { error } = await supabase.from('prospectos').delete().eq('id', id);
-        if (error) alert('Error: ' + error.message);
-        else await loadProspectos();
+
+        const prospecto = typeof prospectoOrId === 'object' ? prospectoOrId : prospectos.find(p => p.id === prospectoOrId);
+        const prospectoId = prospecto?.id || prospectoOrId;
+
+        if (!prospectoId) return;
+        if (!(await confirmModal('¿Eliminar prospecto del pipeline?'))) return;
+
+        const { error } = await supabase.from('prospectos').delete().eq('id', prospectoId);
+
+        if (!error) {
+            await logEvent('prospectos', prospectoId, 'deleted', 'Prospecto eliminado del pipeline', {
+                deleted_by: user?.email || 'unknown'
+            });
+            await loadProspectos();
+            showToast('🗑️ Prospecto eliminado del pipeline', 'success');
+            return;
+        }
+
+        // Fallback: si no es posible borrar físicamente (RLS/FK), ocultar del pipeline
+        const { error: hideError } = await supabase
+            .from('prospectos')
+            .update({ estado: 'Eliminado' })
+            .eq('id', prospectoId);
+
+        if (hideError) {
+            alert('Error al eliminar: ' + error.message);
+            return;
+        }
+
+        await logEvent('prospectos', prospectoId, 'hidden', 'Prospecto ocultado del pipeline (fallback)', {
+            reason: error.message,
+            hidden_by: user?.email || 'unknown'
+        });
+        await loadProspectos();
+        showToast('⚠️ No se pudo borrar físicamente; se ocultó del pipeline.', 'info');
     };
 
     const handleMoveProspecto = async (prospectoId, nuevoEstado) => {

@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-    // Configurar CORS
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -15,23 +14,23 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { apiKey, rutUsuario, passwordSII, año, mes } = req.body;
+        const { apiKey, rutUsuario, passwordSII, año, mes } = req.body || {};
+        const anioNum = Number(año);
+        const mesNum = Number(mes);
 
-        if (!apiKey || !rutUsuario || !passwordSII || !año || !mes) {
-            return res.status(400).json({ error: 'Faltan parámetros requeridos' });
+        if (!apiKey || !rutUsuario || !passwordSII || !Number.isInteger(anioNum) || !Number.isInteger(mesNum) || mesNum < 1 || mesNum > 12) {
+            return res.status(400).json({ error: 'Parámetros inválidos: apiKey, rutUsuario, passwordSII, año numérico y mes (1-12)' });
         }
 
-        // Endpoint de SimpleAPI para facturas emitidas
         const simpleApiUrl = 'https://api.simpleapi.cl/api/dte/emitidos/';
-        
         const payload = {
             rut: rutUsuario,
             password: passwordSII,
-            anio: parseInt(año),
-            mes: parseInt(mes)
+            anio: anioNum,
+            mes: mesNum
         };
 
-        console.log('Llamando a SimpleAPI emitidos:', payload);
+        console.info('[sync-facturas-emitidas] Request validada', { anio: anioNum, mes: mesNum, rutProvided: Boolean(rutUsuario) });
 
         const response = await fetch(simpleApiUrl, {
             method: 'POST',
@@ -44,8 +43,8 @@ export default async function handler(req, res) {
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Error SimpleAPI:', response.status, errorText);
-            return res.status(response.status).json({ 
+            console.error('[sync-facturas-emitidas] Error SimpleAPI', { status: response.status, detailPreview: errorText?.slice?.(0, 200) || '' });
+            return res.status(response.status).json({
                 error: 'Error desde SimpleAPI',
                 details: errorText,
                 status: response.status
@@ -53,15 +52,15 @@ export default async function handler(req, res) {
         }
 
         const data = await response.json();
-        console.log('Respuesta SimpleAPI:', data);
+        console.info('[sync-facturas-emitidas] Sincronización OK');
 
         return res.status(200).json(data);
 
     } catch (error) {
-        console.error('Error en sync-facturas-emitidas:', error);
-        return res.status(500).json({ 
+        console.error('[sync-facturas-emitidas] Error interno', { message: error.message });
+        return res.status(500).json({
             error: 'Error interno del servidor',
-            message: error.message 
+            message: error.message
         });
     }
 }

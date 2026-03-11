@@ -21,43 +21,36 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { apiKey, año, mes, rutUsuario, passwordSII } = req.body;
+    const { apiKey, año, mes, rutUsuario, passwordSII } = req.body || {};
+    const anioNum = Number(año);
+    const mesNum = (mes === '' || mes === null || mes === undefined || mes === 'null' || mes === 'undefined') ? null : Number(mes);
 
     // Log de lo que recibimos
-    console.log('=== REQUEST BODY ===');
-    console.log('apiKey:', apiKey ? 'presente' : 'FALTA');
-    console.log('rutUsuario:', rutUsuario ? 'presente' : 'FALTA');
-    console.log('passwordSII:', passwordSII ? 'presente' : 'FALTA');
-    console.log('año:', año);
-    console.log('mes:', mes);
+    console.info('[sync-boletas] Request recibida', {
+      apiKeyProvided: Boolean(apiKey),
+      rutProvided: Boolean(rutUsuario),
+      passwordProvided: Boolean(passwordSII),
+      anio: anioNum,
+      mes: mesNum
+    });
 
     // Validar parámetros requeridos
-    if (!apiKey || !año || !rutUsuario || !passwordSII) {
+    if (!apiKey || !rutUsuario || !passwordSII || !Number.isInteger(anioNum) || (mesNum !== null && (!Number.isInteger(mesNum) || mesNum < 1 || mesNum > 12))) {
       return res.status(400).json({ 
-        error: 'Faltan parámetros requeridos: apiKey, año, rutUsuario, passwordSII',
-        received: { 
-          apiKey: !!apiKey, 
-          año: !!año, 
-          rutUsuario: !!rutUsuario, 
-          passwordSII: !!passwordSII, 
-          mes: mes 
-        }
+        error: 'Parámetros inválidos: apiKey, rutUsuario, passwordSII, año numérico y mes opcional (1-12)'
       });
     }
 
     // Determinar si pedir mes específico o todo el año
     let urlPath;
-    if (mes && mes !== '' && mes !== 'null' && mes !== 'undefined') {
-      const mesPad = String(mes).padStart(2, '0');
-      urlPath = `/api/bhe/listado/recibidas/${mesPad}/${año}`;
+    if (mesNum !== null) {
+      const mesPad = String(mesNum).padStart(2, '0');
+      urlPath = `/api/bhe/listado/recibidas/${mesPad}/${anioNum}`;
     } else {
-      urlPath = `/api/bhe/listado/recibidas/${año}`;
+      urlPath = `/api/bhe/listado/recibidas/${anioNum}`;
     }
     
-    console.log('=== DEBUG INFO ===');
-    console.log('Año:', año);
-    console.log('Mes válido:', mes && mes !== '' ? mes : 'NO (traer todo el año)');
-    console.log('URL completa:', `https://servicios.simpleapi.cl${urlPath}`);
+    console.info('[sync-boletas] Llamando endpoint SimpleAPI', { anio: anioNum, mes: mesNum, hasMonth: mesNum !== null });
     
     // Preparar body para SimpleAPI
     const postData = JSON.stringify({
@@ -80,14 +73,14 @@ export default async function handler(req, res) {
       const request = https.request(options, (response) => {
         let data = '';
         
-        console.log('Response status code:', response.statusCode);
+        console.info('[sync-boletas] Response status', { statusCode: response.statusCode });
         
         response.on('data', (chunk) => {
           data += chunk;
         });
         
         response.on('end', () => {
-          console.log('Response body (primeros 500 chars):', data.substring(0, 500));
+          console.info('[sync-boletas] Response body preview', { preview: data.substring(0, 200) });
           
           try {
             const parsed = JSON.parse(data);
@@ -106,7 +99,7 @@ export default async function handler(req, res) {
       });
 
       request.on('error', (e) => {
-        console.error('Request error:', e);
+        console.error('[sync-boletas] Request error', { message: e.message });
         reject(e);
       });
 
@@ -126,7 +119,7 @@ export default async function handler(req, res) {
     return res.status(200).json(result.data);
 
   } catch (error) {
-    console.error('Error en sync-boletas:', error);
+    console.error('[sync-boletas] Error interno', { message: error.message });
     return res.status(500).json({
       error: 'Error interno del servidor',
       message: error.message

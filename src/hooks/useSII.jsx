@@ -1,7 +1,8 @@
 import { supabase } from '../utils/supabase'
 import { showToast } from '../utils/toast'
 
-export default function useSII({ user, loadBoletasHonorarios, loadFacturasEmitidas, loadFacturasRecibidas }) {
+export default function useSII({ user, ufActual = 38000, loadBoletasHonorarios, loadFacturasEmitidas, loadFacturasRecibidas }) {
+    const ufDiaActual = Number(ufActual) > 0 ? Number(ufActual) : 38000;
     const sincronizarBoletasSII = async () => {
         const apiKey = prompt('Ingresa tu API Key de SimpleAPI:');
         if (!apiKey) return;
@@ -90,7 +91,7 @@ export default function useSII({ user, loadBoletasHonorarios, loadFacturasEmitid
                             const montoBruto = parseFloat(boleta.honorarios?.brutos) || 0;
                             const retenido = parseFloat(boleta.honorarios?.retenido) || 0;
                             const liquido = parseFloat(boleta.honorarios?.pagado) || 0;
-                            const ufDia = ufActual;
+                            const ufDia = ufDiaActual;
                             
                             // Detectar duplicados
                             const key = `${prestador}-${fecha}-${montoBruto}`;
@@ -258,11 +259,11 @@ export default function useSII({ user, loadBoletasHonorarios, loadFacturasEmitid
                                 rut_cliente: rutCliente,
                                 monto_neto_clp: neto,
                                 monto_clp: total,
-                                monto_uf: (total / ufActual).toFixed(2),
+                                monto_uf: (total / ufDiaActual).toFixed(2),
                                 descripcion: doc.descripcion || `Factura tipo ${doc.tipo}`,
                                 estado: 'Pendiente',
                                 moneda_principal: 'CLP',
-                                uf_dia: ufActual
+                                uf_dia: ufDiaActual
                             };
                             
                             const { error: insertError } = await supabase
@@ -399,11 +400,11 @@ export default function useSII({ user, loadBoletasHonorarios, loadFacturasEmitid
                                 rut_proveedor: rutProveedor,
                                 monto_neto_clp: neto,
                                 monto_clp: total,
-                                monto_uf: (total / ufActual).toFixed(2),
+                                monto_uf: (total / ufDiaActual).toFixed(2),
                                 descripcion: doc.descripcion || `Factura tipo ${doc.tipo}`,
                                 estado: 'Pendiente',
                                 moneda_principal: 'CLP',
-                                uf_dia: ufActual
+                                uf_dia: ufDiaActual
                             };
                             
                             const { error: insertError } = await supabase

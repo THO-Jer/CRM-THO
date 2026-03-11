@@ -23,7 +23,8 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
     }, 0);
 
     // Exclude converted prospectos from active pipeline
-    const prospectosActivos = prospectos.filter(p => p.estado !== 'Convertido');
+    const estadosExcluidos = new Set(['Convertido', 'Eliminado']);
+    const prospectosActivos = prospectos.filter(p => !estadosExcluidos.has(p.estado));
 
     // --- Pipeline ---
     const pipelineTotal = prospectosActivos.reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0);

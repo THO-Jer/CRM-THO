@@ -149,7 +149,7 @@ function CRMApp() {
     );
 
     // ===== SII SYNC HOOK =====
-    const sii = useSII({ user, loadBoletasHonorarios, loadFacturasEmitidas, loadFacturasRecibidas });
+    const sii = useSII({ user, ufActual, loadBoletasHonorarios, loadFacturasEmitidas, loadFacturasRecibidas });
     const { sincronizarBoletasSII, sincronizarFacturasEmitidas, sincronizarFacturasRecibidas } = sii;
 
     // ===== METRICS HOOK =====
