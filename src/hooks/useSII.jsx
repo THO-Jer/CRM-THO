@@ -26,6 +26,7 @@ const BOLETAS_HONORARIOS_ALLOWED_COLUMNS = new Set([
   'rut_prestador', 'prestador', 'sociedad_profesional',
   'monto_bruto_clp', 'monto_retenido_clp', 'monto_pagado_clp',
   'periodo_anio', 'periodo_mes', 'fuente', 'nombre_archivo_origen', 'import_batch_id',
+  'empresa_id',
   // compat legacy boletas
   'fecha', 'rut', 'monto_retencion_clp', 'monto_liquido_clp',
   'monto_bruto_uf', 'monto_retencion_uf', 'monto_liquido_uf',
@@ -41,8 +42,10 @@ const FACTURAS_EMITIDAS_ALLOWED_COLUMNS = new Set([
   'monto_periodo_clp', 'monto_no_facturable_clp', 'saldo_anterior_clp', 'valor_pagar_clp',
   'detalle_descripcion', 'detalle_cantidad', 'detalle_precio_clp', 'detalle_monto_item_clp',
   'periodo_anio', 'periodo_mes', 'fuente', 'nombre_archivo_origen', 'import_batch_id',
-  // compat legacy permitida para emitidas
-  'numero_factura', 'cliente', 'rut_cliente', 'monto_clp', 'monto_neto_clp', 'monto_uf', 'descripcion', 'estado', 'uf_dia'
+  'empresa_id',
+  // legacy real emitidas
+  'numero_factura', 'cliente', 'rut_cliente', 'monto_clp', 'monto_uf', 'descripcion', 'estado', 'uf_dia',
+  'numero_folio', 'tipo_documento', 'origen', 'fecha_pago', 'ticket_id', 'key_account_id'
 ])
 
 const FACTURAS_RECIBIDAS_ALLOWED_COLUMNS = new Set([
@@ -54,9 +57,10 @@ const FACTURAS_RECIBIDAS_ALLOWED_COLUMNS = new Set([
   'monto_periodo_clp', 'monto_no_facturable_clp', 'saldo_anterior_clp', 'valor_pagar_clp',
   'detalle_descripcion', 'detalle_cantidad', 'detalle_precio_clp', 'detalle_monto_item_clp',
   'periodo_anio', 'periodo_mes', 'fuente', 'nombre_archivo_origen', 'import_batch_id',
-  // compat legacy permitida para recibidas (sin cliente)
-  'numero_factura', 'proveedor', 'rut_proveedor', 'monto_clp', 'monto_neto_clp',
-  'monto_uf', 'descripcion', 'estado', 'uf_dia'
+  'empresa_id',
+  // legacy real recibidas
+  'numero_factura', 'proveedor', 'rut_proveedor', 'monto_clp', 'monto_uf', 'categoria', 'descripcion',
+  'estado', 'fecha_pago', 'incluye_iva', 'monto_neto', 'monto_iva', 'tipo_documento', 'origen', 'uf_dia', 'numero_folio'
 ])
 
 const pickAllowedColumns = (payload, allowedColumns) => Object.fromEntries(
@@ -65,7 +69,6 @@ const pickAllowedColumns = (payload, allowedColumns) => Object.fromEntries(
 
 const mapFacturaEmitidaPayload = ({ row, fileName, ufDiaActual }) => {
   const total = Number(row.total_monto_clp || 0)
-  const neto = Number(row.total_neto_clp || 0)
   const [anio, mes] = String(row.fecha_emision || '').split('-')
 
   return pickAllowedColumns({
@@ -79,18 +82,21 @@ const mapFacturaEmitidaPayload = ({ row, fileName, ufDiaActual }) => {
     numero_factura: row.folio,
     cliente: row.razon_social_receptor,
     rut_cliente: row.rut_receptor,
-    monto_neto_clp: neto,
     monto_clp: total,
     monto_uf: total > 0 ? (total / ufDiaActual).toFixed(2) : '0.00',
     descripcion: row.detalle_descripcion || `DTE ${row.tipo_dte}`,
     estado: 'Pendiente',
-    uf_dia: ufDiaActual
+    uf_dia: ufDiaActual,
+    numero_folio: row.folio,
+    tipo_documento: row.tipo_dte ? String(row.tipo_dte) : null,
+    origen: 'sii_xls'
   }, FACTURAS_EMITIDAS_ALLOWED_COLUMNS)
 }
 
 const mapFacturaRecibidaPayload = ({ row, fileName, ufDiaActual }) => {
   const total = Number(row.total_monto_clp || 0)
   const neto = Number(row.total_neto_clp || 0)
+  const iva = Number(row.total_iva_clp || 0)
   const [anio, mes] = String(row.fecha_emision || '').split('-')
 
   return pickAllowedColumns({
@@ -104,12 +110,17 @@ const mapFacturaRecibidaPayload = ({ row, fileName, ufDiaActual }) => {
     numero_factura: row.folio,
     proveedor: row.razon_social_emisor,
     rut_proveedor: row.rut_emisor,
-    monto_neto_clp: neto,
     monto_clp: total,
+    monto_neto: neto,
+    monto_iva: iva,
+    incluye_iva: iva > 0,
     monto_uf: total > 0 ? (total / ufDiaActual).toFixed(2) : '0.00',
     descripcion: row.detalle_descripcion || `DTE ${row.tipo_dte}`,
     estado: 'Pendiente',
-    uf_dia: ufDiaActual
+    uf_dia: ufDiaActual,
+    numero_folio: row.folio,
+    tipo_documento: row.tipo_dte ? String(row.tipo_dte) : null,
+    origen: 'sii_xls'
   }, FACTURAS_RECIBIDAS_ALLOWED_COLUMNS)
 }
 
@@ -196,6 +207,7 @@ export default function useSII({ ufActual = 38000, loadBoletasHonorarios, loadFa
         }
 
         const boletaPayload = mapBoletaPayload({ row, fileName: file.name, ufDiaActual })
+        console.log('[sii-import] boletas_honorarios payload keys', Object.keys(boletaPayload))
         nuevas.push(boletaPayload)
 
         existingKeys.add(kMain)
@@ -245,6 +257,7 @@ export default function useSII({ ufActual = 38000, loadBoletasHonorarios, loadFa
           ? mapFacturaEmitidaPayload({ row, fileName: file.name, ufDiaActual })
           : mapFacturaRecibidaPayload({ row, fileName: file.name, ufDiaActual })
 
+        console.log(`[sii-import] ${table} payload keys`, Object.keys(facturaPayload))
         nuevas.push(facturaPayload)
         existingKeys.add(key)
       }
