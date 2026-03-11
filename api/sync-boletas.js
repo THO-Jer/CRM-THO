@@ -1,6 +1,8 @@
 // Vercel Serverless Function - ES Module syntax
 import https from 'https';
 
+const maskPassword = (value) => (value ? '***' : '');
+
 export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,9 +16,9 @@ export default async function handler(req, res) {
 
   // Solo POST
   if (req.method !== 'POST') {
-    return res.status(405).json({ 
+    return res.status(405).json({
       error: 'Method not allowed',
-      method: req.method 
+      method: req.method
     });
   }
 
@@ -25,18 +27,18 @@ export default async function handler(req, res) {
     const anioNum = Number(año);
     const mesNum = (mes === '' || mes === null || mes === undefined || mes === 'null' || mes === 'undefined') ? null : Number(mes);
 
-    // Log de lo que recibimos
-    console.info('[sync-boletas] Request recibida', {
-      apiKeyProvided: Boolean(apiKey),
-      rutProvided: Boolean(rutUsuario),
-      passwordProvided: Boolean(passwordSII),
+    // Log de request entrante (sin secretos)
+    console.info('[sync-boletas] Body recibido desde frontend', {
+      hasApiKey: Boolean(apiKey),
+      hasRutUsuario: Boolean(rutUsuario),
+      hasPasswordSII: Boolean(passwordSII),
       anio: anioNum,
       mes: mesNum
     });
 
     // Validar parámetros requeridos
     if (!apiKey || !rutUsuario || !passwordSII || !Number.isInteger(anioNum) || (mesNum !== null && (!Number.isInteger(mesNum) || mesNum < 1 || mesNum > 12))) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Parámetros inválidos: apiKey, rutUsuario, passwordSII, año numérico y mes opcional (1-12)'
       });
     }
@@ -49,40 +51,62 @@ export default async function handler(req, res) {
     } else {
       urlPath = `/api/bhe/listado/recibidas/${anioNum}`;
     }
-    
-    console.info('[sync-boletas] Llamando endpoint SimpleAPI', { anio: anioNum, mes: mesNum, hasMonth: mesNum !== null });
-    
-    // Preparar body para SimpleAPI
-    const postData = JSON.stringify({
-      RutUsuario: rutUsuario,
-      PasswordSII: passwordSII
+
+    const sentInput = {
+      RutCertificado: rutUsuario,
+      Password: maskPassword(passwordSII)
+    };
+
+    console.info('[sync-boletas] urlPath final', { urlPath });
+    console.info('[sync-boletas] payload enviado a SimpleAPI', { input: sentInput });
+
+    // SimpleAPI requiere multipart/form-data con campo `input` (JSON string)
+    const inputPayload = JSON.stringify({
+      RutCertificado: rutUsuario,
+      Password: passwordSII
     });
-    
+
+    const boundary = `----crm-tho-${Date.now().toString(16)}`;
+    const multipartBody = [
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="input"',
+      '',
+      inputPayload,
+      `--${boundary}--`,
+      ''
+    ].join('\r\n');
+
+    const postDataBuffer = Buffer.from(multipartBody, 'utf8');
+
     const options = {
       hostname: 'servicios.simpleapi.cl',
       path: urlPath,
       method: 'POST',
       headers: {
-        'Authorization': apiKey,
-        'apikey': apiKey,
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData)
+        Authorization: apiKey,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': postDataBuffer.length
       }
     };
 
     const result = await new Promise((resolve, reject) => {
       const request = https.request(options, (response) => {
         let data = '';
-        
-        console.info('[sync-boletas] Response status', { statusCode: response.statusCode });
-        
+
+        console.info('[sync-boletas] statusCode respuesta SimpleAPI', { statusCode: response.statusCode });
+
         response.on('data', (chunk) => {
           data += chunk;
         });
-        
+
         response.on('end', () => {
-          console.info('[sync-boletas] Response body preview', { preview: data.substring(0, 200) });
-          
+          if (response.statusCode !== 200) {
+            console.error('[sync-boletas] body completo error remoto', {
+              statusCode: response.statusCode,
+              body: data
+            });
+          }
+
           try {
             const parsed = JSON.parse(data);
             resolve({
@@ -92,7 +116,7 @@ export default async function handler(req, res) {
           } catch (e) {
             resolve({
               statusCode: response.statusCode,
-              data: data,
+              data,
               parseError: e.message
             });
           }
@@ -104,18 +128,11 @@ export default async function handler(req, res) {
         reject(e);
       });
 
-      // Enviar el body
-      request.write(postData);
+      request.write(postDataBuffer);
       request.end();
     });
 
     if (result.statusCode !== 200) {
-      console.error('[sync-boletas] Error SimpleAPI', {
-        statusCode: result.statusCode,
-        urlPath,
-        resultData: result.data
-      });
-
       const detailMessage = typeof result.data === 'string'
         ? result.data
         : (
@@ -130,12 +147,12 @@ export default async function handler(req, res) {
         error: detailMessage || 'Error desde SimpleAPI',
         statusCode: result.statusCode,
         details: result.data,
-        urlPath
+        urlPath,
+        sentInput
       });
     }
 
     return res.status(200).json(result.data);
-
   } catch (error) {
     console.error('[sync-boletas] Error interno', { message: error.message });
     return res.status(500).json({
