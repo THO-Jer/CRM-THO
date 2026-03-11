@@ -99,6 +99,7 @@ const mapFacturaRecibidaPayload = ({ row, fileName, ufDiaActual }) => {
   const total = Number(row.total_monto_clp || 0)
   const neto = Number(row.total_neto_clp || 0)
   const iva = Number(row.total_iva_clp || 0)
+  const numeroFacturaFinal = String(sanitize(row.folio) || sanitize(row.numero_folio) || sanitize(row.numero_factura) || 'SIN-FOLIO')
   const proveedorFinal = sanitize(row.razon_social_emisor) || sanitize(row.proveedor) || sanitize(row.rut_emisor) || 'Proveedor sin nombre'
   const categoriaFinal = sanitize(row.categoria) || 'Sin categorizar'
   const [anio, mes] = String(row.fecha_emision || '').split('-')
@@ -267,6 +268,13 @@ export default function useSII({ ufActual = 38000, loadBoletasHonorarios, loadFa
           console.log('[sii-import] facturas_emitidas required fields', {
             numero_factura: facturaPayload.numero_factura,
             cliente: facturaPayload.cliente,
+            fecha_emision: facturaPayload.fecha_emision
+          })
+        } else {
+          console.log('[sii-import] facturas_recibidas required fields', {
+            numero_factura: facturaPayload.numero_factura,
+            proveedor: facturaPayload.proveedor,
+            categoria: facturaPayload.categoria,
             fecha_emision: facturaPayload.fecha_emision
           })
         }
