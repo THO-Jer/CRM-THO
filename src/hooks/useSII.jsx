@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
-import { showToast } from '../utils/toast'
 import { normalizeRut, parseBoletasRecibidasFile, parseDteFile } from '../lib/siiImport/parsers'
 
 const chunk = (items, size = 300) => {
@@ -84,6 +83,7 @@ export default function useSII({ ufActual = 38000, loadBoletasHonorarios, loadFa
           periodo_mes: mes ? Number(mes) : null,
           fuente: 'sii_xls',
           nombre_archivo_origen: file.name,
+          import_batch_id: null,
           // compat legacy UI
           fecha,
           rut: row.rut_prestador,
@@ -144,10 +144,14 @@ export default function useSII({ ufActual = 38000, loadBoletasHonorarios, loadFa
 
         const total = Number(row.total_monto_clp || 0)
         const neto = Number(row.total_neto_clp || 0)
+        const [anio, mes] = String(row.fecha_emision || '').split('-')
         nuevas.push({
           ...row,
+          periodo_anio: anio ? Number(anio) : null,
+          periodo_mes: mes ? Number(mes) : null,
           fuente: 'sii_xls',
           nombre_archivo_origen: file.name,
+          import_batch_id: null,
           // compat legacy UI
           numero_factura: row.folio,
           cliente: row.razon_social_receptor,
