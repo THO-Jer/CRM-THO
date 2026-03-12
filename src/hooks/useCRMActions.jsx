@@ -600,22 +600,26 @@ export default function useCRMActions({ user, data, loaders }) {
     };
 
     const handleSaveProspecto = async (data) => {
-        if (!requireAuth()) return;
+        if (!requireAuth()) return false;
         try {
             let savedId = null;
-            if (editingItem) {
+            const editingId = data?.id || null;
+            const editingSource = editingId ? (prospectos.find((p) => p.id === editingId) || data) : null;
+            if (editingId) {
                 // UPDATE: registrar qué cambió
                 const cambios = {};
                 Object.keys(data).forEach(key => {
-                    if (editingItem[key] !== data[key]) {
-                        cambios[key] = { anterior: editingItem[key], nuevo: data[key] };
+                    if (editingSource?.[key] !== data[key]) {
+                        cambios[key] = { anterior: editingSource?.[key], nuevo: data[key] };
                     }
                 });
-                
-                const { error } = await supabase.from('prospectos').update(data).eq('id', editingItem.id);
+
+                const payload = { ...data };
+                delete payload.id;
+                const { error } = await supabase.from('prospectos').update(payload).eq('id', editingId);
                 if (error) throw error;
                 
-                savedId = editingItem.id;
+                savedId = editingId;
                 
                 // Log del update
                 if (Object.keys(cambios).length > 0) {
@@ -642,10 +646,11 @@ export default function useCRMActions({ user, data, loaders }) {
             }
             
             await loadProspectos();
-            setShowModal(false);
+            return true;
         } catch (error) { 
             console.error('Error completo:', error);
             alert('Error al guardar: ' + error.message); 
+            return false;
         }
     };
 
@@ -747,11 +752,14 @@ export default function useCRMActions({ user, data, loaders }) {
     };
 
     const handleSaveOther = async (type, data) => {
-        if (!requireAuth()) return;
+        if (!requireAuth()) return false;
         try {
             const table = type === 'cerrado' ? 'cerrados' : type === 'ticket' ? 'tickets' : 'key_accounts';
-            if (editingItem) {
-                const { error } = await supabase.from(table).update(data).eq('id', editingItem.id);
+            const editingId = data?.id || null;
+            if (editingId) {
+                const payload = { ...data };
+                delete payload.id;
+                const { error } = await supabase.from(table).update(payload).eq('id', editingId);
                 if (error) throw error;
             } else {
                 const { error } = await supabase.from(table).insert([data]);
@@ -760,8 +768,11 @@ export default function useCRMActions({ user, data, loaders }) {
             if (type === 'cerrado') await loadCerrados();
             if (type === 'ticket') await loadTickets();
             if (type === 'keyaccount') await loadKeyAccounts();
-            setShowModal(false);
-        } catch (error) { alert('Error: ' + error.message); }
+            return true;
+        } catch (error) {
+            alert('Error: ' + error.message);
+            return false;
+        }
     };
 
     const handleDeleteOther = async (type, id) => {
