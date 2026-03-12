@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
-import { showToast } from '../utils/toast'
+import { showToast, confirmModal } from '../utils/toast'
 
 export default function useCRMActions({ user, data, loaders }) {
     const { prospectos, setProspectos, cerrados, setCerrados, tickets, setTickets, keyAccounts, setKeyAccounts } = data;
@@ -37,6 +37,31 @@ export default function useCRMActions({ user, data, loaders }) {
     // Entity detail
     const [selectedEntity, setSelectedEntity] = useState(null);
     const openDetail = (type, item) => setSelectedEntity({ type, item });
+
+    const requireAuth = () => {
+        if (user) return true;
+        showToast('Debes iniciar sesión para realizar esta acción', 'error');
+        return false;
+    };
+
+
+    const logEvent = async (entityType, entityId, eventType, title, payload = {}) => {
+        try {
+            if (!user || !entityType || !entityId || !eventType || !title) return;
+
+            await supabase.from('crm_events').insert([{
+                entity_type: entityType,
+                entity_id: entityId,
+                event_type: eventType,
+                title,
+                payload,
+                created_by: user?.id || null,
+                created_by_email: user?.email || null
+            }]);
+        } catch (e) {
+            console.warn('logEvent failed', e?.message || e);
+        }
+    };
 
     const openConvert = (prospecto, targetType = 'ticket') => {
         setConvertSource({ type: 'prospecto', item: prospecto });
@@ -575,22 +600,26 @@ export default function useCRMActions({ user, data, loaders }) {
     };
 
     const handleSaveProspecto = async (data) => {
-        if (!requireAuth()) return;
+        if (!requireAuth()) return false;
         try {
             let savedId = null;
-            if (editingItem) {
+            const editingId = data?.id || null;
+            const editingSource = editingId ? (prospectos.find((p) => p.id === editingId) || data) : null;
+            if (editingId) {
                 // UPDATE: registrar qué cambió
                 const cambios = {};
                 Object.keys(data).forEach(key => {
-                    if (editingItem[key] !== data[key]) {
-                        cambios[key] = { anterior: editingItem[key], nuevo: data[key] };
+                    if (editingSource?.[key] !== data[key]) {
+                        cambios[key] = { anterior: editingSource?.[key], nuevo: data[key] };
                     }
                 });
-                
-                const { error } = await supabase.from('prospectos').update(data).eq('id', editingItem.id);
+
+                const payload = { ...data };
+                delete payload.id;
+                const { error } = await supabase.from('prospectos').update(payload).eq('id', editingId);
                 if (error) throw error;
                 
-                savedId = editingItem.id;
+                savedId = editingId;
                 
                 // Log del update
                 if (Object.keys(cambios).length > 0) {
@@ -617,19 +646,51 @@ export default function useCRMActions({ user, data, loaders }) {
             }
             
             await loadProspectos();
-            setShowModal(false);
+            return true;
         } catch (error) { 
             console.error('Error completo:', error);
             alert('Error al guardar: ' + error.message); 
+            return false;
         }
     };
 
-    const handleDeleteProspecto = async (id) => {
+    const handleDeleteProspecto = async (prospectoOrId) => {
         if (!requireAuth()) return;
-        if (!(await confirmModal('¿Eliminar?'))) return;
-        const { error } = await supabase.from('prospectos').delete().eq('id', id);
-        if (error) alert('Error: ' + error.message);
-        else await loadProspectos();
+
+        const prospecto = typeof prospectoOrId === 'object' ? prospectoOrId : prospectos.find(p => p.id === prospectoOrId);
+        const prospectoId = prospecto?.id || prospectoOrId;
+
+        if (!prospectoId) return;
+        if (!(await confirmModal('¿Eliminar prospecto del pipeline?'))) return;
+
+        const { error } = await supabase.from('prospectos').delete().eq('id', prospectoId);
+
+        if (!error) {
+            await logEvent('prospectos', prospectoId, 'deleted', 'Prospecto eliminado del pipeline', {
+                deleted_by: user?.email || 'unknown'
+            });
+            await loadProspectos();
+            showToast('🗑️ Prospecto eliminado del pipeline', 'success');
+            return;
+        }
+
+        // Fallback: si no es posible borrar físicamente (RLS/FK), ocultar del pipeline
+        const { error: hideError } = await supabase
+            .from('prospectos')
+            .update({ estado: 'Eliminado' })
+            .eq('id', prospectoId);
+
+        if (hideError) {
+            alert('Error al eliminar: ' + error.message);
+            return;
+        }
+
+        await logEvent('prospectos', prospectoId, 'hidden', 'Prospecto ocultado del pipeline (fallback)', {
+            reason: error.message,
+            hidden_by: user?.email || 'unknown'
+        });
+        await loadProspectos();
+        showToast('⚠️ No se pudo borrar físicamente; se ocultó del pipeline.', 'info');
     };
 
     const handleMoveProspecto = async (prospectoId, nuevoEstado) => {
@@ -691,11 +752,14 @@ export default function useCRMActions({ user, data, loaders }) {
     };
 
     const handleSaveOther = async (type, data) => {
-        if (!requireAuth()) return;
+        if (!requireAuth()) return false;
         try {
             const table = type === 'cerrado' ? 'cerrados' : type === 'ticket' ? 'tickets' : 'key_accounts';
-            if (editingItem) {
-                const { error } = await supabase.from(table).update(data).eq('id', editingItem.id);
+            const editingId = data?.id || null;
+            if (editingId) {
+                const payload = { ...data };
+                delete payload.id;
+                const { error } = await supabase.from(table).update(payload).eq('id', editingId);
                 if (error) throw error;
             } else {
                 const { error } = await supabase.from(table).insert([data]);
@@ -704,8 +768,11 @@ export default function useCRMActions({ user, data, loaders }) {
             if (type === 'cerrado') await loadCerrados();
             if (type === 'ticket') await loadTickets();
             if (type === 'keyaccount') await loadKeyAccounts();
-            setShowModal(false);
-        } catch (error) { alert('Error: ' + error.message); }
+            return true;
+        } catch (error) {
+            alert('Error: ' + error.message);
+            return false;
+        }
     };
 
     const handleDeleteOther = async (type, id) => {

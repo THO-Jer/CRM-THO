@@ -23,9 +23,10 @@ export default function ContabilidadView({
     monedaPreferida, 
     alertasValidacion, 
     setAlertasValidacion, 
-    sincronizarBoletasSII, 
-    sincronizarFacturasEmitidas, 
-    sincronizarFacturasRecibidas, 
+    siiLoadingType, 
+    importarBoletasRecibidasSII, 
+    importarFacturasEmitidasSII, 
+    importarFacturasRecibidasSII, 
     importarCartola, 
     buscarMatches, 
     aplicarConciliacion, 
@@ -36,6 +37,9 @@ export default function ContabilidadView({
     dateRange 
 }) {
         const dashboardDataRef = useRef(null);
+        const boletasFileInputRef = useRef(null);
+        const facturasEmitidasFileInputRef = useRef(null);
+        const facturasRecibidasFileInputRef = useRef(null);
         const [showModal, setShowModal] = useState(false);
         const [modalType, setModalType] = useState(null);
         const [editing, setEditing] = useState(null);
@@ -282,7 +286,72 @@ export default function ContabilidadView({
             await supabase.from(table).delete().eq('id', id);
             onReload();
         };
-        
+        const validarArchivoSii = (file) => {
+            const name = String(file?.name || '').toLowerCase();
+            return name.endsWith('.xls') || name.endsWith('.xlsx');
+        };
+
+        const mostrarResumenImportacion = (titulo, resumen) => {
+            const msg = `✅ ${titulo}
+
+• Leídos: ${resumen.leidos}
+• Nuevos insertados: ${resumen.insertados}
+• Duplicados omitidos: ${resumen.duplicados}
+• Errores detectados: ${resumen.errores}`;
+            showToast(msg, resumen.errores > 0 ? 'info' : 'success');
+        };
+
+        const handleImportBoletas = async (file) => {
+            if (!file) return;
+            if (!validarArchivoSii(file)) {
+                showToast('El archivo debe ser .xls o .xlsx', 'info');
+                return;
+            }
+            try {
+                const resumen = await importarBoletasRecibidasSII(file);
+                if (!resumen) return;
+                mostrarResumenImportacion('Importar Boletas Recibidas SII', resumen);
+                onReload();
+            } catch (error) {
+                console.error('Error importando boletas SII:', error);
+                showToast(`❌ Error importando boletas: ${error.message}`, 'error');
+            }
+        };
+
+        const handleImportFacturasEmitidas = async (file) => {
+            if (!file) return;
+            if (!validarArchivoSii(file)) {
+                showToast('El archivo debe ser .xls o .xlsx', 'info');
+                return;
+            }
+            try {
+                const resumen = await importarFacturasEmitidasSII(file);
+                if (!resumen) return;
+                mostrarResumenImportacion('Importar Facturas Emitidas SII', resumen);
+                onReload();
+            } catch (error) {
+                console.error('Error importando facturas emitidas SII:', error);
+                showToast(`❌ Error importando facturas emitidas: ${error.message}`, 'error');
+            }
+        };
+
+        const handleImportFacturasRecibidas = async (file) => {
+            if (!file) return;
+            if (!validarArchivoSii(file)) {
+                showToast('El archivo debe ser .xls o .xlsx', 'info');
+                return;
+            }
+            try {
+                const resumen = await importarFacturasRecibidasSII(file);
+                if (!resumen) return;
+                mostrarResumenImportacion('Importar Facturas Recibidas SII', resumen);
+                onReload();
+            } catch (error) {
+                console.error('Error importando facturas recibidas SII:', error);
+                showToast(`❌ Error importando facturas recibidas: ${error.message}`, 'error');
+            }
+        };
+
         // Calcular métricas del período
         const totalEmitidas = facturasEmiAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
         const totalRecibidas = facturasRecAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
@@ -607,11 +676,17 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Facturas Emitidas</h3>
                                     <div className="flex gap-2">
-                                        <button onClick={sincronizarFacturasEmitidas} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🔄 Sincronizar SII</button>
+                                        <input
+                                            ref={facturasEmitidasFileInputRef}
+                                            type="file"
+                                            accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                            className="hidden"
+                                            onChange={(e) => { handleImportFacturasEmitidas(e.target.files?.[0] || null); e.target.value = ''; }}
+                                        />
+                                        <button onClick={() => facturasEmitidasFileInputRef.current?.click()} disabled={siiLoadingType === 'emitidas'} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-60">📥 Importar Facturas Emitidas SII</button>
                                         <button onClick={() => { setEditing(null); setModalType('emitida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                     </div>
                                 </div>
-                                
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">
@@ -722,7 +797,14 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Facturas Recibidas (Gastos)</h3>
                                     <div className="flex gap-2">
-                                        <button onClick={sincronizarFacturasRecibidas} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🔄 Sincronizar SII</button>
+                                        <input
+                                            ref={facturasRecibidasFileInputRef}
+                                            type="file"
+                                            accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                            className="hidden"
+                                            onChange={(e) => { handleImportFacturasRecibidas(e.target.files?.[0] || null); e.target.value = ''; }}
+                                        />
+                                        <button onClick={() => facturasRecibidasFileInputRef.current?.click()} disabled={siiLoadingType === 'recibidas'} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-60">📥 Importar Facturas Recibidas SII</button>
                                         <button onClick={() => { setEditing(null); setModalType('recibida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                     </div>
                                 </div>
@@ -843,7 +925,6 @@ export default function ContabilidadView({
                                         <button onClick={() => { setEditing(null); setModalType('sueldo'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Retiro</button>
                                     </div>
                                 </div>
-                                
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">
@@ -988,17 +1069,24 @@ export default function ContabilidadView({
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Boletas de Honorarios</h3>
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={sincronizarBoletasSII} 
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                                    <div className="flex gap-2 flex-wrap justify-end">
+                                        <input
+                                            ref={boletasFileInputRef}
+                                            type="file"
+                                            accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                            className="hidden"
+                                            onChange={(e) => { handleImportBoletas(e.target.files?.[0] || null); e.target.value = ''; }}
+                                        />
+                                        <button
+                                            onClick={() => boletasFileInputRef.current?.click()}
+                                            disabled={siiLoadingType === 'boletas'}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-60"
                                         >
-                                            🔄 Sincronizar SII
+                                            📥 Importar Boletas Recibidas SII
                                         </button>
                                         <button onClick={() => { setEditing(null); setModalType('boleta'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Boleta</button>
                                     </div>
                                 </div>
-                                
                                 {/* Desktop */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full divide-y">

@@ -14,7 +14,7 @@ export default function KanbanColumn({estado, prospectos, onEdit, onDelete, onMo
             </div>
             <div className="space-y-3">
                 {prospectos.length === 0 && <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8 italic">Sin prospectos</p>}
-                {prospectos.map(p => <ProspectoCard key={p.id} prospecto={p} onEdit={() => onEdit(p)} onDetail={() => onDetail && onDetail(p)} onDelete={() => onDelete(p.id)} onCerrar={onCerrar} onConvert={onConvert} onHistory={() => onHistory('prospectos', p.id, p.organizacion)} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
+                {prospectos.map(p => <ProspectoCard key={p.id} prospecto={p} onEdit={() => onEdit(p)} onDetail={() => onDetail && onDetail(p)} onDelete={() => onDelete(p)} onCerrar={onCerrar} onConvert={onConvert} onHistory={() => onHistory('prospectos', p.id, p.organizacion)} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />)}
             </div>
         </div>
     );

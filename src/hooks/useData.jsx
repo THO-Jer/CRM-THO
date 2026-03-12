@@ -19,6 +19,14 @@ export default function useData(user) {
     const [movimientosBancarios, setMovimientosBancarios] = useState([]);
     const [ufActual, setUfActual] = useState(38000);
 
+
+    const deriveUF = (montoCLP, ufDia, fallback = 38000) => {
+        const clp = Number(montoCLP);
+        if (!Number.isFinite(clp)) return null;
+        const uf = Number(ufDia) > 0 ? Number(ufDia) : fallback;
+        return uf > 0 ? Number((clp / uf).toFixed(2)) : null;
+    };
+
     const loadProspectos = useCallback(async () => {
         const { data } = await supabase.from('prospectos').select('*').order('created_at', { ascending: false });
         if (data) setProspectos(data);
@@ -97,20 +105,46 @@ export default function useData(user) {
     const loadFacturasEmitidas = useCallback(async () => {
         const { data } = await supabase.from('facturas_emitidas').select('*').order('fecha_emision', { ascending: false });
         if (data) {
-            const enhanced = data.map(f => {
-                if (f.ticket_id || f.key_account_id) return f;
-                const desc = (f.descripcion || '').toLowerCase();
-                const org = (f.cliente || '').toLowerCase();
-                return f;
-            });
+            const enhanced = data.map(f => ({
+                ...f,
+                numero_factura: f.numero_factura || f.folio || '',
+                cliente: f.cliente || f.razon_social_receptor || '',
+                rut_cliente: f.rut_cliente || f.rut_receptor || '',
+                proveedor: f.proveedor || f.razon_social_emisor || '',
+                rut_proveedor: f.rut_proveedor || f.rut_emisor || '',
+                monto_neto_clp: f.monto_neto_clp ?? f.total_neto_clp ?? 0,
+                monto_clp: f.monto_clp ?? f.total_monto_clp ?? 0,
+                monto_uf: (f.monto_clp ?? f.total_monto_clp) != null
+                    ? deriveUF(f.monto_clp ?? f.total_monto_clp, f.uf_dia, ufActual)
+                    : (f.monto_uf ?? null),
+                descripcion: f.descripcion || f.detalle_descripcion || `DTE ${f.tipo_dte || ''}`.trim(),
+                fecha_emision: f.fecha_emision || null
+            }));
             setFacturasEmitidas(enhanced);
         }
-    }, []);
+    }, [ufActual]);
 
     const loadFacturasRecibidas = useCallback(async () => {
         const { data } = await supabase.from('facturas_recibidas').select('*').order('fecha_emision', { ascending: false });
-        if (data) setFacturasRecibidas(data);
-    }, []);
+        if (data) {
+            const enhanced = data.map(f => ({
+                ...f,
+                numero_factura: f.numero_factura || f.folio || '',
+                cliente: f.cliente || f.razon_social_receptor || '',
+                rut_cliente: f.rut_cliente || f.rut_receptor || '',
+                proveedor: f.proveedor || f.razon_social_emisor || '',
+                rut_proveedor: f.rut_proveedor || f.rut_emisor || '',
+                monto_neto_clp: f.monto_neto_clp ?? f.total_neto_clp ?? 0,
+                monto_clp: f.monto_clp ?? f.total_monto_clp ?? 0,
+                monto_uf: (f.monto_clp ?? f.total_monto_clp) != null
+                    ? deriveUF(f.monto_clp ?? f.total_monto_clp, f.uf_dia, ufActual)
+                    : (f.monto_uf ?? null),
+                descripcion: f.descripcion || f.detalle_descripcion || `DTE ${f.tipo_dte || ''}`.trim(),
+                fecha_emision: f.fecha_emision || null
+            }));
+            setFacturasRecibidas(enhanced);
+        }
+    }, [ufActual]);
 
     const loadCajaChica = useCallback(async () => {
         const { data } = await supabase.from('caja_chica').select('*').order('fecha', { ascending: false });
@@ -118,9 +152,27 @@ export default function useData(user) {
     }, []);
 
     const loadBoletasHonorarios = useCallback(async () => {
-        const { data } = await supabase.from('boletas_honorarios').select('*').order('fecha', { ascending: false });
-        if (data) setBoletasHonorarios(data);
-    }, []);
+        const { data } = await supabase.from('boletas_honorarios').select('*').order('fecha_emision', { ascending: false });
+        if (data) {
+            const enhanced = data.map(b => ({
+                ...b,
+                fecha: b.fecha || b.fecha_emision || null,
+                rut: b.rut || b.rut_prestador || '',
+                monto_retencion_clp: b.monto_retencion_clp ?? b.monto_retenido_clp ?? 0,
+                monto_liquido_clp: b.monto_liquido_clp ?? b.monto_pagado_clp ?? 0,
+                monto_bruto_uf: (b.monto_bruto_clp != null)
+                    ? deriveUF(b.monto_bruto_clp, b.uf_dia, ufActual)
+                    : (b.monto_bruto_uf ?? null),
+                monto_retencion_uf: ((b.monto_retencion_clp ?? b.monto_retenido_clp) != null)
+                    ? deriveUF(b.monto_retencion_clp ?? b.monto_retenido_clp, b.uf_dia, ufActual)
+                    : (b.monto_retencion_uf ?? null),
+                monto_liquido_uf: ((b.monto_liquido_clp ?? b.monto_pagado_clp) != null)
+                    ? deriveUF(b.monto_liquido_clp ?? b.monto_pagado_clp, b.uf_dia, ufActual)
+                    : (b.monto_liquido_uf ?? null)
+            }));
+            setBoletasHonorarios(enhanced);
+        }
+    }, [ufActual]);
 
     const loadSueldosSocios = useCallback(async () => {
         const { data } = await supabase.from('sueldos_socios').select('*').order('fecha', { ascending: false });

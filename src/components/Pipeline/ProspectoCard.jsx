@@ -22,7 +22,7 @@ export default function ProspectoCard({ prospecto, onEdit, onDetail, onDelete, o
             <div className="flex space-x-1 pt-3 border-t border-gray-100 dark:border-gray-700 mt-3">
                 <button onClick={(e) => { e.stopPropagation(); onHistory && onHistory(); }} className="flex-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition">🕘</button>
                 <button onClick={(e) => { e.stopPropagation(); setShowActions(!showActions); }} className="flex-1 text-xs text-verde py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition">🔄 Convertir</button>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="flex-1 text-xs text-red-400 hover:text-red-600 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition">🗑️</button>
+                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="flex-1 text-xs text-red-400 hover:text-red-600 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition">🗑️ Eliminar</button>
             </div>
             {showActions && (
                 <div className="space-y-2 mt-2 pt-2 border-t dark:border-gray-700">

@@ -77,4 +77,12 @@ npm run dev
 ```
 
 ## 4) Supabase keys
-Están en `src/supabaseClient.js` (publicables).
+Están en `src/utils/supabase.js` (publicables).
+
+### Recomendado (producción)
+1. Copia `.env.example` a `.env.local`
+2. Define (elige una convención):
+   - `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (recomendado), o
+   - `SUPABASE_URL` y `SUPABASE_ANON_KEY` (compatibilidad).
+3. En Vercel, configura esas variables en Project Settings -> Environment Variables.
+
