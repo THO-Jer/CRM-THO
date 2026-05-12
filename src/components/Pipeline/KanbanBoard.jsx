@@ -1,13 +1,47 @@
+import { DndContext, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import KanbanColumn from './KanbanColumn'
 
-export default function KanbanBoard({estados, prospectosPorEstado, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey, onHistory, onConvert, onDetail}) {
+export default function KanbanBoard({ estados, prospectosPorEstado, onEdit, onDelete, onMove, onCerrar, getEstadoFromKey, onHistory, onConvert, onDetail }) {
+    // Sensores para input variado: mouse (PointerSensor) y touch (TouchSensor).
+    // distance:8 evita activar drag con clicks pequeños accidentales en desktop.
+    // delay:200ms en touch permite que un tap rápido en el card abra el detail
+    // mientras que un long-press (200ms+) activa el drag.
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+        useSensor(KeyboardSensor),
+    )
+
+    const handleDragEnd = (event) => {
+        const { active, over } = event
+        if (!active || !over) return
+        const prospectoId = String(active.id)
+        const targetEstadoKey = String(over.id)
+        const nuevoEstado = getEstadoFromKey(targetEstadoKey)
+        if (!nuevoEstado) return
+        onMove(prospectoId, nuevoEstado)
+    }
+
     return (
-        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide md:grid md:grid-cols-4 md:overflow-visible">
-            {estados.map(estado => (
-                <div key={estado.id} className="min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
-                    <KanbanColumn onDetail={onDetail} onHistory={onHistory} estado={estado} prospectos={prospectosPorEstado(estado.id)} onEdit={onEdit} onDelete={onDelete} onMove={onMove} onCerrar={onCerrar} getEstadoFromKey={getEstadoFromKey} onConvert={onConvert} />
-                </div>
-            ))}
-        </div>
-    );
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <div className="flex flex-col gap-4 pb-4">
+                {estados.map(estado => (
+                    <KanbanColumn
+                        key={estado.id}
+                        estado={estado}
+                        estados={estados}
+                        prospectos={prospectosPorEstado(estado.id)}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onMove={onMove}
+                        onCerrar={onCerrar}
+                        getEstadoFromKey={getEstadoFromKey}
+                        onHistory={onHistory}
+                        onConvert={onConvert}
+                        onDetail={onDetail}
+                    />
+                ))}
+            </div>
+        </DndContext>
+    )
 }

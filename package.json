@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.1.0",
     "@supabase/supabase-js": "^2.39.0",
     "chart.js": "^4.4.0",
     "jspdf": "^4.1.0",

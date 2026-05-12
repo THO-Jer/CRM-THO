@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
-import { showToast } from '../utils/toast'
+import { showToast, confirmModal } from '../utils/toast'
 
 export default function useCRMActions({ user, data, loaders }) {
     const { prospectos, setProspectos, cerrados, setCerrados, tickets, setTickets, keyAccounts, setKeyAccounts } = data;
