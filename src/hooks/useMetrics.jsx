@@ -86,13 +86,14 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
 
     // --- Kanban ---
     const estadosKanban = [
+        { id: 'lead_nuevo', nombre: 'Lead nuevo', emoji: '📥' },
         { id: 'contactado', nombre: 'Contactado', emoji: '🔵' },
         { id: 'reunion', nombre: 'Reunión agendada', emoji: '🟡' },
         { id: 'propuesta', nombre: 'Propuesta enviada', emoji: '🟠' },
         { id: 'negociacion', nombre: 'Negociación', emoji: '🟢' }
     ];
-    const getEstadoKey = (estado) => ({ 'Contactado': 'contactado', 'Reunión agendada': 'reunion', 'Propuesta enviada': 'propuesta', 'Negociación': 'negociacion' }[estado] || null);
-    const getEstadoFromKey = (key) => ({ contactado: 'Contactado', reunion: 'Reunión agendada', propuesta: 'Propuesta enviada', negociacion: 'Negociación' }[key] || 'Contactado');
+    const getEstadoKey = (estado) => ({ 'Lead nuevo': 'lead_nuevo', 'Contactado': 'contactado', 'Reunión agendada': 'reunion', 'Propuesta enviada': 'propuesta', 'Negociación': 'negociacion' }[estado] || null);
+    const getEstadoFromKey = (key) => ({ lead_nuevo: 'Lead nuevo', contactado: 'Contactado', reunion: 'Reunión agendada', propuesta: 'Propuesta enviada', negociacion: 'Negociación' }[key] || 'Contactado');
     const prospectosPorEstado = (estadoKey) => prospectosActivos.filter(p => getEstadoKey(p.estado) === estadoKey);
 
     return { metrics, estadosKanban, prospectosPorEstado, getEstadoFromKey };

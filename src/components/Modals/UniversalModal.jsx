@@ -30,7 +30,7 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <SelectField label="Tipo" required value={formData.tipo} onChange={(e) => setFormData({...formData, tipo: e.target.value})} options={['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG', 'Key Account Nivel 1', 'Key Account Nivel 2', 'Key Account Nivel 3', 'Gestión de Contenido']} />
-                                <SelectField label="Estado" required value={formData.estado} onChange={(e) => setFormData({...formData, estado: e.target.value})} options={['Contactado', 'Reunión agendada', 'Propuesta enviada', 'Negociación']} />
+                                <SelectField label="Estado" required value={formData.estado} onChange={(e) => setFormData({...formData, estado: e.target.value})} options={['Lead nuevo', 'Contactado', 'Reunión agendada', 'Propuesta enviada', 'Negociación']} />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <InputField label="Valor (UF)" type="number" step="0.01" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value) || 0})} />
