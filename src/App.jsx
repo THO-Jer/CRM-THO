@@ -158,6 +158,8 @@ function CRMApp() {
     // ===== CRM ACTIONS HOOK =====
     const actions = useCRMActions({
         user,
+        requireAuth,
+        setShowModal,
         data: { prospectos, setProspectos: data.setProspectos, cerrados, setCerrados: data.setCerrados, tickets, setTickets: data.setTickets, keyAccounts, setKeyAccounts: data.setKeyAccounts },
         loaders: { loadProspectos, loadCerrados, loadTickets, loadKeyAccounts, loadContactos, loadNotas, loadActividad }
     });

@@ -2,9 +2,28 @@ import { useState } from 'react'
 import { supabase } from '../utils/supabase'
 import { showToast, confirmModal } from '../utils/toast'
 
-export default function useCRMActions({ user, data, loaders }) {
+export default function useCRMActions({ user, requireAuth, setShowModal, data, loaders }) {
     const { prospectos, setProspectos, cerrados, setCerrados, tickets, setTickets, keyAccounts, setKeyAccounts } = data;
     const { loadProspectos, loadCerrados, loadTickets, loadKeyAccounts, loadContactos, loadNotas, loadActividad } = loaders;
+
+    // logEvent — registra acciones del CRM en la tabla crm_events para auditoría/timeline.
+    // Si falla (RLS, tabla inexistente, etc.) se ignora silenciosamente: no debe bloquear el flujo principal.
+    const logEvent = async (entityType, entityId, eventType, title, payload = {}) => {
+        try {
+            if (!user) return;
+            await supabase.from('crm_events').insert([{
+                entity_type: entityType,
+                entity_id: entityId,
+                event_type: eventType,
+                title: title,
+                payload: payload,
+                created_by: user?.id || null,
+                created_by_email: user?.email || null,
+            }]);
+        } catch (e) {
+            console.warn('logEvent failed', e?.message || e);
+        }
+    };
 
     // History modal
     const [historyOpen, setHistoryOpen] = useState(false);
