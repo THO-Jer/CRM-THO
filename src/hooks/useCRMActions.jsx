@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
-import { showToast, confirmModal } from '../utils/toast'
+import { showToast } from '../utils/toast'
+import { confirmModal } from '../utils/confirmModal'
 
 export default function useCRMActions({ user, requireAuth, setShowModal, data, loaders }) {
     const { prospectos, setProspectos, cerrados, setCerrados, tickets, setTickets, keyAccounts, setKeyAccounts } = data;
@@ -549,7 +550,11 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
     };
 
     const deleteFile = async (fileName) => {
-        if (!(await confirmModal('¿Eliminar este archivo?'))) return;
+        const confirmed = await confirmModal(
+            `¿Estás seguro que quieres eliminar el archivo "${fileName}"?\n\nEsta acción no se puede deshacer.`,
+            { title: 'Eliminar archivo', confirmLabel: 'Eliminar', danger: true }
+        );
+        if (!confirmed) return;
         try {
             const folderPath = `${filesEntityType}/${filesEntityId}`;
             const { error } = await supabase.storage
@@ -645,9 +650,15 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
 
     const handleDeleteProspecto = async (id) => {
         if (!requireAuth()) return;
-        if (!(await confirmModal('¿Eliminar?'))) return;
+        const prospecto = prospectos.find(p => p.id === id);
+        const label = prospecto?.organizacion ? `el prospecto de "${prospecto.organizacion}"` : 'este prospecto';
+        const confirmed = await confirmModal(
+            `¿Estás seguro que quieres eliminar ${label}?\n\nEsta acción no se puede deshacer.`,
+            { title: 'Eliminar prospecto', confirmLabel: 'Eliminar', danger: true }
+        );
+        if (!confirmed) return;
         const { error } = await supabase.from('prospectos').delete().eq('id', id);
-        if (error) alert('Error: ' + error.message);
+        if (error) showToast('Error: ' + error.message, 'error');
         else await loadProspectos();
     };
 
@@ -729,10 +740,19 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
 
     const handleDeleteOther = async (type, id) => {
         if (!requireAuth()) return;
-        if (!(await confirmModal('¿Eliminar?'))) return;
+        const lists = { cerrado: cerrados, ticket: tickets, keyaccount: keyAccounts };
+        const item = (lists[type] || []).find(x => x.id === id);
+        const typeLabel = { cerrado: 'el cerrado', ticket: 'el ticket', keyaccount: 'el key account' }[type] || 'el registro';
+        const orgLabel = item?.organizacion ? ` de "${item.organizacion}"` : '';
+        const titleByType = { cerrado: 'Eliminar cerrado', ticket: 'Eliminar ticket', keyaccount: 'Eliminar key account' }[type] || 'Eliminar';
+        const confirmed = await confirmModal(
+            `¿Estás seguro que quieres eliminar ${typeLabel}${orgLabel}?\n\nEsta acción no se puede deshacer.`,
+            { title: titleByType, confirmLabel: 'Eliminar', danger: true }
+        );
+        if (!confirmed) return;
         const table = type === 'cerrado' ? 'cerrados' : type === 'ticket' ? 'tickets' : 'key_accounts';
         const { error } = await supabase.from(table).delete().eq('id', id);
-        if (error) alert('Error: ' + error.message);
+        if (error) showToast('Error: ' + error.message, 'error');
         else {
             if (type === 'cerrado') await loadCerrados();
             if (type === 'ticket') await loadTickets();

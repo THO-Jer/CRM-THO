@@ -23,6 +23,5 @@ export function showToast(message, type = 'info') {
   }, 3000);
 }
 
-export function confirmModal(message) {
-  return window.confirm(message);
-}
+// confirmModal se movió a './confirmModal.jsx' como un modal estilizado.
+// Para usarlo: import { confirmModal } from './confirmModal'
