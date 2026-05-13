@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../utils/supabase'
-import { showToast, confirmModal } from '../../utils/toast'
+import { showToast } from '../../utils/toast'
+import { confirmModal } from '../../utils/confirmModal'
 import { formatCLP, formatUF, formatDate, formatDateTime, formatNumber } from '../../utils/formatters'
 import { Chart } from 'chart.js'
 import * as XLSX from 'xlsx'
