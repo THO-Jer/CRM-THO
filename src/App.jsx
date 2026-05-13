@@ -155,6 +155,10 @@ function CRMApp() {
     // ===== METRICS HOOK =====
     const { metrics, estadosKanban, prospectosPorEstado, getEstadoFromKey } = useMetrics({ prospectos, cerrados, tickets: activeTickets, keyAccounts: activeKeyAccounts, ufActual });
 
+    // setShowModal se declara aquí (antes de useCRMActions) porque el hook lo necesita como prop.
+    // El resto del UI STATE block sigue declarándose más abajo por consistencia visual.
+    const [showModal, setShowModal] = useState(false);
+
     // ===== CRM ACTIONS HOOK =====
     const actions = useCRMActions({
         user,
@@ -174,7 +178,7 @@ function CRMApp() {
     // ===== UI STATE =====
     const [activeTab, setActiveTab] = useState('dashboard');
     const [dateRange, setDateRange] = useState({ desde: '', hasta: '' });
-    const [showModal, setShowModal] = useState(false);
+    // showModal/setShowModal se declara arriba (antes de useCRMActions) — ver comentario allá.
     const [modalType, setModalType] = useState('prospecto');
     const [editingItem, setEditingItem] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
