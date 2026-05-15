@@ -1,26 +1,38 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react'
 import { supabase } from './utils/supabase'
 import { showToast } from './utils/toast'
 import { formatCLP, formatUF, formatDate, formatDateTime, getNombreMes, formatNumber, formatFileSize } from './utils/formatters'
-import { Chart, registerables } from 'chart.js'
-import * as XLSX from 'xlsx'
 
-// Components
-import Dashboard from './components/Dashboard/Dashboard'
-import ContabilidadView from './components/Contabilidad/ContabilidadView'
+// Modales y utilidades — eager: son chicos y se renderizan condicionalmente.
 import LoginModal from './components/Modals/LoginModal'
-import KanbanBoard from './components/Pipeline/KanbanBoard'
-import ReportesView from './components/Reportes/ReportesView'
-import CerradosView from './components/Cerrados/CerradosView'
-import TicketsView from './components/Tickets/TicketsView'
-import KeyAccountsView from './components/KeyAccounts/KeyAccountsView'
 import UniversalModal from './components/Modals/UniversalModal'
 import HistoryModal from './components/shared/HistoryModal'
 import FilesModal from './components/shared/FilesModal'
 import EntityDetail from './components/Detail/EntityDetail'
 import DateRangeFilter from './components/shared/DateRangeFilter'
 
-Chart.register(...registerables)
+// Componentes de tab — lazy-loaded: cada uno se descarga sólo cuando el usuario
+// entra a su pestaña. ContabilidadView y ReportesView arrastran chart.js/xlsx,
+// así que mantenerlos fuera del bundle inicial es la mayor ganancia de peso.
+const Dashboard = lazy(() => import('./components/Dashboard/Dashboard'))
+const ContabilidadView = lazy(() => import('./components/Contabilidad/ContabilidadView'))
+const KanbanBoard = lazy(() => import('./components/Pipeline/KanbanBoard'))
+const ReportesView = lazy(() => import('./components/Reportes/ReportesView'))
+const CerradosView = lazy(() => import('./components/Cerrados/CerradosView'))
+const TicketsView = lazy(() => import('./components/Tickets/TicketsView'))
+const KeyAccountsView = lazy(() => import('./components/KeyAccounts/KeyAccountsView'))
+
+// Fallback mientras carga el chunk de una pestaña lazy-loaded.
+function TabLoader() {
+    return (
+        <div className="flex items-center justify-center py-24">
+            <div className="relative w-10 h-10">
+                <div className="absolute inset-0 rounded-full border-2 border-gray-200 dark:border-gray-700"></div>
+                <div className="absolute inset-0 rounded-full border-2 border-naranja border-t-transparent animate-spin"></div>
+            </div>
+        </div>
+    )
+}
 
 // Error logging (sin manipular el DOM de React)
 if (typeof window !== 'undefined') {
@@ -47,7 +59,6 @@ async function obtenerUFHoy() {
 
 // Función utilitaria para exportar datos a CSV
 import useData from './hooks/useData'
-import useSII from './hooks/useSII'
 import useCRMActions from './hooks/useCRMActions'
 import useFinanzas from './hooks/useFinanzas'
 import useMetrics from './hooks/useMetrics'
@@ -134,7 +145,11 @@ function CRMApp() {
         loadActividad, loadAllData, loadFacturasEmitidas, loadFacturasRecibidas,
         loadCajaChica, loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios,
         setFacturasEmitidas, setFacturasRecibidas, setCajaChica, setBoletasHonorarios,
-        setSueldosSocios, setMovimientosBancarios } = data;
+        setSueldosSocios, setMovimientosBancarios,
+        coreLoading, financeLoading, ensureFinanceData } = data;
+
+    // Tabs que viven en la sección Finanzas — disparan la carga diferida de sus datos.
+    const FINANCE_TABS = ['finanzas-dashboard', 'contabilidad', 'conciliacion'];
 
     // Active KAs = exclude Cerrado and Vencido (used everywhere except EntityDetail)
     const activeKeyAccounts = useMemo(() => 
@@ -147,10 +162,6 @@ function CRMApp() {
         tickets.filter(t => t.status !== 'Cerrado'),
         [tickets]
     );
-
-    // ===== SII SYNC HOOK =====
-    const sii = useSII({ user, loadBoletasHonorarios, loadFacturasEmitidas, loadFacturasRecibidas });
-    const { sincronizarBoletasSII, sincronizarFacturasEmitidas, sincronizarFacturasRecibidas } = sii;
 
     // ===== METRICS HOOK =====
     const { metrics, estadosKanban, prospectosPorEstado, getEstadoFromKey } = useMetrics({ prospectos, cerrados, tickets: activeTickets, keyAccounts: activeKeyAccounts, ufActual });
@@ -196,6 +207,12 @@ function CRMApp() {
         document.documentElement.classList.toggle('dark', darkMode);
         localStorage.setItem('darkMode', darkMode);
     }, [darkMode]);
+
+    // Carga diferida de datos financieros: la primera vez que el usuario abre
+    // una pestaña de Finanzas, se disparan las queries de facturas/boletas/etc.
+    useEffect(() => {
+        if (FINANCE_TABS.includes(activeTab)) ensureFinanceData();
+    }, [activeTab, ensureFinanceData]);
 
     // Cmd+K search
     useEffect(() => {
@@ -435,12 +452,15 @@ function CRMApp() {
             )}
 
             <main className="max-w-7xl mx-auto px-3 py-4 md:px-4 md:py-8">
+                {coreLoading ? <TabLoader /> : (
+                <Suspense fallback={<TabLoader />}>
                 {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={activeTickets} keyAccounts={activeKeyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
                 {activeTab === 'pipeline' && <KanbanBoard onDetail={(p) => openDetail('prospecto', p)} onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                 {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={filteredCerrados} tickets={filteredTickets} keyAccounts={filteredKeyAccounts} ufActual={ufActual} dateRange={dateRange} />}
                 {['finanzas-dashboard', 'contabilidad', 'conciliacion'].includes(activeTab) && (
-                    <ContabilidadView 
-                        facturasEmitidas={facturasEmitidas} 
+                    financeLoading ? <TabLoader /> :
+                    <ContabilidadView
+                        facturasEmitidas={facturasEmitidas}
                         facturasRecibidas={facturasRecibidas} 
                         cajaChica={cajaChica} 
                         boletasHonorarios={boletasHonorarios} 
@@ -453,12 +473,9 @@ function CRMApp() {
                         contaTab={contaTab} 
                         setContaTab={setContaTab} 
                         monedaPreferida={monedaPreferida} 
-                        alertasValidacion={alertasValidacion} 
-                        setAlertasValidacion={setAlertasValidacion} 
-                        sincronizarBoletasSII={sincronizarBoletasSII} 
-                        sincronizarFacturasEmitidas={sincronizarFacturasEmitidas} 
-                        sincronizarFacturasRecibidas={sincronizarFacturasRecibidas} 
-                        importarCartola={importarCartola} 
+                        alertasValidacion={alertasValidacion}
+                        setAlertasValidacion={setAlertasValidacion}
+                        importarCartola={importarCartola}
                         buscarMatches={buscarMatches} 
                         aplicarConciliacion={aplicarConciliacion} 
                         crearGastoCajaChica={crearGastoCajaChica} 
@@ -477,6 +494,8 @@ function CRMApp() {
                 {activeTab === 'cerrados' && <CerradosView onDetail={(c) => openDetail('cerrado', c)} onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={filteredCerrados} keyAccounts={activeKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                 {activeTab === 'tickets' && <TicketsView onDetail={(t) => openDetail('ticket', t)} onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={filteredTickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                 {activeTab === 'keyaccounts' && <KeyAccountsView onDetail={(k) => openDetail('keyaccount', k)} onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={filteredKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
+                </Suspense>
+                )}
             </main>
 
             {showModal && <UniversalModal type={modalType} item={editingItem} onSave={(data) => modalType === 'prospecto' ? handleSaveProspecto(data) : handleSaveOther(modalType, data)} onClose={() => setShowModal(false)} />}

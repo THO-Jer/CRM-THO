@@ -3,7 +3,7 @@ import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
 import { confirmModal } from '../../utils/confirmModal'
 import { formatCLP, formatUF, formatDate, formatDateTime, formatNumber } from '../../utils/formatters'
-import { Chart } from 'chart.js'
+import { Chart } from '../../utils/chartSetup'
 import * as XLSX from 'xlsx'
 import DualCurrency from '../shared/DualCurrency'
 import MetricCard from '../shared/MetricCard'
@@ -22,13 +22,10 @@ export default function ContabilidadView({
     contaTab, 
     setContaTab, 
     monedaPreferida, 
-    alertasValidacion, 
-    setAlertasValidacion, 
-    sincronizarBoletasSII, 
-    sincronizarFacturasEmitidas, 
-    sincronizarFacturasRecibidas, 
-    importarCartola, 
-    buscarMatches, 
+    alertasValidacion,
+    setAlertasValidacion,
+    importarCartola,
+    buscarMatches,
     aplicarConciliacion, 
     crearGastoCajaChica, 
     ignorarMovimiento, 
@@ -270,7 +267,7 @@ export default function ContabilidadView({
                 onReload();
             } catch (err) {
                 console.error('Error completo:', err);
-                alert('❌ Error al guardar: ' + err.message);
+                showToast('Error al guardar: ' + err.message, 'error');
             }
         };
         
@@ -608,7 +605,6 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Facturas Emitidas</h3>
                                     <div className="flex gap-2">
-                                        <button onClick={sincronizarFacturasEmitidas} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🔄 Sincronizar SII</button>
                                         <button onClick={() => { setEditing(null); setModalType('emitida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                     </div>
                                 </div>
@@ -723,7 +719,6 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Facturas Recibidas (Gastos)</h3>
                                     <div className="flex gap-2">
-                                        <button onClick={sincronizarFacturasRecibidas} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🔄 Sincronizar SII</button>
                                         <button onClick={() => { setEditing(null); setModalType('recibida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                     </div>
                                 </div>
@@ -990,12 +985,6 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Boletas de Honorarios</h3>
                                     <div className="flex gap-2">
-                                        <button 
-                                            onClick={sincronizarBoletasSII} 
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
-                                        >
-                                            🔄 Sincronizar SII
-                                        </button>
                                         <button onClick={() => { setEditing(null); setModalType('boleta'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Boleta</button>
                                     </div>
                                 </div>
@@ -1080,7 +1069,7 @@ export default function ContabilidadView({
                                             onClick={async () => {
                                                 if (await confirmModal('¿Eliminar TODOS los movimientos bancarios? Esta acción no se puede deshacer.')) {
                                                     const { error } = await supabase.from('movimientos_bancarios').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-                                                    if (error) alert('Error: ' + error.message);
+                                                    if (error) showToast('Error: ' + error.message, 'error');
                                                     else { showToast('✅ Movimientos eliminados', 'success'); onReload(); }
                                                 }
                                             }}

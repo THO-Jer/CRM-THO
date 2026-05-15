@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../utils/supabase'
-import { showToast } from '../utils/toast'
 import { obtenerUFHoy } from '../utils/formatters'
 
 export default function useData(user) {
@@ -18,6 +17,14 @@ export default function useData(user) {
     const [sueldosSocios, setSueldosSocios] = useState([]);
     const [movimientosBancarios, setMovimientosBancarios] = useState([]);
     const [ufActual, setUfActual] = useState(38000);
+
+    // Loading flags:
+    // - coreLoading: true mientras carga el dataset core en el login.
+    // - financeLoading / financeLoaded: la data financiera se carga de forma
+    //   diferida la primera vez que el usuario abre una pestaña de Finanzas.
+    const [coreLoading, setCoreLoading] = useState(true);
+    const [financeLoading, setFinanceLoading] = useState(false);
+    const [financeLoaded, setFinanceLoaded] = useState(false);
 
     const loadProspectos = useCallback(async () => {
         const { data } = await supabase.from('prospectos').select('*').order('created_at', { ascending: false });
@@ -43,8 +50,8 @@ export default function useData(user) {
         if (data) {
             const hoy = new Date().toISOString().split('T')[0];
             // Auto-expire: mark KAs past fin_contrato as 'Vencido' (unless already Cerrado)
-            const expired = data.filter(ka => 
-                ka.fin_contrato && ka.fin_contrato < hoy && 
+            const expired = data.filter(ka =>
+                ka.fin_contrato && ka.fin_contrato < hoy &&
                 (ka.salud || '').toLowerCase() !== 'cerrado' && (ka.salud || '').toLowerCase() !== 'vencido'
             );
             if (expired.length > 0) {
@@ -96,15 +103,7 @@ export default function useData(user) {
 
     const loadFacturasEmitidas = useCallback(async () => {
         const { data } = await supabase.from('facturas_emitidas').select('*').order('fecha_emision', { ascending: false });
-        if (data) {
-            const enhanced = data.map(f => {
-                if (f.ticket_id || f.key_account_id) return f;
-                const desc = (f.descripcion || '').toLowerCase();
-                const org = (f.cliente || '').toLowerCase();
-                return f;
-            });
-            setFacturasEmitidas(enhanced);
-        }
+        if (data) setFacturasEmitidas(data);
     }, []);
 
     const loadFacturasRecibidas = useCallback(async () => {
@@ -132,17 +131,51 @@ export default function useData(user) {
         if (data) setMovimientosBancarios(data);
     }, []);
 
-    const loadAllData = useCallback(async () => {
+    // Core data — necesario para Dashboard, Pipeline, Tickets, Key Accounts,
+    // Historial y Reportes. Se carga al iniciar sesión.
+    const loadCoreData = useCallback(async () => {
         await Promise.all([
             loadProspectos(), loadCerrados(), loadTickets(), loadKeyAccounts(),
-            loadContactos(), loadNotas(), loadActividad(),
+            loadContactos(), loadNotas(), loadActividad()
+        ]);
+    }, [loadProspectos, loadCerrados, loadTickets, loadKeyAccounts, loadContactos, loadNotas, loadActividad]);
+
+    // Finance data — sólo necesario para las pestañas de Finanzas. Se carga
+    // de forma diferida la primera vez que el usuario entra a una de ellas.
+    const loadFinanceData = useCallback(async () => {
+        await Promise.all([
             loadFacturasEmitidas(), loadFacturasRecibidas(),
             loadCajaChica(), loadBoletasHonorarios(), loadSueldosSocios(),
             loadMovimientosBancarios()
         ]);
-    }, [loadProspectos, loadCerrados, loadTickets, loadKeyAccounts, loadContactos, loadNotas, loadActividad, loadFacturasEmitidas, loadFacturasRecibidas, loadCajaChica, loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios]);
+    }, [loadFacturasEmitidas, loadFacturasRecibidas, loadCajaChica, loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios]);
 
-    useEffect(() => { if (user) loadAllData(); }, [user, loadAllData]);
+    // Conveniencia: carga todo de una. Conservado por compatibilidad.
+    const loadAllData = useCallback(async () => {
+        await Promise.all([loadCoreData(), loadFinanceData()]);
+    }, [loadCoreData, loadFinanceData]);
+
+    // ensureFinanceData — App.jsx lo llama cuando el usuario abre una pestaña
+    // de Finanzas. Carga los datasets financieros una sola vez por sesión.
+    const ensureFinanceData = useCallback(async () => {
+        if (financeLoaded || financeLoading) return;
+        setFinanceLoading(true);
+        try {
+            await loadFinanceData();
+            setFinanceLoaded(true);
+        } finally {
+            setFinanceLoading(false);
+        }
+    }, [financeLoaded, financeLoading, loadFinanceData]);
+
+    // Al iniciar sesión: cargar sólo lo core. Las finanzas van diferidas.
+    useEffect(() => {
+        if (!user) return;
+        setCoreLoading(true);
+        setFinanceLoaded(false); // reset del cache financiero en cada login
+        loadCoreData().finally(() => setCoreLoading(false));
+    }, [user, loadCoreData]);
+
     useEffect(() => { obtenerUFHoy().then(uf => setUfActual(uf)); }, []);
 
     return {
@@ -155,6 +188,9 @@ export default function useData(user) {
         loadProspectos, loadCerrados, loadTickets, loadKeyAccounts,
         loadContactos, loadNotas, loadActividad, loadAllData,
         loadFacturasEmitidas, loadFacturasRecibidas, loadCajaChica,
-        loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios
+        loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios,
+        // Carga diferida + loading flags
+        loadCoreData, loadFinanceData, ensureFinanceData,
+        coreLoading, financeLoading, financeLoaded
     };
 }

@@ -232,7 +232,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
 
         closeConvert();
     } catch (error) {
-        alert('Error al convertir: ' + error.message);
+        showToast('Error al convertir: ' + error.message, 'error');
     }
 
     };
@@ -372,7 +372,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
 
             closeRenewal();
         } catch (error) {
-            alert('Error: ' + error.message);
+            showToast('Error: ' + error.message, 'error');
         }
     };
 
@@ -461,7 +461,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
             setHistoryItems(items);
         } catch (err) {
             console.error('Error cargando historial:', err);
-            alert('No se pudo cargar el historial: ' + (err?.message || err));
+            showToast('No se pudo cargar el historial: ' + (err?.message || err), 'error');
             setHistoryItems([]);
         } finally {
             setHistoryLoading(false);
@@ -522,7 +522,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
             showToast('Archivo subido correctamente', 'info');
         } catch (err) {
             console.error('Error subiendo archivo:', err);
-            alert('Error al subir archivo: ' + err.message);
+            showToast('Error al subir archivo: ' + err.message, 'error');
         } finally {
             setUploadingFile(false);
         }
@@ -545,7 +545,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
             URL.revokeObjectURL(url);
         } catch (err) {
             console.error('Error descargando archivo:', err);
-            alert('Error al descargar: ' + err.message);
+            showToast('Error al descargar: ' + err.message, 'error');
         }
     };
 
@@ -576,7 +576,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
             showToast('Archivo eliminado', 'info');
         } catch (err) {
             console.error('Error eliminando archivo:', err);
-            alert('Error al eliminar: ' + err.message);
+            showToast('Error al eliminar: ' + err.message, 'error');
         }
     };
 
@@ -644,7 +644,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
             setShowModal(false);
         } catch (error) { 
             console.error('Error completo:', error);
-            alert('Error al guardar: ' + error.message); 
+            showToast('Error al guardar: ' + error.message, 'error');
         }
     };
 
@@ -717,7 +717,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
             if (deleteError) throw deleteError;
             await loadProspectos();
             await loadCerrados();
-        } catch (error) { alert('Error: ' + error.message); }
+        } catch (error) { showToast('Error: ' + error.message, 'error'); }
     };
 
     const handleSaveOther = async (type, data) => {
@@ -735,7 +735,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
             if (type === 'ticket') await loadTickets();
             if (type === 'keyaccount') await loadKeyAccounts();
             setShowModal(false);
-        } catch (error) { alert('Error: ' + error.message); }
+        } catch (error) { showToast('Error: ' + error.message, 'error'); }
     };
 
     const handleDeleteOther = async (type, id) => {
@@ -850,7 +850,7 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
 
             await loadTickets();
         } catch (err) {
-            alert('Error al finalizar ticket: ' + (err?.message || err));
+            showToast('Error al finalizar ticket: ' + (err?.message || err), 'error');
         }
     };
 

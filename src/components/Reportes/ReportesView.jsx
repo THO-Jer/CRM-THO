@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Chart } from 'chart.js'
+import { Chart } from '../../utils/chartSetup'
 
 export default function ReportesView({ prospectos, cerrados, tickets, keyAccounts, ufActual, dateRange }) {
     // Filter active prospectos (exclude converted)
