@@ -128,7 +128,7 @@ export default function useExcelImport({
         if (!file) return
         try {
             const workbook = await readWorkbook(file)
-            const rows = parseFacturasEmitidas(workbook, { fileName: file.name })
+            const rows = parseFacturasEmitidas(workbook, { fileName: file.name, ufActual })
             if (!rows.length) { showToast('No se encontraron facturas emitidas en el archivo', 'warning'); return }
 
             // Dedup por (rut_emisor + folio + tipo_dte) — única por documento tributario.
@@ -142,7 +142,7 @@ export default function useExcelImport({
             console.error('[importarFacturasEmitidasExcel]', err)
             showToast(`Error al importar facturas emitidas: ${err.message}`, 'error')
         }
-    }, [user, pickFile, insertWithDedup, loadFacturasEmitidas])
+    }, [user, ufActual, pickFile, insertWithDedup, loadFacturasEmitidas])
 
     const importarFacturasRecibidasExcel = useCallback(async () => {
         if (!user) { showToast('Inicia sesión primero', 'warning'); return }
@@ -150,7 +150,7 @@ export default function useExcelImport({
         if (!file) return
         try {
             const workbook = await readWorkbook(file)
-            const rows = parseFacturasRecibidas(workbook, { fileName: file.name })
+            const rows = parseFacturasRecibidas(workbook, { fileName: file.name, ufActual })
             if (!rows.length) { showToast('No se encontraron facturas recibidas en el archivo', 'warning'); return }
 
             // Dedup por (proveedor + numero_factura + fecha_emision) — únicas por proveedor.
@@ -164,7 +164,7 @@ export default function useExcelImport({
             console.error('[importarFacturasRecibidasExcel]', err)
             showToast(`Error al importar facturas recibidas: ${err.message}`, 'error')
         }
-    }, [user, pickFile, insertWithDedup, loadFacturasRecibidas])
+    }, [user, ufActual, pickFile, insertWithDedup, loadFacturasRecibidas])
 
     return {
         importarBoletasExcel,

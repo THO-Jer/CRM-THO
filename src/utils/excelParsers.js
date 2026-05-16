@@ -208,8 +208,8 @@ export function parseBoletasHonorarios(workbook, { ufActual, fileName = '' } = {
  *   - 1+ filas de items (col 0 vacío)
  *   - Fila vacía / re-encabezados / siguiente factura
  */
-export function parseFacturasEmitidas(workbook, { fileName = '' } = {}) {
-    return parseFacturasGenerico(workbook, { fileName, mode: 'emitidas' });
+export function parseFacturasEmitidas(workbook, { fileName = '', ufActual } = {}) {
+    return parseFacturasGenerico(workbook, { fileName, ufActual, mode: 'emitidas' });
 }
 
 /**
@@ -217,11 +217,11 @@ export function parseFacturasEmitidas(workbook, { fileName = '' } = {}) {
  * pero el schema de destino es más simple (sólo numero_factura, proveedor,
  * fecha_emision, monto_clp).
  */
-export function parseFacturasRecibidas(workbook, { fileName = '' } = {}) {
-    return parseFacturasGenerico(workbook, { fileName, mode: 'recibidas' });
+export function parseFacturasRecibidas(workbook, { fileName = '', ufActual } = {}) {
+    return parseFacturasGenerico(workbook, { fileName, ufActual, mode: 'recibidas' });
 }
 
-function parseFacturasGenerico(workbook, { fileName, mode }) {
+function parseFacturasGenerico(workbook, { fileName, mode, ufActual }) {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
     if (rows.length < 2) {
@@ -319,6 +319,7 @@ function parseFacturasGenerico(workbook, { fileName, mode }) {
         }
 
         const totalMonto = parseNumber(r[idx.totalMonto]);
+        const montoUF = ufActual && totalMonto != null ? totalMonto / ufActual : null;
 
         if (mode === 'emitidas') {
             current = {
@@ -351,6 +352,10 @@ function parseFacturasGenerico(workbook, { fileName, mode }) {
                 total_iva_clp: parseNumber(r[idx.totalIVA]),
                 total_monto_clp: totalMonto,
                 monto_clp: totalMonto,
+                monto_uf: montoUF,
+                uf_dia: ufActual || null,
+                moneda_principal: 'CLP',
+                estado: 'Pendiente',
                 monto_periodo_clp: parseNumber(r[idx.montoPeriodo]),
                 monto_no_facturable_clp: parseNumber(r[idx.montoNoFacturable]),
                 saldo_anterior_clp: parseNumber(r[idx.saldoAnterior]),
@@ -364,11 +369,20 @@ function parseFacturasGenerico(workbook, { fileName, mode }) {
             };
         } else {
             // mode === 'recibidas' → schema más simple
+            // OJO: la tabla tiene un CHECK constraint en `categoria` que sólo
+            // acepta valores de la lista del formulario (Honorarios, Servicios,
+            // Oficina, Marketing, Tecnología, Sueldos, Otros). Por eso seteamos
+            // 'Otros' por defecto; el usuario puede recategorizar manualmente.
             current = {
                 numero_factura: folio,
                 proveedor: toText(r[idx.razonSocialEmisor]),
                 fecha_emision: fechaEmision,
                 monto_clp: totalMonto,
+                monto_uf: montoUF,
+                uf_dia: ufActual || null,
+                moneda_principal: 'CLP',
+                categoria: 'Otros',
+                estado: 'Pendiente',
                 descripcion: toText(r[idx.giroEmisor]) || null,
                 __hasItem: false,
             };
