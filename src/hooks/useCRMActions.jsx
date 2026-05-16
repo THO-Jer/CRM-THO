@@ -3,7 +3,7 @@ import { supabase } from '../utils/supabase'
 import { showToast } from '../utils/toast'
 import { confirmModal } from '../utils/confirmModal'
 
-export default function useCRMActions({ user, requireAuth, setShowModal, data, loaders }) {
+export default function useCRMActions({ user, requireAuth, setShowModal, editingItem, data, loaders }) {
     const { prospectos, setProspectos, cerrados, setCerrados, tickets, setTickets, keyAccounts, setKeyAccounts } = data;
     const { loadProspectos, loadCerrados, loadTickets, loadKeyAccounts, loadContactos, loadNotas, loadActividad } = loaders;
 
@@ -388,8 +388,6 @@ export default function useCRMActions({ user, requireAuth, setShowModal, data, l
         setHistoryOpen(true);
         setHistoryLoading(true);
         setHistoryTitle(title || `${entityType} ${entityId}`);
-        setHistoryEntityType(entityType);
-        setHistoryEntityId(entityId);
         try {
             const { data: events, error: evErr } = await supabase
                 .from('crm_events')

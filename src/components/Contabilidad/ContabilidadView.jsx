@@ -24,6 +24,9 @@ export default function ContabilidadView({
     monedaPreferida, 
     alertasValidacion,
     setAlertasValidacion,
+    importarBoletasExcel,
+    importarFacturasEmitidasExcel,
+    importarFacturasRecibidasExcel,
     importarCartola,
     buscarMatches,
     aplicarConciliacion, 
@@ -605,6 +608,7 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Facturas Emitidas</h3>
                                     <div className="flex gap-2">
+                                        <button onClick={importarFacturasEmitidasExcel} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition" title="Importar Excel del SII">📄 Importar Excel</button>
                                         <button onClick={() => { setEditing(null); setModalType('emitida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                     </div>
                                 </div>
@@ -719,6 +723,7 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Facturas Recibidas (Gastos)</h3>
                                     <div className="flex gap-2">
+                                        <button onClick={importarFacturasRecibidasExcel} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition" title="Importar Excel del SII">📄 Importar Excel</button>
                                         <button onClick={() => { setEditing(null); setModalType('recibida'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                     </div>
                                 </div>
@@ -985,6 +990,7 @@ export default function ContabilidadView({
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-bold dark:text-gray-200">Boletas de Honorarios</h3>
                                     <div className="flex gap-2">
+                                        <button onClick={importarBoletasExcel} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition" title="Importar Excel del SII (BHE)">📄 Importar Excel</button>
                                         <button onClick={() => { setEditing(null); setModalType('boleta'); setShowModal(true); }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Boleta</button>
                                     </div>
                                 </div>

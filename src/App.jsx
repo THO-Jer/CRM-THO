@@ -62,6 +62,7 @@ import useData from './hooks/useData'
 import useCRMActions from './hooks/useCRMActions'
 import useFinanzas from './hooks/useFinanzas'
 import useMetrics from './hooks/useMetrics'
+import useExcelImport from './hooks/useExcelImport'
 function exportToCSV(data, filename = 'export.csv') {
     if (!data || data.length === 0) return;
     const excludeFields = ['id', 'created_at', 'created_by_email', 'updated_at'];
@@ -163,18 +164,28 @@ function CRMApp() {
         [tickets]
     );
 
+    // ===== EXCEL IMPORT HOOK =====
+    // Reemplaza al antiguo useSII (la API del SII murió por seguridad).
+    // Importa Excels descargados desde el SII a boletas/facturas.
+    const { importarBoletasExcel, importarFacturasEmitidasExcel, importarFacturasRecibidasExcel } = useExcelImport({
+        user, ufActual, loadBoletasHonorarios, loadFacturasEmitidas, loadFacturasRecibidas
+    });
+
     // ===== METRICS HOOK =====
     const { metrics, estadosKanban, prospectosPorEstado, getEstadoFromKey } = useMetrics({ prospectos, cerrados, tickets: activeTickets, keyAccounts: activeKeyAccounts, ufActual });
 
-    // setShowModal se declara aquí (antes de useCRMActions) porque el hook lo necesita como prop.
+    // setShowModal y editingItem se declaran aquí (antes de useCRMActions) porque el hook
+    // los necesita como props (TDZ: const no se puede referenciar antes de su declaración).
     // El resto del UI STATE block sigue declarándose más abajo por consistencia visual.
     const [showModal, setShowModal] = useState(false);
+    const [editingItem, setEditingItem] = useState(null);
 
     // ===== CRM ACTIONS HOOK =====
     const actions = useCRMActions({
         user,
         requireAuth,
         setShowModal,
+        editingItem,
         data: { prospectos, setProspectos: data.setProspectos, cerrados, setCerrados: data.setCerrados, tickets, setTickets: data.setTickets, keyAccounts, setKeyAccounts: data.setKeyAccounts },
         loaders: { loadProspectos, loadCerrados, loadTickets, loadKeyAccounts, loadContactos, loadNotas, loadActividad }
     });
@@ -191,7 +202,7 @@ function CRMApp() {
     const [dateRange, setDateRange] = useState({ desde: '', hasta: '' });
     // showModal/setShowModal se declara arriba (antes de useCRMActions) — ver comentario allá.
     const [modalType, setModalType] = useState('prospecto');
-    const [editingItem, setEditingItem] = useState(null);
+    // editingItem/setEditingItem se declara arriba (antes de useCRMActions) — ver comentario allá.
     const [searchTerm, setSearchTerm] = useState('');
     const [globalSearch, setGlobalSearch] = useState('');
     const [showGlobalSearch, setShowGlobalSearch] = useState(false);
@@ -475,6 +486,9 @@ function CRMApp() {
                         monedaPreferida={monedaPreferida} 
                         alertasValidacion={alertasValidacion}
                         setAlertasValidacion={setAlertasValidacion}
+                        importarBoletasExcel={importarBoletasExcel}
+                        importarFacturasEmitidasExcel={importarFacturasEmitidasExcel}
+                        importarFacturasRecibidasExcel={importarFacturasRecibidasExcel}
                         importarCartola={importarCartola}
                         buscarMatches={buscarMatches} 
                         aplicarConciliacion={aplicarConciliacion} 
