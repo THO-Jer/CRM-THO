@@ -1,6 +1,8 @@
 import { useRef } from 'react'
+import useEscapeKey from '../../hooks/useEscapeKey'
 
 export default function FilesModal({ open, onClose, entityName, files, loading, uploading, onUpload, onDownload, onDelete, getIcon, formatSize }) {
+    useEscapeKey(onClose, open);
     if (!open) return null;
     const fileInputRef = useRef(null);
     const handleFileSelect = (e) => { const file = e.target.files[0]; if (file) { onUpload(file); e.target.value = ''; } };
@@ -39,7 +41,7 @@ export default function FilesModal({ open, onClose, entityName, files, loading, 
                             {files.map((file, idx) => {
                                 const displayName = file.name.split('_').slice(1).join('_') || file.name;
                                 return (
-                                    <li key={idx} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                                    <li key={file.id || file.name || idx} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center space-x-3 flex-1 min-w-0">
                                                 <span className="text-2xl">{getIcon(file.name)}</span>

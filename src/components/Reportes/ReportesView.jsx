@@ -1,83 +1,110 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Chart } from '../../utils/chartSetup'
 
 export default function ReportesView({ prospectos, cerrados, tickets, keyAccounts, ufActual, dateRange }) {
     // Filter active prospectos (exclude converted)
     const prospectosActivos = useMemo(() => prospectos.filter(p => p.estado !== 'Convertido'), [prospectos]);
 
-    const prepararDatosIngresos = () => {
+    // Calcula el rango de meses a mostrar. Respeta dateRange si está seteado;
+    // si no, default a los últimos 6 meses (comportamiento previo).
+    const rangoMeses = useMemo(() => {
         const hoy = new Date();
+        const out = [];
+        if (dateRange?.desde && dateRange?.hasta) {
+            const d = new Date(dateRange.desde + 'T00:00:00');
+            const h = new Date(dateRange.hasta + 'T00:00:00');
+            let cur = new Date(d.getFullYear(), d.getMonth(), 1);
+            const end = new Date(h.getFullYear(), h.getMonth(), 1);
+            // Cap a 24 meses para que no explote el gráfico
+            let i = 0;
+            while (cur <= end && i < 24) {
+                out.push(new Date(cur));
+                cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+                i++;
+            }
+            if (out.length === 0) out.push(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+        } else {
+            for (let i = 5; i >= 0; i--) {
+                out.push(new Date(hoy.getFullYear(), hoy.getMonth() - i, 1));
+            }
+        }
+        return out;
+    }, [dateRange?.desde, dateRange?.hasta]);
+
+    const datosIngresos = useMemo(() => {
+        const uf = Number(ufActual) > 0 ? Number(ufActual) : 38000;
         const meses = [], mrrData = [], ticketsData = [], cerradosData = [];
-        for (let i = 5; i >= 0; i--) {
-            const mesStart = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
-            const mesEnd = new Date(hoy.getFullYear(), hoy.getMonth() - i + 1, 0);
+        rangoMeses.forEach(mesStart => {
+            const mesEnd = new Date(mesStart.getFullYear(), mesStart.getMonth() + 1, 0);
             meses.push(mesStart.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' }));
-            
-            // MRR: KA uf_mes only if active during this month (started before end, not ended before start)
+
             const mrrTotal = keyAccounts.reduce((sum, ka) => {
                 const kaStart = new Date(ka.inicio_contrato || ka.created_at);
                 const kaEnd = ka.fin_contrato ? new Date(ka.fin_contrato) : new Date(2099, 11, 31);
+                if (isNaN(kaStart.getTime())) return sum;
                 if (kaStart > mesEnd || kaEnd < mesStart) return sum;
                 return sum + (parseFloat(ka.uf_mes) || 0);
             }, 0);
-            
-            // Tickets: distribute value across active months
+
             const ticketsTotal = tickets.reduce((sum, t) => {
-                const tStart = new Date(t.fecha_inicio || t.created_at);
-                const tEnd = t.fecha_entrega ? new Date(t.fecha_entrega) : hoy;
+                // Skip tickets sin fecha de inicio válida — antes caían a Invalid Date y NaN.
+                const startRaw = t.fecha_inicio || t.created_at;
+                if (!startRaw) return sum;
+                const tStart = new Date(startRaw);
+                if (isNaN(tStart.getTime())) return sum;
+                const tEnd = t.fecha_entrega ? new Date(t.fecha_entrega) : mesEnd;
+                if (isNaN(tEnd.getTime())) return sum;
                 if (tStart > mesEnd || tEnd < mesStart) return sum;
                 const monto = parseFloat(t.valor_monto) || 0;
-                const montoUF = t.valor_moneda === 'CLP' ? monto / (ufActual || 38000) : monto;
-                const totalMonths = Math.max(1, Math.ceil((tEnd - tStart) / (30 * 86400000)));
+                const montoUF = t.valor_moneda === 'CLP' ? monto / uf : monto;
+                const dur = tEnd - tStart;
+                const totalMonths = Math.max(1, Math.ceil(dur / (30 * 86400000)));
+                if (!isFinite(totalMonths)) return sum;
                 return sum + (montoUF / totalMonths);
             }, 0);
 
-            // Cerrados ganados: one-time revenue in their close month
             const cerradosMes = cerrados.filter(c => {
                 if (c.estado_final !== 'Ganado') return false;
                 const f = new Date(c.fecha_cierre);
+                if (isNaN(f.getTime())) return false;
                 return f.getMonth() === mesStart.getMonth() && f.getFullYear() === mesStart.getFullYear();
             }).reduce((sum, c) => sum + (parseFloat(c.valor_total_final || c.valor) || 0), 0);
-            
+
             mrrData.push(Math.round(mrrTotal));
             ticketsData.push(Math.round(ticketsTotal));
             cerradosData.push(Math.round(cerradosMes));
-        }
+        });
         return { labels: meses, mrr: mrrData, tickets: ticketsData, cerrados: cerradosData };
-    };
-    
-    const prepararDatosPipeline = () => {
+    }, [rangoMeses, keyAccounts, tickets, cerrados, ufActual]);
+
+    const datosPipeline = useMemo(() => {
         const etapas = ['Contactado', 'Reunión agendada', 'Propuesta enviada', 'Negociación'];
         const valores = etapas.map(e => Math.round(prospectosActivos.filter(p => p.estado === e).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)));
         const counts = etapas.map(e => prospectosActivos.filter(p => p.estado === e).length);
         return { labels: etapas, data: valores, counts };
-    };
-    
-    const prepararDatosConversion = () => {
-        const hoy = new Date();
+    }, [prospectosActivos]);
+
+    const datosConversion = useMemo(() => {
         const meses = [], tasas = [];
-        for (let i = 5; i >= 0; i--) {
-            const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+        rangoMeses.forEach(fecha => {
             meses.push(fecha.toLocaleDateString('es-CL', { month: 'short' }));
-            const cerradosMes = cerrados.filter(c => { const f = new Date(c.fecha_cierre); return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear(); });
+            const cerradosMes = cerrados.filter(c => { const f = new Date(c.fecha_cierre); if (isNaN(f.getTime())) return false; return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear(); });
             const ganados = cerradosMes.filter(c => c.estado_final === 'Ganado').length;
             tasas.push(cerradosMes.length > 0 ? Math.round((ganados / cerradosMes.length) * 100) : 0);
-        }
+        });
         return { labels: meses, data: tasas };
-    };
+    }, [rangoMeses, cerrados]);
 
     const datosWinLoss = useMemo(() => {
-        const hoy = new Date();
         const meses = [], ganados = [], perdidos = [];
-        for (let i = 5; i >= 0; i--) {
-            const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+        rangoMeses.forEach(fecha => {
             meses.push(fecha.toLocaleDateString('es-CL', { month: 'short' }));
-            const del_mes = cerrados.filter(c => { const f = new Date(c.fecha_cierre); return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear(); });
+            const del_mes = cerrados.filter(c => { const f = new Date(c.fecha_cierre); if (isNaN(f.getTime())) return false; return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear(); });
             ganados.push(del_mes.filter(c => c.estado_final === 'Ganado').length);
             perdidos.push(del_mes.filter(c => c.estado_final === 'Perdido').length);
-        }
+        });
         return { labels: meses, ganados, perdidos };
-    }, [cerrados]);
+    }, [rangoMeses, cerrados]);
 
     const datosAging = useMemo(() => {
         const hoy = new Date();
@@ -103,10 +130,6 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
         return salud;
     }, [keyAccounts]);
     
-    const datosIngresos = prepararDatosIngresos();
-    const datosPipeline = prepararDatosPipeline();
-    const datosConversion = prepararDatosConversion();
-
     useEffect(() => {
         const timeout = setTimeout(() => {
             const kill = (id) => { const c = document.getElementById(id); if (c?.chart) { c.chart.destroy(); c.chart = null; } };
@@ -139,7 +162,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
             });
         }, 50);
         return () => { clearTimeout(timeout); ['chartIngresos','chartPipeline','chartConversion','chartWinLoss','chartAging'].forEach(id => { const c = document.getElementById(id); if (c?.chart) { c.chart.destroy(); c.chart = null; } }); };
-    }, [prospectosActivos, cerrados, tickets, keyAccounts]);
+    }, [datosIngresos, datosPipeline, datosConversion, datosWinLoss, datosAging]);
 
     const totalPipeline = Math.round(prospectosActivos.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0));
     const mrrActual = Math.round(keyAccounts.reduce((s, ka) => s + (parseFloat(ka.uf_mes) || 0), 0));
@@ -178,7 +201,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                     <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">💰 Ingresos Mensuales</h3>
                     <div style={{height: '250px', position: 'relative'}}><canvas id="chartIngresos"></canvas></div>
-                    <div className="text-xs text-gray-500 mt-2 text-center">MRR + Tickets + Cierres · Últimos 6 meses</div>
+                    <div className="text-xs text-gray-500 mt-2 text-center">MRR + Tickets + Cierres · {rangoMeses.length} {rangoMeses.length === 1 ? 'mes' : 'meses'}{dateRange?.desde || dateRange?.hasta ? ' (filtrado)' : ''}</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                     <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">🎯 Pipeline por Etapa</h3>
@@ -196,7 +219,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                     <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">🏆 Ganados vs Perdidos</h3>
                     <div style={{height: '250px', position: 'relative'}}><canvas id="chartWinLoss"></canvas></div>
-                    <div className="text-xs text-gray-500 mt-2 text-center">Cierres por mes · Últimos 6 meses</div>
+                    <div className="text-xs text-gray-500 mt-2 text-center">Cierres por mes · {rangoMeses.length} {rangoMeses.length === 1 ? 'mes' : 'meses'}{dateRange?.desde || dateRange?.hasta ? ' (filtrado)' : ''}</div>
                 </div>
             </div>
 
@@ -212,7 +235,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                     <div className="space-y-3">
                         {datosTickets.length === 0 && <p className="text-sm text-gray-400 text-center py-8">Sin tickets activos</p>}
                         {datosTickets.map((t, i) => (
-                            <div key={i}>
+                            <div key={`${t.org}-${t.nombre}-${i}`}>
                                 <div className="flex justify-between text-xs mb-1">
                                     <div className="flex-1 min-w-0 mr-2">
                                         <span className="text-gray-700 dark:text-gray-300 font-medium truncate block" title={`${t.org} — ${t.nombre}`}>{t.org}</span>
@@ -249,8 +272,8 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                         <div>
                             <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Top Razones de Pérdida</div>
                             <div className="space-y-1.5">
-                                {razonesPerdida.map(([razon, count], i) => (
-                                    <div key={i} className="flex justify-between text-xs"><span className="text-gray-600 dark:text-gray-400 truncate mr-2">{razon}</span><span className="text-gray-500 font-medium">{count}</span></div>
+                                {razonesPerdida.map(([razon, count]) => (
+                                    <div key={razon} className="flex justify-between text-xs"><span className="text-gray-600 dark:text-gray-400 truncate mr-2">{razon}</span><span className="text-gray-500 font-medium">{count}</span></div>
                                 ))}
                             </div>
                         </div>

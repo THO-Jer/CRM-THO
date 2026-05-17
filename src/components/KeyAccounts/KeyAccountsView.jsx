@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
 import MetricCard from '../shared/MetricCard'
 
-export default function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles, onDetail}) {
+export default function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles, onDetail, ufActual = 38000}) {
     const totalMRR = keyAccounts.reduce((sum, ka) => sum + (parseFloat(ka.uf_mes) || 0), 0);
     const saludBadge = (s) => s === 'Excelente' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : s === 'Buena' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : s === 'Riesgo' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-    
-    // Group KAs by organization
+
+    // Group KAs by organization (ordering numeric-aware: "Acme 2" antes que "Acme 10").
     const grouped = useMemo(() => {
         const map = {};
         keyAccounts.forEach(ka => {
@@ -13,7 +13,7 @@ export default function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, o
             if (!map[key]) map[key] = { org: ka.organizacion, services: [] };
             map[key].services.push(ka);
         });
-        return Object.values(map).sort((a, b) => a.org.localeCompare(b.org));
+        return Object.values(map).sort((a, b) => (a.org || '').localeCompare(b.org || '', 'es-CL', { numeric: true }));
     }, [keyAccounts]);
 
     const uniqueOrgs = grouped.length;
@@ -28,7 +28,7 @@ export default function KeyAccountsView({keyAccounts, onAdd, onEdit, onDelete, o
                 </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <MetricCard title="MRR" value={`${Math.round(totalMRR)} UF/mes`} subtitle={`~$${Math.round(totalMRR * 38000).toLocaleString()}`} color="verde" />
+                <MetricCard title="MRR" value={`${Math.round(totalMRR)} UF/mes`} subtitle={`~$${Math.round(totalMRR * (ufActual || 38000)).toLocaleString('es-CL')}`} color="verde" />
                 <MetricCard title="Clientes" value={uniqueOrgs} subtitle={`${keyAccounts.length} servicio${keyAccounts.length !== 1 ? 's' : ''} activo${keyAccounts.length !== 1 ? 's' : ''}`} color="azul" />
             </div>
             

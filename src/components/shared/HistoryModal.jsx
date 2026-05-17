@@ -1,4 +1,7 @@
+import useEscapeKey from '../../hooks/useEscapeKey'
+
 export default function HistoryModal({ open, title, items, loading, onClose }) {
+    useEscapeKey(onClose, open);
     if (!open) return null;
 
     const formatDT = (dt) => {
@@ -75,7 +78,7 @@ export default function HistoryModal({ open, title, items, loading, onClose }) {
                                     const detalles = getDetalles(it);
                                     const titulo = it.title || it.label || 'Actividad';
                                     return (
-                                        <li key={idx} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                                        <li key={it.id || `${it.created_at || ''}-${idx}`} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                                             <div className="flex items-start space-x-3">
                                                 <span className="text-xl flex-shrink-0">{getEventIcon(it.event_type || it.label)}</span>
                                                 <div className="flex-1 min-w-0">

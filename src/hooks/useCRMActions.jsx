@@ -62,7 +62,10 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
         setConvertSource({ type: 'prospecto', item: prospecto });
         const today = new Date().toISOString().split('T')[0];
         const defaultEntrega = prospecto?.fecha_limite || today;
-        setConvertTarget(targetType === 'keyaccount' ? 'keyaccount' : 'ticket');
+        // Normaliza el target: el <select> en App.jsx usa value="key_account" y
+        // el código bifurcador en submitConvert compara contra 'ticket'/'key_account'.
+        // Antes mezclábamos 'keyaccount' (sin guión) y rompía el select.
+        setConvertTarget(targetType === 'keyaccount' || targetType === 'key_account' ? 'key_account' : 'ticket');
         setConvertForm({
             ticket: `Ejecución - ${prospecto?.organizacion || ''}`.trim(),
             fecha_inicio: today,
@@ -107,6 +110,25 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
     const source = convertSource?.item;
     if (!sourceType || !source) return;
 
+    // Validación mínima — antes mandábamos strings vacíos al insert y Supabase
+    // devolvía un error genérico de cast sin contexto para el usuario.
+    if (convertTarget === 'ticket') {
+        if (!convertForm.fecha_inicio || !convertForm.fecha_entrega) {
+            showToast('Completa fecha de inicio y entrega', 'warning');
+            return;
+        }
+    } else {
+        if (!convertForm.inicio_contrato || !convertForm.fin_contrato) {
+            showToast('Completa fecha de inicio y fin del contrato', 'warning');
+            return;
+        }
+        const ufMes = Number(convertForm.uf_mes || source.valor || 0);
+        if (!isFinite(ufMes) || ufMes <= 0) {
+            showToast('UF/mes debe ser un valor positivo', 'warning');
+            return;
+        }
+    }
+
     try {
         const fromId = source.id;
         const fromEntityType = (sourceType === 'prospecto') ? 'prospectos' : 'cerrados';
@@ -140,7 +162,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
             const kaRow = {
     organizacion: source.organizacion,
     servicio: convertForm.servicio || source.tipo || 'Servicio',
-    uf_mes: Number(convertForm.uf_mes || source.valor || 0),
+    uf_mes: Math.max(0, Number(convertForm.uf_mes || source.valor || 0)),
     inicio_contrato: convertForm.inicio_contrato,
     fin_contrato: convertForm.fin_contrato,
     renovacion: 'Mensual',
@@ -224,11 +246,13 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
 
         await logEvent(fromEntityType, fromId, 'converted', `${transitionFrom} convertido`, { to_type: toType, to_id: toId });
 
-        // 4) Refresh
-        await loadProspectos();
-        await loadCerrados();
-        await loadTickets();
-        await loadKeyAccounts();
+        // 4) Refresh en paralelo (antes era serial: 4 round-trips a Supabase).
+        await Promise.all([
+            loadProspectos(),
+            loadCerrados(),
+            loadTickets(),
+            loadKeyAccounts()
+        ]);
 
         closeConvert();
     } catch (error) {
@@ -667,10 +691,16 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
         const prospecto = prospectos.find(p => p.id === prospectoId);
         const estadoAnterior = prospecto?.estado;
         
-        let probabilidad = 10;
-        if (nuevoEstado === 'Reunión agendada') probabilidad = 25;
-        if (nuevoEstado === 'Propuesta enviada') probabilidad = 40;
-        if (nuevoEstado === 'Negociación') probabilidad = 70;
+        // Probabilidad por estado — antes faltaban 'Lead nuevo' y 'Contactado',
+        // que caían al default 10 y ensuciaban el pipeline ponderado.
+        const PROBABILIDAD_POR_ESTADO = {
+            'Lead nuevo': 5,
+            'Contactado': 15,
+            'Reunión agendada': 25,
+            'Propuesta enviada': 40,
+            'Negociación': 70
+        };
+        const probabilidad = PROBABILIDAD_POR_ESTADO[nuevoEstado] ?? 10;
         
         const { error } = await supabase.from('prospectos').update({ estado: nuevoEstado, probabilidad }).eq('id', prospectoId);
         if (error) {

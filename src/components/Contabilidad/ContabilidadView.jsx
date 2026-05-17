@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
 import { confirmModal } from '../../utils/confirmModal'
-import { formatCLP, formatUF, formatDate, formatDateTime, formatNumber } from '../../utils/formatters'
 import { Chart } from '../../utils/chartSetup'
 import * as XLSX from 'xlsx'
 import DualCurrency from '../shared/DualCurrency'
@@ -247,6 +246,13 @@ export default function ContabilidadView({
                         cleanedData[key] = value;
                     }
                 }
+
+                // Schema drift defensivo: facturas_recibidas no tiene moneda_principal.
+                // Si el form legacy lo trae (ej: edición de un registro creado antes
+                // con esa key), lo removemos antes del insert/update para que no caiga.
+                if (table === 'facturas_recibidas') {
+                    delete cleanedData.moneda_principal;
+                }
                 
                 console.log('Guardando en tabla:', table);
                 console.log('Datos limpios a guardar:', cleanedData);
@@ -315,10 +321,15 @@ export default function ContabilidadView({
                 if (cellUF && typeof cellUF.v === 'number') cellUF.z = '#,##0.00';
             }
             XLSX.utils.book_append_sheet(wb, ws, 'Retiros Socios');
+            // 'personalizado' usaba variables filtroSueldosDesde/Hasta que ya no existen
+            // (refactor previo). Caemos al rango global si está seteado; si no, etiqueta genérica.
             const periodoTexto = {
                 'mes-actual': 'Mes_Actual', 'ultimos-3-meses': 'Ultimos_3_Meses',
                 'año-actual': `Año_${new Date().getFullYear()}`,
-                'personalizado': `${filtroSueldosDesde}_a_${filtroSueldosHasta}`, 'todo': 'Todos'
+                'personalizado': (dateRange?.desde || dateRange?.hasta)
+                    ? `${dateRange.desde || 'inicio'}_a_${dateRange.hasta || 'hoy'}`
+                    : 'Personalizado',
+                'todo': 'Todos'
             }[periodo] || 'Export';
             const fechaExport = new Date().toISOString().split('T')[0];
             const nombreArchivo = `THO_Retiros_Socios_${periodoTexto}_${fechaExport}.xlsx`;
@@ -1071,15 +1082,22 @@ export default function ContabilidadView({
                                         </span>
                                     </div>
                                     <div className="flex gap-2">
-                                        <button 
+                                        <button
                                             onClick={async () => {
-                                                if (await confirmModal('¿Eliminar TODOS los movimientos bancarios? Esta acción no se puede deshacer.')) {
-                                                    const { error } = await supabase.from('movimientos_bancarios').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-                                                    if (error) showToast('Error: ' + error.message, 'error');
-                                                    else { showToast('✅ Movimientos eliminados', 'success'); onReload(); }
+                                                // Doble confirmación tipo "type ELIMINAR" — esta operación
+                                                // borra TODOS los movimientos y no es reversible.
+                                                if (!(await confirmModal(`⚠️ ESTO ELIMINA TODOS los movimientos bancarios (${movBancAct.length} registros). No se puede deshacer.\n\n¿Continuar?`, { title: 'Confirmar eliminación masiva', danger: true, confirmLabel: 'Continuar' }))) return;
+                                                const verificacion = window.prompt('Para confirmar, escribe ELIMINAR (en mayúsculas):');
+                                                if (verificacion !== 'ELIMINAR') {
+                                                    showToast('Operación cancelada', 'info');
+                                                    return;
                                                 }
+                                                const { error } = await supabase.from('movimientos_bancarios').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                                                if (error) showToast('Error: ' + error.message, 'error');
+                                                else { showToast('✅ Movimientos eliminados', 'success'); onReload(); }
                                             }}
                                             className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
+                                            title="Elimina TODOS los movimientos bancarios"
                                         >
                                             🗑️ Limpiar Todo
                                         </button>
@@ -1478,7 +1496,8 @@ export default function ContabilidadView({
                                             ['Mes', 'Ingresos', 'Gastos Operacionales', 'Honorarios', 'Caja Chica', 'Retenciones', 'Utilidad Operacional', 'Utilidad Neta'],
                                             ...data.map(m => [m.mes, m.emitidas, m.gastos, m.honorarios, m.cajaChica, m.retenciones, m.utilidadOperacional, m.utilidadNeta])
                                         ].map(row => row.join(',')).join('\n');
-                                        const blob = new Blob([csv], { type: 'text/csv' });
+                                        // BOM ﻿ para que Excel respete los acentos en castellano.
+                                        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
                                         const url = window.URL.createObjectURL(blob);
                                         const a = document.createElement('a');
                                         a.href = url;

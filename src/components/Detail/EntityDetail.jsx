@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
 import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
-import { generateProposal } from '../../utils/proposalPDF'
+import { confirmModal } from '../../utils/confirmModal'
+import useEscapeKey from '../../hooks/useEscapeKey'
 
 const tipoIcons = { nota: '📝', llamada: '📞', reunion: '🤝', email: '📧', tarea: '✅' };
 const tipoLabels = { nota: 'Nota', llamada: 'Llamada', reunion: 'Reunión', email: 'Email', tarea: 'Tarea' };
@@ -10,12 +11,16 @@ const servicioOptions = ['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG', '
 
 export default function EntityDetail({ entity, onClose, contactos, notas, user, keyAccounts = [], ufActual = 38000, onRefresh }) {
     const { type, item } = entity;
+    useEscapeKey(onClose);
     const [activeSection, setActiveSection] = useState('ficha');
     const [formData, setFormData] = useState({ ...item });
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
     const [newNota, setNewNota] = useState({ tipo: 'nota', contenido: '' });
     const [newContacto, setNewContacto] = useState({ nombre: '', cargo: '', email: '', telefono: '' });
+
+    // jsPDF (~350KB) se carga lazy en el handler del botón "Propuesta" — antes
+    // se importaba eager y arrastraba el bundle aunque el usuario nunca exporte.
 
     const entityNotas = useMemo(() =>
         notas.filter(n => n.entidad_tipo === type && n.entidad_id === item.id)
@@ -32,9 +37,10 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     const handleSave = async () => {
         setSaving(true);
         const table = tableMap[type];
-        const { id, created_at, ...rest } = formData;
+        // Excluimos campos calculados por la DB para no enviarlos en el update.
+        const { id, created_at, updated_at, created_by_email, ...rest } = formData;
         const { error } = await supabase.from(table).update(rest).eq('id', id);
-        if (error) { showToast('Error al guardar', 'error'); console.error(error); }
+        if (error) { showToast('Error al guardar: ' + (error.message || 'desconocido'), 'error'); console.error(error); }
         else { showToast('Guardado ✓', 'success'); setDirty(false); onRefresh(); }
         setSaving(false);
     };
@@ -62,9 +68,17 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
         setSaving(false);
     };
 
-    const handleDeleteNota = async (id) => { if (!confirm('¿Eliminar esta nota?')) return; await supabase.from('notas').delete().eq('id', id); onRefresh(); };
+    const handleDeleteNota = async (id) => {
+        if (!(await confirmModal('¿Eliminar esta nota?', { danger: true, confirmLabel: 'Eliminar' }))) return;
+        await supabase.from('notas').delete().eq('id', id);
+        onRefresh();
+    };
     const handleToggleTarea = async (nota) => { await supabase.from('notas').update({ completada: !nota.completada }).eq('id', nota.id); onRefresh(); };
-    const handleDeleteContacto = async (id) => { if (!confirm('¿Eliminar este contacto?')) return; await supabase.from('contactos').delete().eq('id', id); onRefresh(); };
+    const handleDeleteContacto = async (id) => {
+        if (!(await confirmModal('¿Eliminar este contacto?', { danger: true, confirmLabel: 'Eliminar' }))) return;
+        await supabase.from('contactos').delete().eq('id', id);
+        onRefresh();
+    };
     const fmtDateTime = (d) => d ? new Date(d).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
     const org = formData.organizacion || formData.ticket || 'Sin nombre';
@@ -127,18 +141,24 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                         </div>
                         <div className="flex items-center gap-2 ml-4">
                             {(type === 'prospecto' || type === 'keyaccount') && (
-                                <button onClick={() => {
+                                <button onClick={async () => {
                                     const valor = type === 'keyaccount' ? formData.uf_mes : formData.valor;
-                                    generateProposal({
-                                        organizacion: formData.organizacion,
-                                        contacto: formData.contacto,
-                                        tipo: formData.tipo || formData.servicio || tipo,
-                                        valor: valor,
-                                        moneda: 'UF',
-                                        ufActual,
-                                        notas: formData.notas || formData.proximo_paso || ''
-                                    });
-                                    showToast('PDF generado ✓', 'success');
+                                    try {
+                                        const { generateProposal } = await import('../../utils/proposalPDF');
+                                        generateProposal({
+                                            organizacion: formData.organizacion,
+                                            contacto: formData.contacto,
+                                            tipo: formData.tipo || formData.servicio || type,
+                                            valor: valor,
+                                            moneda: 'UF',
+                                            ufActual,
+                                            notas: formData.notas || formData.proximo_paso || ''
+                                        });
+                                        showToast('PDF generado ✓', 'success');
+                                    } catch (err) {
+                                        console.error(err);
+                                        showToast('No se pudo generar el PDF: ' + (err.message || ''), 'error');
+                                    }
                                 }} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Generar propuesta PDF">
                                     📄 Propuesta
                                 </button>

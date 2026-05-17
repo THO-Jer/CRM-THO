@@ -1,7 +1,16 @@
+import * as XLSX from 'xlsx'
 import { supabase } from '../utils/supabase'
 import { showToast } from '../utils/toast'
 
-export default function useFinanzas({ user, movimientosBancarios, setMovimientosBancarios, facturasEmitidas, facturasRecibidas, boletasHonorarios, sueldosSocios, cajaChica, loadMovimientosBancarios, loadCajaChica }) {
+export default function useFinanzas({
+    user, movimientosBancarios, setMovimientosBancarios,
+    facturasEmitidas, facturasRecibidas, boletasHonorarios, sueldosSocios, cajaChica,
+    ufActual,
+    loadMovimientosBancarios, loadCajaChica,
+    loadFacturasEmitidas, loadFacturasRecibidas, loadBoletasHonorarios, loadSueldosSocios
+}) {
+    // Guarda contra divisiones por cero / UF indefinida
+    const uf = Number(ufActual) > 0 ? Number(ufActual) : 38000;
     // ============================================
     // CONCILIACIÓN BANCARIA - FUNCIONES
     // ============================================
@@ -62,7 +71,8 @@ export default function useFinanzas({ user, movimientosBancarios, setMovimientos
             };
             if (docCol >= 0 && row[docCol]) obj.numero_documento = row[docCol].toString();
             if (sucCol >= 0 && row[sucCol]) obj.sucursal = row[sucCol].toString();
-            if (ufActual > 0) { obj.monto_uf = Math.abs(monto) / ufActual; obj.uf_dia = ufActual; }
+            obj.monto_uf = Math.abs(monto) / uf;
+            obj.uf_dia = uf;
             movimientos.push(obj);
         }
         return movimientos;
@@ -161,10 +171,13 @@ export default function useFinanzas({ user, movimientosBancarios, setMovimientos
         
         // Función para calcular score de similaridad
         const calcularScore = (fechaRegistro, montoRegistroCLP) => {
+            // Defensa: si alguno de los montos es 0 o no numérico, no hay match real.
+            if (!montoCLP || !montoRegistroCLP || !isFinite(montoCLP) || !isFinite(montoRegistroCLP)) return 0;
             const fechaReg = new Date(fechaRegistro);
             const diffDias = Math.abs((fechaMov - fechaReg) / (1000 * 60 * 60 * 24));
             const diffMonto = Math.abs(montoCLP - montoRegistroCLP) / montoCLP;
-            
+            if (!isFinite(diffDias) || !isFinite(diffMonto)) return 0;
+
             if (diffDias > 30 || diffMonto > 0.05) return 0; // Fuera de rango
             
             let score = 1.0;
@@ -263,17 +276,18 @@ export default function useFinanzas({ user, movimientosBancarios, setMovimientos
         if (movimiento.tipo === 'salida') {
             cajaChica.forEach(c => {
                 const montoCajaCLP = parseFloat(c.monto_clp) || 0;
+                if (!montoCajaCLP || !montoCLP) return;
                 const fechaCaja = new Date(c.fecha);
                 const diffDias = Math.abs((new Date(movimiento.fecha) - fechaCaja) / (1000 * 60 * 60 * 24));
                 const diffMonto = Math.abs(montoCLP - montoCajaCLP) / montoCLP;
-                
+
                 if (diffDias <= 7 && diffMonto <= 0.02) { // Mismo día ±7 y monto ±2%
                     matches.push({
                         tipo: 'caja_chica',
                         id: String(c.id),
                         descripcion: `Caja Chica: ${c.concepto}`,
                         monto_clp: montoCajaCLP,
-                        monto_uf: montoCajaCLP / ufActual,
+                        monto_uf: montoCajaCLP / uf,
                         fecha: c.fecha,
                         score: 0.85 // Alto porque coincide fecha y monto
                     });
@@ -312,8 +326,8 @@ export default function useFinanzas({ user, movimientosBancarios, setMovimientos
             const movId = String(movimientoId);
             const conId = String(conciliadoConId);
             
-            // Actualizar movimiento
-            const { error: errorMov } = await supabase
+            // Actualizar movimiento (sólo si aún está pendiente — evita doble-conciliación)
+            const { data: updMov, error: errorMov } = await supabase
                 .from('movimientos_bancarios')
                 .update({
                     estado_conciliacion: 'conciliado',
@@ -321,9 +335,15 @@ export default function useFinanzas({ user, movimientosBancarios, setMovimientos
                     conciliado_con_id: conId,
                     conciliado_at: new Date().toISOString()
                 })
-                .eq('id', movId);
-            
+                .eq('id', movId)
+                .eq('estado_conciliacion', 'pendiente')
+                .select();
+
             if (errorMov) throw errorMov;
+            if (!updMov || updMov.length === 0) {
+                showToast('⚠️ Este movimiento ya estaba conciliado', 'info');
+                return;
+            }
             
             // Actualizar estado del registro conciliado
             let tabla, nuevoEstado;
@@ -349,22 +369,33 @@ export default function useFinanzas({ user, movimientosBancarios, setMovimientos
                     tabla = null;
             }
             
+            let tablaActualizada = true;
             if (tabla) {
                 const { error: errorReg } = await supabase
                     .from(tabla)
                     .update({ estado: nuevoEstado })
                     .eq('id', conId);
-                
-                // Don't throw on this - the record might use different ID format
-                if (errorReg) console.warn(`Could not update ${tabla} status:`, errorReg.message);
+
+                if (errorReg) {
+                    tablaActualizada = false;
+                    console.warn(`Could not update ${tabla} status:`, errorReg.message);
+                }
             }
-            
-            showToast('✅ Conciliación aplicada correctamente', 'success');
-            loadMovimientosBancarios();
-            loadFacturasEmitidas();
-            loadFacturasRecibidas();
-            loadBoletasHonorarios();
-            loadSueldosSocios();
+
+            if (tablaActualizada) {
+                showToast('✅ Conciliación aplicada correctamente', 'success');
+            } else {
+                showToast(`⚠️ Movimiento conciliado, pero no se pudo actualizar ${tabla}. Refresca y revisa.`, 'warning');
+            }
+            // Refrescos en paralelo. Las funciones loadX pueden no estar definidas si el
+            // hook se montó sin esas props — guard para no romper.
+            await Promise.all([
+                loadMovimientosBancarios?.(),
+                loadFacturasEmitidas?.(),
+                loadFacturasRecibidas?.(),
+                loadBoletasHonorarios?.(),
+                loadSueldosSocios?.()
+            ].filter(Boolean));
             
         } catch (error) {
             console.error('Error aplicando conciliación:', error);
@@ -375,10 +406,13 @@ export default function useFinanzas({ user, movimientosBancarios, setMovimientos
     // Crear gasto en caja chica desde movimiento
     const crearGastoCajaChica = async (movimiento, categoria) => {
         try {
+            const montoCLPGasto = Number(movimiento.monto_clp) || 0;
             const nuevoGasto = {
                 fecha: movimiento.fecha,
                 concepto: movimiento.descripcion,
-                monto_clp: movimiento.monto_clp,
+                monto_clp: montoCLPGasto,
+                monto_uf: uf > 0 ? montoCLPGasto / uf : null,
+                uf_dia: uf,
                 categoria: categoria,
                 responsable: 'Importado desde cartola',
                 comprobante: movimiento.numero_documento

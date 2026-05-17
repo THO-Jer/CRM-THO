@@ -46,6 +46,7 @@ function ConfirmDialog({ message, title, confirmLabel, cancelLabel, danger, onYe
                     <button
                         type="button"
                         onClick={onNo}
+                        autoFocus={danger}
                         className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition"
                     >
                         {cancelLabel}
@@ -53,7 +54,7 @@ function ConfirmDialog({ message, title, confirmLabel, cancelLabel, danger, onYe
                     <button
                         type="button"
                         onClick={onYes}
-                        autoFocus
+                        autoFocus={!danger}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition ${confirmClass}`}
                     >
                         {confirmLabel}
@@ -91,7 +92,9 @@ export function confirmModal(message, options = {}) {
 
         const handleKey = (e) => {
             if (e.key === 'Escape') handleNo()
-            if (e.key === 'Enter') handleYes()
+            // En acciones destructivas no aceptamos Enter — el usuario debe clickear
+            // explícitamente para evitar borrados accidentales por Enter en otro contexto.
+            if (e.key === 'Enter' && !danger) handleYes()
         }
         document.addEventListener('keydown', handleKey)
 

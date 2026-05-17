@@ -62,10 +62,10 @@ export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyA
       if (sinActividad > 0) { score -= sinActividad * 2; details.push({ icon: '🟡', text: `${sinActividad} prospecto${sinActividad > 1 ? 's' : ''} sin actividad reciente`, type: 'warn' }); }
     }
 
-    // 6. Diversification bonus
+    // 6. Diversification bonus — trim para que "Acme" y " Acme " no cuenten distinto.
     const uniqueClients = new Set([
-      ...(keyAccounts || []).map(ka => ka.organizacion?.toLowerCase()),
-      ...(tickets || []).map(t => t.organizacion?.toLowerCase())
+      ...(keyAccounts || []).map(ka => ka.organizacion?.trim().toLowerCase()),
+      ...(tickets || []).map(t => t.organizacion?.trim().toLowerCase())
     ].filter(Boolean)).size;
     if (uniqueClients >= 5) { score += 5; details.push({ icon: '🌐', text: `${uniqueClients} clientes activos — buena diversificación`, type: 'good' }); }
     else if (uniqueClients >= 3) { score += 2; }
@@ -196,7 +196,7 @@ export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyA
           ) : (
             <div className="space-y-2">
               {actionItems.map((item, i) => (
-                <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                <div key={item.id || `${item.text}-${i}`} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                   <span className="text-base flex-shrink-0 mt-0.5">{item.icon}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-gray-700 dark:text-gray-300 truncate">{item.text}</div>
@@ -240,7 +240,7 @@ export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyA
           <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-4">📋 Actividad Reciente</h3>
           <div className="space-y-2">
             {actividadReciente.slice(0, 8).map((act, i) => (
-              <div key={i} className="flex items-start gap-3 text-sm py-1.5 border-b dark:border-gray-700 last:border-0">
+              <div key={act.id || `${act.kind || 'a'}-${act.created_at || i}`} className="flex items-start gap-3 text-sm py-1.5 border-b dark:border-gray-700 last:border-0">
                 <span className="text-base flex-shrink-0">{act.icono_mejorado || '📌'}</span>
                 <div className="flex-1 min-w-0">
                   <span className="text-gray-700 dark:text-gray-300">{act.titulo_mejorado || act.label || 'Actividad'}</span>

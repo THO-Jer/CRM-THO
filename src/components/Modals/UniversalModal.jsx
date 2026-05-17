@@ -2,8 +2,10 @@ import { useState } from 'react'
 import InputField from '../shared/InputField'
 import SelectField from '../shared/SelectField'
 import TextAreaField from '../shared/TextAreaField'
+import useEscapeKey from '../../hooks/useEscapeKey'
 
 export default function UniversalModal({ type, item, onSave, onClose }) {
+    useEscapeKey(onClose);
     const getDefault = (type) => {
         if (type === 'prospecto') return { organizacion: '', contacto: '', tipo: 'Ticket RC Express', estado: 'Contactado', valor: '', probabilidad: 10, proximo_paso: '', fecha_limite: '', notas: '' };
         if (type === 'cerrado') return { organizacion: '', contacto: '', tipo: 'Ticket RC Express', estado_final: 'Ganado', fecha_cierre: new Date().toISOString().split('T')[0], fecha_inicio: '', fecha_termino: '', valor: '', razon_perdida: '', motivo_cierre: '', notas: '' };
@@ -12,7 +14,19 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
     };
     
     const [formData, setFormData] = useState(item || getDefault(type));
+    const [saving, setSaving] = useState(false);
     const titles = { prospecto: 'Prospecto', cerrado: 'Cerrado', ticket: 'Ticket', keyaccount: 'Key Account' };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (saving) return; // evita doble submit
+        try {
+            setSaving(true);
+            await onSave(formData);
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
@@ -22,7 +36,7 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
                         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{item ? 'Editar' : 'Nuevo'} {titles[type]}</h2>
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl transition">✕</button>
                     </div>
-                    <form onSubmit={(e) => { e.preventDefault(); onSave(formData); }} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         {type === 'prospecto' && (<>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <InputField label="Organización" required value={formData.organizacion} onChange={(e) => setFormData({...formData, organizacion: e.target.value})} />
@@ -33,7 +47,7 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
                                 <SelectField label="Estado" required value={formData.estado} onChange={(e) => setFormData({...formData, estado: e.target.value})} options={['Lead nuevo', 'Contactado', 'Reunión agendada', 'Propuesta enviada', 'Negociación']} />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <InputField label="Valor (UF)" type="number" step="0.01" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value) || 0})} />
+                                <InputField label="Valor (UF)" type="number" step="0.01" min="0" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value) || 0})} />
                                 <InputField label="Fecha Límite" type="date" required value={formData.fecha_limite} onChange={(e) => setFormData({...formData, fecha_limite: e.target.value})} />
                             </div>
                             <InputField label="Próximo Paso" required value={formData.proximo_paso} onChange={(e) => setFormData({...formData, proximo_paso: e.target.value})} />
@@ -49,7 +63,7 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
                                 <SelectField label="Estado Final" required value={formData.estado_final} onChange={(e) => setFormData({...formData, estado_final: e.target.value})} options={['Ganado', 'Perdido']} />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <InputField label="Valor (UF)" type="number" step="0.01" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value) || 0})} />
+                                <InputField label="Valor (UF)" type="number" step="0.01" min="0" required value={formData.valor} onChange={(e) => setFormData({...formData, valor: parseFloat(e.target.value) || 0})} />
                                 <InputField label="Fecha Inicio" type="date" value={formData.fecha_inicio || ''} onChange={(e) => setFormData({...formData, fecha_inicio: e.target.value})} />
                                 <InputField label="Fecha Cierre" type="date" required value={formData.fecha_cierre} onChange={(e) => setFormData({...formData, fecha_cierre: e.target.value})} />
                             </div>
@@ -71,7 +85,7 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
                                 <InputField label="Fecha Entrega" type="date" required value={formData.fecha_entrega} onChange={(e) => setFormData({...formData, fecha_entrega: e.target.value})} />
                             </div>
                             <div className="grid grid-cols-3 gap-4">
-                                <InputField label="Valor" type="number" step="0.01" required value={formData.valor_monto || 0} onChange={(e) => setFormData({...formData, valor_monto: parseFloat(e.target.value) || 0})} />
+                                <InputField label="Valor" type="number" step="0.01" min="0" required value={formData.valor_monto || 0} onChange={(e) => setFormData({...formData, valor_monto: parseFloat(e.target.value) || 0})} />
                                 <SelectField label="Moneda" required value={formData.valor_moneda || 'UF'} onChange={(e) => setFormData({...formData, valor_moneda: e.target.value})} options={['UF', 'CLP']} />
                                 <InputField label="% Avance" type="number" min="0" max="100" required value={formData.porcentaje_avance} onChange={(e) => setFormData({...formData, porcentaje_avance: parseInt(e.target.value) || 0})} />
                             </div>
@@ -86,7 +100,7 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
                                 <InputField label="Servicio" required value={formData.servicio} onChange={(e) => setFormData({...formData, servicio: e.target.value})} />
                             </div>
                             <div className="grid grid-cols-3 gap-4">
-                                <InputField label="UF/mes" type="number" step="0.01" required value={formData.uf_mes} onChange={(e) => setFormData({...formData, uf_mes: parseFloat(e.target.value) || 0})} />
+                                <InputField label="UF/mes" type="number" step="0.01" min="0" required value={formData.uf_mes} onChange={(e) => setFormData({...formData, uf_mes: parseFloat(e.target.value) || 0})} />
                                 <InputField label="Inicio" type="date" required value={formData.inicio_contrato} onChange={(e) => setFormData({...formData, inicio_contrato: e.target.value})} />
                                 <InputField label="Fin" type="date" value={formData.fin_contrato || ''} onChange={(e) => setFormData({...formData, fin_contrato: e.target.value})} />
                             </div>
@@ -96,8 +110,8 @@ export default function UniversalModal({ type, item, onSave, onClose }) {
                             </div>
                         </>)}
                         <div className="flex space-x-3 pt-4 border-t dark:border-gray-700">
-                            <button type="submit" className="flex-1 px-4 py-2.5 color-naranja text-white rounded-lg font-medium hover:opacity-90 transition">Guardar</button>
-                            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition">Cancelar</button>
+                            <button type="submit" disabled={saving} className="flex-1 px-4 py-2.5 color-naranja text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed">{saving ? 'Guardando…' : 'Guardar'}</button>
+                            <button type="button" onClick={onClose} disabled={saving} className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition disabled:opacity-50">Cancelar</button>
                         </div>
                     </form>
                 </div>

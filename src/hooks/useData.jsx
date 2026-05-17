@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../utils/supabase'
 import { obtenerUFHoy } from '../utils/formatters'
+import { showToast } from '../utils/toast'
+
+// Helper para loggear y notificar errores de Supabase. Antes los loadX
+// destructuraban sólo `data`, lo que dejaba pasar errores silenciosamente.
+function reportLoadError(scope, error) {
+    if (!error) return;
+    console.error(`[useData] ${scope}:`, error.message || error);
+    // Sólo notificamos al usuario para errores no triviales — RLS y red.
+    if (error.code && error.code !== 'PGRST116') {
+        showToast(`No se pudo cargar ${scope}: ${error.message || 'error'}`, 'error');
+    }
+}
 
 export default function useData(user) {
     const [prospectos, setProspectos] = useState([]);
@@ -27,17 +39,20 @@ export default function useData(user) {
     const [financeLoaded, setFinanceLoaded] = useState(false);
 
     const loadProspectos = useCallback(async () => {
-        const { data } = await supabase.from('prospectos').select('*').order('created_at', { ascending: false });
+        const { data, error } = await supabase.from('prospectos').select('*').order('created_at', { ascending: false });
+        reportLoadError('prospectos', error);
         if (data) setProspectos(data);
     }, []);
 
     const loadCerrados = useCallback(async () => {
-        const { data } = await supabase.from('cerrados').select('*').order('fecha_cierre', { ascending: false });
+        const { data, error } = await supabase.from('cerrados').select('*').order('fecha_cierre', { ascending: false });
+        reportLoadError('cerrados', error);
         if (data) setCerrados(data);
     }, []);
 
     const loadTickets = useCallback(async () => {
-        const { data } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
+        const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
+        reportLoadError('tickets', error);
         if (data) setTickets(data.map(t => ({
             ...t,
             valor_monto: t.valor_monto || 0,
@@ -46,33 +61,42 @@ export default function useData(user) {
     }, []);
 
     const loadKeyAccounts = useCallback(async () => {
-        const { data } = await supabase.from('key_accounts').select('*').order('organizacion');
+        const { data, error } = await supabase.from('key_accounts').select('*').order('organizacion');
+        reportLoadError('key accounts', error);
         if (data) {
             const hoy = new Date().toISOString().split('T')[0];
-            // Auto-expire: mark KAs past fin_contrato as 'Vencido' (unless already Cerrado)
-            const expired = data.filter(ka =>
-                ka.fin_contrato && ka.fin_contrato < hoy &&
-                (ka.salud || '').toLowerCase() !== 'cerrado' && (ka.salud || '').toLowerCase() !== 'vencido'
-            );
-            if (expired.length > 0) {
-                for (const ka of expired) {
-                    await supabase.from('key_accounts').update({ salud: 'Vencido' }).eq('id', ka.id);
-                }
-                // Re-fetch with updated salud
-                const { data: refreshed } = await supabase.from('key_accounts').select('*').order('organizacion');
-                if (refreshed) { setKeyAccounts(refreshed); return; }
+            // Auto-expire: marca KAs vencidos en una sola query (.in) en vez de un loop secuencial.
+            const expiredIds = data
+                .filter(ka =>
+                    ka.fin_contrato && ka.fin_contrato < hoy &&
+                    (ka.salud || '').toLowerCase() !== 'cerrado' &&
+                    (ka.salud || '').toLowerCase() !== 'vencido'
+                )
+                .map(ka => ka.id);
+            if (expiredIds.length > 0) {
+                const { error: updErr } = await supabase
+                    .from('key_accounts')
+                    .update({ salud: 'Vencido' })
+                    .in('id', expiredIds);
+                if (updErr) console.warn('[useData] auto-expire KA:', updErr.message);
+                // Patch local en lugar de re-fetch — más rápido y consistente.
+                const patched = data.map(ka => expiredIds.includes(ka.id) ? { ...ka, salud: 'Vencido' } : ka);
+                setKeyAccounts(patched);
+                return;
             }
             setKeyAccounts(data);
         }
     }, []);
 
     const loadContactos = useCallback(async () => {
-        const { data } = await supabase.from('contactos').select('*').order('organizacion');
+        const { data, error } = await supabase.from('contactos').select('*').order('organizacion');
+        reportLoadError('contactos', error);
         if (data) setContactos(data);
     }, []);
 
     const loadNotas = useCallback(async () => {
-        const { data } = await supabase.from('notas').select('*').order('created_at', { ascending: false });
+        const { data, error } = await supabase.from('notas').select('*').order('created_at', { ascending: false });
+        reportLoadError('notas', error);
         if (data) setNotas(data);
     }, []);
 
@@ -102,32 +126,38 @@ export default function useData(user) {
     }, []);
 
     const loadFacturasEmitidas = useCallback(async () => {
-        const { data } = await supabase.from('facturas_emitidas').select('*').order('fecha_emision', { ascending: false });
+        const { data, error } = await supabase.from('facturas_emitidas').select('*').order('fecha_emision', { ascending: false });
+        reportLoadError('facturas emitidas', error);
         if (data) setFacturasEmitidas(data);
     }, []);
 
     const loadFacturasRecibidas = useCallback(async () => {
-        const { data } = await supabase.from('facturas_recibidas').select('*').order('fecha_emision', { ascending: false });
+        const { data, error } = await supabase.from('facturas_recibidas').select('*').order('fecha_emision', { ascending: false });
+        reportLoadError('facturas recibidas', error);
         if (data) setFacturasRecibidas(data);
     }, []);
 
     const loadCajaChica = useCallback(async () => {
-        const { data } = await supabase.from('caja_chica').select('*').order('fecha', { ascending: false });
+        const { data, error } = await supabase.from('caja_chica').select('*').order('fecha', { ascending: false });
+        reportLoadError('caja chica', error);
         if (data) setCajaChica(data);
     }, []);
 
     const loadBoletasHonorarios = useCallback(async () => {
-        const { data } = await supabase.from('boletas_honorarios').select('*').order('fecha', { ascending: false });
+        const { data, error } = await supabase.from('boletas_honorarios').select('*').order('fecha', { ascending: false });
+        reportLoadError('boletas honorarios', error);
         if (data) setBoletasHonorarios(data);
     }, []);
 
     const loadSueldosSocios = useCallback(async () => {
-        const { data } = await supabase.from('sueldos_socios').select('*').order('fecha', { ascending: false });
+        const { data, error } = await supabase.from('sueldos_socios').select('*').order('fecha', { ascending: false });
+        reportLoadError('sueldos socios', error);
         if (data) setSueldosSocios(data);
     }, []);
 
     const loadMovimientosBancarios = useCallback(async () => {
-        const { data } = await supabase.from('movimientos_bancarios').select('*').order('fecha', { ascending: false });
+        const { data, error } = await supabase.from('movimientos_bancarios').select('*').order('fecha', { ascending: false });
+        reportLoadError('movimientos bancarios', error);
         if (data) setMovimientosBancarios(data);
     }, []);
 
@@ -169,14 +199,21 @@ export default function useData(user) {
     }, [financeLoaded, financeLoading, loadFinanceData]);
 
     // Al iniciar sesión: cargar sólo lo core. Las finanzas van diferidas.
+    // La dep es `user?.email` (string) y no el objeto user — antes onAuthStateChange
+    // recreaba el objeto en cada evento y disparaba doble fetch.
     useEffect(() => {
         if (!user) return;
         setCoreLoading(true);
         setFinanceLoaded(false); // reset del cache financiero en cada login
         loadCoreData().finally(() => setCoreLoading(false));
-    }, [user, loadCoreData]);
+    }, [user?.email, loadCoreData]);
 
-    useEffect(() => { obtenerUFHoy().then(uf => setUfActual(uf)); }, []);
+    // UF: cargar al montar y refrescar cada 6h para sesiones largas.
+    useEffect(() => {
+        obtenerUFHoy().then(uf => setUfActual(uf));
+        const t = setInterval(() => { obtenerUFHoy().then(uf => setUfActual(uf)); }, 6 * 60 * 60 * 1000);
+        return () => clearInterval(t);
+    }, []);
 
     return {
         prospectos, setProspectos, cerrados, setCerrados, tickets, setTickets,

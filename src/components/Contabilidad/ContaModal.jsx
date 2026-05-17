@@ -2,11 +2,15 @@ import { useState } from 'react'
 import InputField from '../shared/InputField'
 import SelectField from '../shared/SelectField'
 import TextAreaField from '../shared/TextAreaField'
+import useEscapeKey from '../../hooks/useEscapeKey'
 
 export default     function ContaModal({ type, item, ufActual, tickets, keyAccounts, onSave, onClose }) {
+        useEscapeKey(onClose);
         const getDefault = () => {
             if (type === 'emitida') return { numero_factura: '', cliente: '', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, ticket_id: null, key_account_id: null, moneda_principal: 'UF' };
-            if (type === 'recibida') return { numero_factura: '', proveedor: '', categoria: 'Servicios', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, moneda_principal: 'UF' };
+            // OJO: facturas_recibidas en Supabase NO tiene columna `moneda_principal` (schema drift conocido).
+            // Si se la mandamos, el insert revienta. Por eso la sacamos del default acá.
+            if (type === 'recibida') return { numero_factura: '', proveedor: '', categoria: 'Servicios', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null };
             if (type === 'boleta') return { fecha: new Date().toISOString().split('T')[0], prestador: '', rut: '', monto_bruto_uf: '', monto_bruto_clp: '', uf_dia: ufActual, porcentaje_retencion: 15.25, monto_retencion_uf: '', monto_retencion_clp: '', monto_liquido_uf: '', monto_liquido_clp: '', descripcion: '', mes_servicio: '', proyecto: '', moneda_principal: 'UF' };
             if (type === 'sueldo') return { fecha: new Date().toISOString().split('T')[0], socio: 'Jere', monto_uf: '', monto_clp: '', uf_dia: ufActual, concepto: '', mes_servicio: '', moneda_principal: 'UF' };
             if (type === 'caja') return { fecha: new Date().toISOString().split('T')[0], concepto: '', monto_clp: '', categoria: 'Otros', responsable: '', comprobante: '' };
@@ -14,6 +18,13 @@ export default     function ContaModal({ type, item, ufActual, tickets, keyAccou
         
         const [form, setForm] = useState(item || getDefault());
         const [monedaPrincipal, setMonedaPrincipal] = useState(form.moneda_principal || 'UF');
+        const [saving, setSaving] = useState(false);
+        const handleSubmit = async (e) => {
+            e.preventDefault();
+            if (saving) return;
+            setSaving(true);
+            try { await onSave(form); } finally { setSaving(false); }
+        };
         
         // Auto-calcular UF o CLP para facturas
         const handleMontoChange = (field, value) => {
@@ -88,7 +99,7 @@ export default     function ContaModal({ type, item, ufActual, tickets, keyAccou
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl transition">✕</button>
                     </div>
                     
-                    <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         {type === 'emitida' && (<>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <InputField label="N° Factura" required value={form.numero_factura} onChange={(e) => setForm({...form, numero_factura: e.target.value})} />
@@ -414,8 +425,8 @@ export default     function ContaModal({ type, item, ufActual, tickets, keyAccou
                         </>)}
                         
                         <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
-                            <button type="submit" className="flex-1 px-4 py-2.5 color-naranja text-white rounded-lg font-medium hover:opacity-90 transition">Guardar</button>
-                            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition">Cancelar</button>
+                            <button type="submit" disabled={saving} className="flex-1 px-4 py-2.5 color-naranja text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed">{saving ? 'Guardando…' : 'Guardar'}</button>
+                            <button type="button" onClick={onClose} disabled={saving} className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition disabled:opacity-50">Cancelar</button>
                         </div>
                     </form>
                 </div>

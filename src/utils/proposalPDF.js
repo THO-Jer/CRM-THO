@@ -244,12 +244,16 @@ export function generateProposal({ organizacion, contacto, tipo, valor, moneda =
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(28);
     setColor(COLORS.naranja);
-    const isRecurrente = tipo.startsWith('Key Account') || tipo === 'Gestión de Contenido';
+    // Guard contra tipo undefined — antes `tipo.startsWith` reventaba con TypeError.
+    const tipoSafe = String(tipo || '');
+    const isRecurrente = tipoSafe.startsWith('Key Account') || tipoSafe === 'Gestión de Contenido';
+    // Formato CL: "1.500,5 UF" en vez de "1500.5 UF".
+    const valorUFFmt = Number(valorUF).toLocaleString('es-CL', { maximumFractionDigits: 2 });
 
     if (isRecurrente) {
-        doc.text(`${valorUF} UF /mes`, ML + 10, y + 12);
+        doc.text(`${valorUFFmt} UF /mes`, ML + 10, y + 12);
     } else {
-        doc.text(`${valorUF} UF`, ML + 10, y + 12);
+        doc.text(`${valorUFFmt} UF`, ML + 10, y + 12);
     }
 
     doc.setFont('helvetica', 'normal');
@@ -326,7 +330,10 @@ export function generateProposal({ organizacion, contacto, tipo, valor, moneda =
     }
 
     // Save
-    const filename = `Propuesta_THO_${(organizacion || 'cliente').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+    // Sanitización completa del filename — antes solo reemplazaba espacios y los
+    // caracteres /\:* del nombre del cliente reventaban en algunos browsers.
+    const safeOrg = (organizacion || 'cliente').replace(/[^a-zA-Z0-9-_]+/g, '_').replace(/^_+|_+$/g, '') || 'cliente';
+    const filename = `Propuesta_THO_${safeOrg}_${new Date().toISOString().split('T')[0]}.pdf`;
     doc.save(filename);
     return filename;
 }

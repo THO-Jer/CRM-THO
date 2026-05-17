@@ -42,8 +42,11 @@ export default function LoginModal({ onLogin, onClose }) {
     const handleEmailSubmit = (e) => {
         e.preventDefault();
         const validEmails = ['jeremias@tho.cl', 'max@tho.cl', 'francisco@tho.cl'];
-        if (validEmails.includes(email.toLowerCase())) {
-            onLogin(email);
+        // Normalizamos antes de comparar Y de pasarlo a onLogin — evita
+        // que localStorage quede con casing inconsistente.
+        const normalized = (email || '').trim().toLowerCase();
+        if (validEmails.includes(normalized)) {
+            onLogin(normalized);
         } else {
             showToast('Email no autorizado. Contacta al administrador.', 'info');
         }
@@ -103,11 +106,12 @@ export default function LoginModal({ onLogin, onClose }) {
                         </button>
                     )}
 
-                    <button 
-                        onClick={onClose} 
+                    <button
+                        onClick={onClose}
                         className="w-full px-4 py-2 text-gray-400 dark:text-gray-500 text-xs hover:text-gray-600 transition"
+                        title="Cierra el inicio de sesión — sigues en modo solo lectura"
                     >
-                        Continuar como invitado
+                        Cerrar
                     </button>
                 </div>
 

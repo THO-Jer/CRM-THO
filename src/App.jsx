@@ -1,15 +1,17 @@
-import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { supabase } from './utils/supabase'
-import { showToast } from './utils/toast'
-import { formatCLP, formatUF, formatDate, formatDateTime, getNombreMes, formatNumber, formatFileSize } from './utils/formatters'
+import { formatFileSize } from './utils/formatters'
 
 // Modales y utilidades — eager: son chicos y se renderizan condicionalmente.
 import LoginModal from './components/Modals/LoginModal'
 import UniversalModal from './components/Modals/UniversalModal'
 import HistoryModal from './components/shared/HistoryModal'
 import FilesModal from './components/shared/FilesModal'
-import EntityDetail from './components/Detail/EntityDetail'
 import DateRangeFilter from './components/shared/DateRangeFilter'
+import useEscapeKey from './hooks/useEscapeKey'
+
+// EntityDetail importa jsPDF; lazy-load para mantenerlo fuera del bundle inicial.
+const EntityDetail = lazy(() => import('./components/Detail/EntityDetail'))
 
 // Componentes de tab — lazy-loaded: cada uno se descarga sólo cuando el usuario
 // entra a su pestaña. ContabilidadView y ReportesView arrastran chart.js/xlsx,
@@ -44,29 +46,30 @@ if (typeof window !== 'undefined') {
     });
 }
 
-async function obtenerUFHoy() {
-    try {
-        const res = await fetch('https://mindicador.cl/api/uf');
-        const data = await res.json();
-        if (data?.serie?.[0]?.valor) {
-            return Math.round(data.serie[0].valor);
-        }
-    } catch (e) {
-        console.warn('No se pudo obtener UF del día, usando valor por defecto', e);
-    }
-    return 38000;
-}
-
 // Función utilitaria para exportar datos a CSV
 import useData from './hooks/useData'
 import useCRMActions from './hooks/useCRMActions'
 import useFinanzas from './hooks/useFinanzas'
 import useMetrics from './hooks/useMetrics'
 import useExcelImport from './hooks/useExcelImport'
+
+// localStorage seguro (Safari modo privado puede tirar QuotaExceededError)
+const safeStorage = {
+    get(key) { try { return localStorage.getItem(key); } catch { return null; } },
+    set(key, value) { try { localStorage.setItem(key, value); } catch { /* silencio */ } },
+    remove(key) { try { localStorage.removeItem(key); } catch { /* silencio */ } },
+};
+
 function exportToCSV(data, filename = 'export.csv') {
     if (!data || data.length === 0) return;
     const excludeFields = ['id', 'created_at', 'created_by_email', 'updated_at'];
-    const headers = Object.keys(data[0]).filter(h => !excludeFields.includes(h));
+    // Union de todas las keys — evita perder columnas que aparezcan recién en items 2+
+    const allKeys = new Set();
+    data.forEach(row => Object.keys(row || {}).forEach(k => {
+        if (!excludeFields.includes(k)) allKeys.add(k);
+    }));
+    const headers = Array.from(allKeys);
+    if (headers.length === 0) return;
     const csvContent = [
         headers.join(','),
         ...data.map(row => headers.map(h => {
@@ -82,7 +85,9 @@ function exportToCSV(data, filename = 'export.csv') {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    // Timestamp completo para evitar overwrites en el mismo día
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.download = filename.replace(/\.csv$/i, '') + `-${stamp}.csv`;
     a.click();
     URL.revokeObjectURL(url);
 }
@@ -97,17 +102,18 @@ function CRMApp() {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session?.user) {
-                    const email = session.user.email;
-                    const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || email.split('@')[0];
+                    const email = session.user.email || '';
+                    const namePart = email.includes('@') ? email.split('@')[0] : email;
+                    const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || namePart;
                     setUser({ email, name });
-                    localStorage.setItem('crm_tho_email', email);
+                    safeStorage.set('crm_tho_email', email);
                     setLoading(false);
                     return;
                 }
             } catch (e) {
                 console.warn('OAuth session check failed:', e);
             }
-            const savedEmail = localStorage.getItem('crm_tho_email');
+            const savedEmail = safeStorage.get('crm_tho_email');
             if (savedEmail) setUser({ email: savedEmail, name: savedEmail.split('@')[0] });
             setLoading(false);
         };
@@ -115,20 +121,22 @@ function CRMApp() {
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_IN' && session?.user) {
-                const email = session.user.email;
-                const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || email.split('@')[0];
+                const email = session.user.email || '';
+                const namePart = email.includes('@') ? email.split('@')[0] : email;
+                const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || namePart;
                 setUser({ email, name });
-                localStorage.setItem('crm_tho_email', email);
+                safeStorage.set('crm_tho_email', email);
                 setShowLoginModal(false);
             }
-            if (event === 'SIGNED_OUT') { setUser(null); localStorage.removeItem('crm_tho_email'); }
+            if (event === 'SIGNED_OUT') { setUser(null); safeStorage.remove('crm_tho_email'); }
         });
         return () => subscription.unsubscribe();
     }, []);
 
     const handleLogin = (email) => {
-        localStorage.setItem('crm_tho_email', email);
-        setUser({ email, name: email.split('@')[0] });
+        const normalized = (email || '').trim().toLowerCase();
+        safeStorage.set('crm_tho_email', normalized);
+        setUser({ email: normalized, name: normalized.split('@')[0] });
         setShowLoginModal(false);
     };
 
@@ -194,7 +202,9 @@ function CRMApp() {
     const finanzas = useFinanzas({
         user, movimientosBancarios, setMovimientosBancarios,
         facturasEmitidas, facturasRecibidas, boletasHonorarios, sueldosSocios, cajaChica,
-        loadMovimientosBancarios, loadCajaChica
+        ufActual,
+        loadMovimientosBancarios, loadCajaChica,
+        loadFacturasEmitidas, loadFacturasRecibidas, loadBoletasHonorarios, loadSueldosSocios
     });
 
     // ===== UI STATE =====
@@ -207,16 +217,19 @@ function CRMApp() {
     const [globalSearch, setGlobalSearch] = useState('');
     const [showGlobalSearch, setShowGlobalSearch] = useState(false);
     const [filterTipo, setFilterTipo] = useState('todos');
-    const [monedaPreferida, setMonedaPreferida] = useState('CLP');
+    const [monedaPreferida, setMonedaPreferida] = useState(() => safeStorage.get('monedaPreferida') || 'CLP');
     const [contaTab, setContaTab] = useState('dashboard');
     const [alertasValidacion, setAlertasValidacion] = useState([]);
-    const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+    const [darkMode, setDarkMode] = useState(() => safeStorage.get('darkMode') === 'true');
+
+    // Persistir moneda preferida
+    useEffect(() => { safeStorage.set('monedaPreferida', monedaPreferida); }, [monedaPreferida]);
 
     // Dark mode
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
         document.documentElement.classList.toggle('dark', darkMode);
-        localStorage.setItem('darkMode', darkMode);
+        safeStorage.set('darkMode', darkMode);
     }, [darkMode]);
 
     // Carga diferida de datos financieros: la primera vez que el usuario abre
@@ -225,30 +238,61 @@ function CRMApp() {
         if (FINANCE_TABS.includes(activeTab)) ensureFinanceData();
     }, [activeTab, ensureFinanceData]);
 
-    // Cmd+K search
+    // ESC para los modales inline (Convertir / Renovar). Los otros modales
+    // (UniversalModal, EntityDetail, HistoryModal, FilesModal, ContaModal) tienen
+    // su propio useEscapeKey internamente.
+    useEscapeKey(closeConvert, convertOpen);
+    useEscapeKey(closeRenewal, renewalOpen);
+
+    // Cmd+K search — usamos updater functions y un guard para evitar reinstalar el
+    // listener en cada cambio de showGlobalSearch.
     useEffect(() => {
         const handler = (e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setShowGlobalSearch(prev => !prev); }
-            if (e.key === 'Escape' && showGlobalSearch) { setShowGlobalSearch(false); setGlobalSearch(''); }
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                setShowGlobalSearch(prev => !prev);
+            }
+            if (e.key === 'Escape') {
+                setShowGlobalSearch(prev => { if (prev) { setGlobalSearch(''); return false; } return prev; });
+            }
         };
         document.addEventListener('keydown', handler);
         return () => document.removeEventListener('keydown', handler);
-    }, [showGlobalSearch]);
+    }, []);
 
-    // Date range filter
+    // Date range filter — extrae sólo la parte ISO (YYYY-MM-DD) por si la fecha de DB viene con timestamp.
     const filterByDateRange = (items, dateField) => {
         if (!dateRange.desde && !dateRange.hasta) return items;
         return items.filter(item => {
-            const d = item[dateField];
-            if (!d) return true;
+            const raw = item[dateField];
+            if (!raw) return true;
+            const d = String(raw).slice(0, 10);
             if (dateRange.desde && d < dateRange.desde) return false;
             if (dateRange.hasta && d > dateRange.hasta) return false;
             return true;
         });
     };
-    const filteredCerrados = filterByDateRange(cerrados, 'fecha_cierre');
-    const filteredTickets = filterByDateRange(activeTickets, 'fecha_inicio');
-    const filteredKeyAccounts = filterByDateRange(activeKeyAccounts, 'inicio_contrato');
+    const filteredCerrados = useMemo(() => filterByDateRange(cerrados, 'fecha_cierre'), [cerrados, dateRange.desde, dateRange.hasta]);
+    const filteredTickets = useMemo(() => filterByDateRange(activeTickets, 'fecha_inicio'), [activeTickets, dateRange.desde, dateRange.hasta]);
+    const filteredKeyAccounts = useMemo(() => filterByDateRange(activeKeyAccounts, 'inicio_contrato'), [activeKeyAccounts, dateRange.desde, dateRange.hasta]);
+
+    // Pipeline: aplicamos searchTerm y filterTipo a los prospectos antes de pasarlos al kanban.
+    // Antes los inputs existían pero no filtraban nada.
+    const filteredProspectos = useMemo(() => {
+        const q = (searchTerm || '').trim().toLowerCase();
+        return prospectos.filter(p => {
+            if (filterTipo !== 'todos' && (p.tipo || '') !== filterTipo) return false;
+            if (!q) return true;
+            return (
+                (p.organizacion || '').toLowerCase().includes(q) ||
+                (p.contacto || '').toLowerCase().includes(q) ||
+                (p.notas || '').toLowerCase().includes(q) ||
+                (p.proximo_paso || '').toLowerCase().includes(q)
+            );
+        });
+    }, [prospectos, searchTerm, filterTipo]);
+
+    const prospectosPorEstadoFiltrado = (estadoId) => prospectosPorEstado(estadoId, filteredProspectos);
 
     // Destructure actions for render convenience
     const { historyOpen, historyLoading, historyTitle, historyItems, setHistoryItems, openHistory, setHistoryOpen,
@@ -320,17 +364,18 @@ function CRMApp() {
                             </button>
                             {user && (
                                 <>
-                                    <button onClick={() => { setEditingItem(null); setModalType('prospecto'); setShowModal(true); }} className="hidden md:inline-flex px-3 py-1.5 color-naranja text-white rounded-lg text-sm font-medium">+ Prospecto</button>
+                                    <button onClick={() => { setEditingItem(null); setModalType('prospecto'); setShowModal(true); }} className="px-3 py-1.5 color-naranja text-white rounded-lg text-sm font-medium whitespace-nowrap">+ Prospecto</button>
                                     <button onClick={() => {
-                                        exportToCSV(prospectos, `pipeline-${new Date().toISOString().split('T')[0]}.csv`);
-                                    }} className="hidden md:inline-flex px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm" title="Exportar pipeline">📥</button>
+                                        // Respeta los filtros actuales del pipeline (búsqueda + tipo).
+                                        exportToCSV(filteredProspectos, 'pipeline.csv');
+                                    }} className="hidden md:inline-flex px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm" title="Exportar pipeline (respeta filtros)">📥</button>
                                 </>
                             )}
                             <div className="text-sm">
                                 {user ? (
                                     <div className="flex items-center gap-2">
                                         <span className="hidden md:inline text-xs text-gray-500 dark:text-gray-400">{user.email.split('@')[0]}</span>
-                                        <button onClick={async () => { await supabase.auth.signOut(); localStorage.removeItem('crm_tho_email'); setUser(null); }} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Salir</button>
+                                        <button onClick={async () => { await supabase.auth.signOut(); safeStorage.remove('crm_tho_email'); setUser(null); }} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Salir</button>
                                     </div>
                                 ) : (
                                     <button onClick={() => setShowLoginModal(true)} className="px-3 py-1.5 color-naranja text-white rounded-lg text-sm font-medium">Ingresar</button>
@@ -413,7 +458,7 @@ function CRMApp() {
                             return results.length > 0 ? (
                                 <div className="mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 overflow-hidden">
                                     {results.map((r, i) => (
-                                        <button key={i} onClick={() => { setActiveTab(r.tab); setGlobalSearch(''); setShowGlobalSearch(false); }} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-left border-b dark:border-gray-700 last:border-0 transition">
+                                        <button key={`${r.type}-${r.item?.id ?? i}`} onClick={() => { setActiveTab(r.tab); setGlobalSearch(''); setShowGlobalSearch(false); }} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-left border-b dark:border-gray-700 last:border-0 transition">
                                             <span>{typeIcon[r.type]}</span>
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{r.label}</div>
@@ -448,16 +493,24 @@ function CRMApp() {
             </div>
 
             {activeTab === 'pipeline' && (
-                <div className="bg-white border-b">
+                <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700">
                     <div className="max-w-7xl mx-auto px-4 py-3">
                         <div className="flex space-x-4">
-                            <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="flex-1 px-4 py-2 border rounded-lg" />
-                            <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} className="px-4 py-2 border rounded-lg">
+                            <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-100" aria-label="Buscar prospectos" />
+                            <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} className="px-4 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-100" aria-label="Filtrar por tipo">
                                 <option value="todos">Todos</option>
                                 <option value="Ticket">Tickets</option>
                                 <option value="Key Account">Key Accounts</option>
                             </select>
+                            {(searchTerm || filterTipo !== 'todos') && (
+                                <button onClick={() => { setSearchTerm(''); setFilterTipo('todos'); }} className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">Limpiar filtros</button>
+                            )}
                         </div>
+                        {(searchTerm || filterTipo !== 'todos') && (
+                            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                Mostrando {filteredProspectos.length} de {prospectos.length} prospectos
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -466,7 +519,7 @@ function CRMApp() {
                 {coreLoading ? <TabLoader /> : (
                 <Suspense fallback={<TabLoader />}>
                 {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={activeTickets} keyAccounts={activeKeyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={setMonedaPreferida} actividadReciente={actividadReciente} />}
-                {activeTab === 'pipeline' && <KanbanBoard onDetail={(p) => openDetail('prospecto', p)} onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
+                {activeTab === 'pipeline' && <KanbanBoard onDetail={(p) => openDetail('prospecto', p)} onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstadoFiltrado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
                 {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={filteredCerrados} tickets={filteredTickets} keyAccounts={filteredKeyAccounts} ufActual={ufActual} dateRange={dateRange} />}
                 {['finanzas-dashboard', 'contabilidad', 'conciliacion'].includes(activeTab) && (
                     financeLoading ? <TabLoader /> :
@@ -507,7 +560,7 @@ function CRMApp() {
                 )}
                 {activeTab === 'cerrados' && <CerradosView onDetail={(c) => openDetail('cerrado', c)} onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={filteredCerrados} keyAccounts={activeKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                 {activeTab === 'tickets' && <TicketsView onDetail={(t) => openDetail('ticket', t)} onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={filteredTickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('ticket'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
-                {activeTab === 'keyaccounts' && <KeyAccountsView onDetail={(k) => openDetail('keyaccount', k)} onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={filteredKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(keyAccounts, 'key-accounts.csv')} />}
+                {activeTab === 'keyaccounts' && <KeyAccountsView ufActual={ufActual} onDetail={(k) => openDetail('keyaccount', k)} onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={filteredKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(filteredKeyAccounts, 'key-accounts.csv')} />}
                 </Suspense>
                 )}
             </main>
@@ -517,8 +570,8 @@ function CRMApp() {
             {historyOpen && <HistoryModal open={historyOpen} title={historyTitle} items={historyItems} loading={historyLoading} onClose={() => { setHistoryOpen(false); setHistoryItems([]); }} />}
             {filesModalOpen && <FilesModal open={filesModalOpen} onClose={() => setFilesModalOpen(false)} entityName={filesEntityName} files={filesList} loading={filesLoading} uploading={uploadingFile} onUpload={uploadFile} onDownload={downloadFile} onDelete={deleteFile} getIcon={getFileIcon} formatSize={formatFileSize} />}
             {convertOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={closeConvert}>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-start">
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Convertir prospecto</h3>
@@ -565,7 +618,7 @@ function CRMApp() {
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">UF/mes</label>
-                                        <input type="number" step="0.01" value={convertForm.uf_mes} onChange={(e) => setConvertForm({...convertForm, uf_mes: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+                                        <input type="number" step="0.01" min="0" value={convertForm.uf_mes} onChange={(e) => setConvertForm({...convertForm, uf_mes: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                     </div>
                                     <div>
                                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Fin contrato</label>
@@ -588,8 +641,8 @@ function CRMApp() {
             )}
 
             {renewalOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={closeRenewal}>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-start">
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">{renewalMode === 'cancel' ? 'Cancelar contrato' : 'Renovar contrato'}</h3>
@@ -631,7 +684,7 @@ function CRMApp() {
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">UF/mes</label>
-                                    <input type="number" step="0.01" value={renewalForm.uf_mes} onChange={(e) => setRenewalForm({...renewalForm, uf_mes: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+                                    <input type="number" step="0.01" min="0" value={renewalForm.uf_mes} onChange={(e) => setRenewalForm({...renewalForm, uf_mes: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Notas</label>
@@ -651,7 +704,11 @@ function CRMApp() {
             )}
 
             {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
-            {selectedEntity && <EntityDetail entity={selectedEntity} onClose={() => setSelectedEntity(null)} contactos={contactos} notas={notas} user={user} keyAccounts={keyAccounts} ufActual={ufActual} onRefresh={() => { loadNotas(); loadContactos(); loadProspectos(); loadCerrados(); loadTickets(); loadKeyAccounts(); }} />}
+            {selectedEntity && (
+                <Suspense fallback={<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"><TabLoader /></div>}>
+                    <EntityDetail entity={selectedEntity} onClose={() => setSelectedEntity(null)} contactos={contactos} notas={notas} user={user} keyAccounts={keyAccounts} ufActual={ufActual} onRefresh={() => { loadNotas(); loadContactos(); loadProspectos(); loadCerrados(); loadTickets(); loadKeyAccounts(); }} />
+                </Suspense>
+            )}
         </div>
     );
 }
