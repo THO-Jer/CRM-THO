@@ -23,14 +23,24 @@ const LEADS_API_KEY = process.env.LEADS_API_KEY;
 const LEADS_OWNER_USER_ID = process.env.LEADS_OWNER_USER_ID;
 
 function getApiKey(req) {
+  // Aceptamos sólo headers — antes también leíamos req.body.apiKey, pero eso
+  // arriesga que la key quede en logs de Vercel para siempre si un cliente
+  // la manda en el cuerpo JSON. Si llega por body, lo loggeamos como warning
+  // pero NO la usamos (forzamos al caller a corregir su integración).
   const auth = req.headers["authorization"] || req.headers["Authorization"] || "";
   if (typeof auth === "string" && auth.startsWith("Bearer ")) {
     return auth.slice(7).trim();
   }
   const headerKey = req.headers["x-api-key"];
   if (headerKey) return String(headerKey).trim();
+
+  // Aviso explícito si todavía se está mandando por body — útil para detectar
+  // integraciones legacy que haya que actualizar (tho-web u otras).
   if (req.body && typeof req.body.apiKey === "string") {
-    return req.body.apiKey.trim();
+    console.warn(
+      "[LEADS API] cliente mandó apiKey en el body — esto es inseguro y ya no se acepta. " +
+      "Migrar a Authorization: Bearer <key> o x-api-key: <key>."
+    );
   }
   return null;
 }
@@ -94,6 +104,9 @@ export default async function handler(req, res) {
       hasAuth: !!req.headers["authorization"],
       hasXApiKey: !!req.headers["x-api-key"],
       hasBodyKey: !!(req.body && req.body.apiKey),
+      hint: req.body && req.body.apiKey
+        ? "el caller está mandando apiKey en el body — migrar a Authorization header"
+        : undefined,
     });
     return res.status(401).json({ error: "Unauthorized" });
   }
