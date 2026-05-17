@@ -133,12 +133,9 @@ function CRMApp() {
         return () => subscription.unsubscribe();
     }, []);
 
-    const handleLogin = (email) => {
-        const normalized = (email || '').trim().toLowerCase();
-        safeStorage.set('crm_tho_email', normalized);
-        setUser({ email: normalized, name: normalized.split('@')[0] });
-        setShowLoginModal(false);
-    };
+    // handleLogin se eliminó al cerrar las RLS — el único path de login válido
+    // ahora es Microsoft OAuth, que se procesa vía supabase.auth.onAuthStateChange
+    // arriba (evento 'SIGNED_IN') y setea el user automáticamente.
 
     const requireAuth = () => {
         if (!user) { setShowLoginModal(true); return false; }
@@ -705,7 +702,7 @@ function CRMApp() {
                 </div>
             )}
 
-            {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
+            {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
             {selectedEntity && (
                 <Suspense fallback={<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"><TabLoader /></div>}>
                     <EntityDetail entity={selectedEntity} onClose={() => setSelectedEntity(null)} contactos={contactos} notas={notas} user={user} keyAccounts={keyAccounts} ufActual={ufActual} onRefresh={() => { loadNotas(); loadContactos(); loadProspectos(); loadCerrados(); loadTickets(); loadKeyAccounts(); }} />

@@ -1,24 +1,24 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
 
-export default function LoginModal({ onLogin, onClose }) {
-    const [email, setEmail] = useState('');
+// El flujo de "email login" anterior se eliminó al cerrar las RLS de Supabase:
+// guardaba el email en localStorage pero no creaba sesión real, así que tras la
+// migración el usuario quedaba "logeado" en UI sin poder leer ni escribir.
+// La autenticación ahora es exclusivamente Microsoft OAuth (Supabase Auth).
+export default function LoginModal({ onClose }) {
     const [loading, setLoading] = useState(false);
-    const [showEmail, setShowEmail] = useState(false);
-    const inputRef = useRef(null);
-    
+
     useEffect(() => {
-        if (showEmail) inputRef.current?.focus();
         const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', handleEsc);
         return () => window.removeEventListener('keydown', handleEsc);
-    }, [onClose, showEmail]);
+    }, [onClose]);
 
     const handleMicrosoftLogin = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase.auth.signInWithOAuth({
+            const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'azure',
                 options: {
                     scopes: 'email profile openid',
@@ -27,30 +27,13 @@ export default function LoginModal({ onLogin, onClose }) {
             });
             if (error) {
                 console.warn('OAuth error:', error);
-                // Mensaje específico — antes decía "no configurado aún" que confundía
-                // cuando el error en realidad era de redirect URI o de tenant.
                 showToast(`No se pudo iniciar sesión con Microsoft: ${error.message}`, 'error');
-                setShowEmail(true);
             }
         } catch (e) {
             console.warn('OAuth exception:', e);
             showToast(`Error de conexión: ${e?.message || 'no se pudo contactar a Supabase'}`, 'error');
-            setShowEmail(true);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleEmailSubmit = (e) => {
-        e.preventDefault();
-        const validEmails = ['jeremias@tho.cl', 'max@tho.cl', 'francisco@tho.cl'];
-        // Normalizamos antes de comparar Y de pasarlo a onLogin — evita
-        // que localStorage quede con casing inconsistente.
-        const normalized = (email || '').trim().toLowerCase();
-        if (validEmails.includes(normalized)) {
-            onLogin(normalized);
-        } else {
-            showToast('Email no autorizado. Contacta al administrador.', 'info');
         }
     };
 
@@ -60,11 +43,11 @@ export default function LoginModal({ onLogin, onClose }) {
                 <div className="text-center mb-8">
                     <img src="/logo-tho.png" alt="THO" className="h-12 mx-auto mb-4 dark:brightness-0 dark:invert" />
                     <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">Bienvenido al CRM</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Inicia sesión para continuar</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Inicia sesión con tu cuenta de THO</p>
                 </div>
 
                 <div className="space-y-3">
-                    <button 
+                    <button
                         onClick={handleMicrosoftLogin}
                         disabled={loading}
                         className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#2F2F2F] hover:bg-[#3b3b3b] text-white rounded-xl font-medium transition-colors disabled:opacity-50"
@@ -78,47 +61,17 @@ export default function LoginModal({ onLogin, onClose }) {
                         {loading ? 'Conectando...' : 'Iniciar con Microsoft 365'}
                     </button>
 
-                    <div className="flex items-center gap-3 my-4">
-                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">o</span>
-                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
-                    </div>
-
-                    {showEmail ? (
-                        <form onSubmit={handleEmailSubmit} className="space-y-3">
-                            <input
-                                ref={inputRef}
-                                type="email"
-                                required
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="tu-email@tho.cl"
-                                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 dark:text-gray-100 focus:ring-2 focus:ring-naranja focus:border-transparent"
-                            />
-                            <button type="submit" className="w-full px-4 py-3 color-naranja text-white rounded-xl font-medium text-sm">
-                                Ingresar con email
-                            </button>
-                        </form>
-                    ) : (
-                        <button 
-                            onClick={() => setShowEmail(true)} 
-                            className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                        >
-                            Ingresar con email
-                        </button>
-                    )}
-
                     <button
                         onClick={onClose}
-                        className="w-full px-4 py-2 text-gray-400 dark:text-gray-500 text-xs hover:text-gray-600 transition"
-                        title="Cierra el inicio de sesión — sigues en modo solo lectura"
+                        className="w-full px-4 py-2 text-gray-400 dark:text-gray-500 text-xs hover:text-gray-600 transition mt-3"
+                        title="Cierra el modal sin iniciar sesión"
                     >
                         Cerrar
                     </button>
                 </div>
 
                 <p className="text-[10px] text-gray-400 dark:text-gray-600 text-center mt-6">
-                    Solo usuarios autorizados pueden editar datos
+                    Acceso restringido a socios de THO
                 </p>
             </div>
         </div>
