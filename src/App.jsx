@@ -238,12 +238,6 @@ function CRMApp() {
         if (FINANCE_TABS.includes(activeTab)) ensureFinanceData();
     }, [activeTab, ensureFinanceData]);
 
-    // ESC para los modales inline (Convertir / Renovar). Los otros modales
-    // (UniversalModal, EntityDetail, HistoryModal, FilesModal, ContaModal) tienen
-    // su propio useEscapeKey internamente.
-    useEscapeKey(closeConvert, convertOpen);
-    useEscapeKey(closeRenewal, renewalOpen);
-
     // Cmd+K search — usamos updater functions y un guard para evitar reinstalar el
     // listener en cada cambio de showGlobalSearch.
     useEffect(() => {
@@ -281,7 +275,9 @@ function CRMApp() {
     const filteredProspectos = useMemo(() => {
         const q = (searchTerm || '').trim().toLowerCase();
         return prospectos.filter(p => {
-            if (filterTipo !== 'todos' && (p.tipo || '') !== filterTipo) return false;
+            // filterTipo "Ticket" matchea "Ticket RC Express", "Ticket Diag Org", etc.
+            // (los `tipo` reales en DB son específicos, no la categoría suelta).
+            if (filterTipo !== 'todos' && !(p.tipo || '').startsWith(filterTipo)) return false;
             if (!q) return true;
             return (
                 (p.organizacion || '').toLowerCase().includes(q) ||
@@ -305,6 +301,12 @@ function CRMApp() {
         uploadFile, downloadFile, deleteFile, getFileIcon } = actions;
 
     const { importarCartola, buscarMatches, aplicarConciliacion, crearGastoCajaChica, ignorarMovimiento } = finanzas;
+
+    // ESC para los modales inline (Convertir / Renovar). Va DESPUÉS del destructuring
+    // de `actions` porque `closeConvert/closeRenewal/convertOpen/renewalOpen` se
+    // declaran ahí — si lo movemos arriba, TDZ en runtime.
+    useEscapeKey(closeConvert, convertOpen);
+    useEscapeKey(closeRenewal, renewalOpen);
 
     if (loading) return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900">
