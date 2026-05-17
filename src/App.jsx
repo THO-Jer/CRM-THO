@@ -5,6 +5,7 @@ import { formatFileSize } from './utils/formatters'
 // Modales y utilidades — eager: son chicos y se renderizan condicionalmente.
 import LoginModal from './components/Modals/LoginModal'
 import UniversalModal from './components/Modals/UniversalModal'
+import CloseTicketModal from './components/Modals/CloseTicketModal'
 import HistoryModal from './components/shared/HistoryModal'
 import FilesModal from './components/shared/FilesModal'
 import DateRangeFilter from './components/shared/DateRangeFilter'
@@ -292,6 +293,7 @@ function CRMApp() {
         convertOpen, convertSource, convertTarget, convertForm, openConvert, openConvertFromCerrado, closeConvert, setConvertTarget, setConvertForm, submitConvert,
         renewalOpen, renewalKA, renewalMode, renewalForm, cancelAlsoRegisterLoss, openRenewal, openCancelKA, closeRenewal, setRenewalForm, setCancelAlsoRegisterLoss, submitRenewal,
         filesModalOpen, filesEntityName, filesList, filesLoading, uploadingFile, openFilesModal, setFilesModalOpen,
+        closeTicketOpen, closeTicketTarget, closeCloseTicketModal, submitCloseTicket,
         selectedEntity, openDetail, setSelectedEntity,
         handleSaveProspecto, handleDeleteProspecto, handleMoveProspecto, handleCerrarProspecto,
         handleSaveOther, handleDeleteOther, handleCloseTicket,
@@ -568,6 +570,7 @@ function CRMApp() {
             
             {historyOpen && <HistoryModal open={historyOpen} title={historyTitle} items={historyItems} loading={historyLoading} onClose={() => { setHistoryOpen(false); setHistoryItems([]); }} />}
             {filesModalOpen && <FilesModal open={filesModalOpen} onClose={() => setFilesModalOpen(false)} entityName={filesEntityName} files={filesList} loading={filesLoading} uploading={uploadingFile} onUpload={uploadFile} onDownload={downloadFile} onDelete={deleteFile} getIcon={getFileIcon} formatSize={formatFileSize} />}
+            {closeTicketOpen && <CloseTicketModal ticket={closeTicketTarget} onSubmit={submitCloseTicket} onClose={closeCloseTicketModal} />}
             {convertOpen && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={closeConvert}>
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>

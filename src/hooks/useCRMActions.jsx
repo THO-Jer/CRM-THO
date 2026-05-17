@@ -54,6 +54,10 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
     const [filesLoading, setFilesLoading] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
 
+    // Close ticket modal — reemplaza el flujo viejo de 4 prompts nativos.
+    const [closeTicketOpen, setCloseTicketOpen] = useState(false);
+    const [closeTicketTarget, setCloseTicketTarget] = useState(null);
+
     // Entity detail
     const [selectedEntity, setSelectedEntity] = useState(null);
     const openDetail = (type, item) => setSelectedEntity({ type, item });
@@ -791,95 +795,95 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
     // -------------------------
     // Cerrar / finalizar Ticket
     // -------------------------
-    const handleCloseTicket = async (ticket) => {
+    // openCloseTicket: abre el modal con el ticket a finalizar.
+    // El TicketsView llama a esto en lugar de ejecutar el cierre directo.
+    const handleCloseTicket = (ticket) => {
         if (!requireAuth()) return;
         if (!ticket) return;
+        setCloseTicketTarget(ticket);
+        setCloseTicketOpen(true);
+    };
 
-        // 1) Finalizar ticket
-        const ok = confirm(`¿Finalizar este ticket?
+    const closeCloseTicketModal = () => {
+        setCloseTicketOpen(false);
+        setCloseTicketTarget(null);
+    };
 
-${ticket.organizacion} — ${ticket.ticket}
+    // submitCloseTicket: ejecuta la mutación real con los datos del modal.
+    // El modal pasa { alsoClosed, closedOutcome, ufValue, lossReason }.
+    // Throw si algo falla — el modal mostrará el error en su UI.
+    const submitCloseTicket = async ({ alsoClosed, closedOutcome, ufValue, lossReason }) => {
+        const ticket = closeTicketTarget;
+        if (!ticket) throw new Error('No hay ticket seleccionado');
 
-Se marcará como 100% y Cerrado.`);
-        if (!ok) return;
+        const payload = {
+            status: 'Cerrado',
+            porcentaje_avance: 100,
+            fase_actual: ticket.fase_actual || 'Finalizado',
+            updated_at: new Date().toISOString()
+        };
 
-        // 2) ¿Registrar también en "Cerrados"?
-        const alsoClosed = confirm(`¿Quieres registrar el término del ticket en la pestaña "Cerrados"?
+        const { error } = await supabase
+            .from('tickets')
+            .update(payload)
+            .eq('id', ticket.id);
 
-Recomendado: así queda como histórico y después puedes reactivarlo/convertirlo.`);
-        let closedOutcome = 'Ganado';
-        let lossReason = '';
-        let ufValue = '';
+        if (error) throw new Error(error.message);
+
+        await logEvent('tickets', ticket.id, 'ticket_closed', 'Ticket finalizado', {
+            status: 'Cerrado',
+            outcome: alsoClosed ? closedOutcome : null
+        });
+
+        // Si corresponde, crear registro en "cerrados" + link + evento
         if (alsoClosed) {
-            const opt = prompt('¿Cómo terminó este ticket?\n\n1 = Ganado (finalizado)\n2 = Perdido/Cancelado', '1');
-            closedOutcome = (opt === '2') ? 'Perdido' : 'Ganado';
-            ufValue = prompt('UF del ticket (opcional, para métricas). Deja vacío si no aplica.', '') || '';
-            if (closedOutcome === 'Perdido') {
-                lossReason = prompt('Motivo de pérdida/cancelación (opcional)', '') || '';
-            }
-        }
-
-        try {
-            const payload = {
-                status: 'Cerrado',
-                porcentaje_avance: 100,
-                fase_actual: ticket.fase_actual || 'Finalizado',
-                updated_at: new Date().toISOString()
+            const today = new Date().toISOString().split('T')[0];
+            const ufParsed = ufValue ? parseFloat(ufValue) : null;
+            const closedRow = {
+                organizacion: ticket.organizacion,
+                tipo: ticket.ticket,
+                estado_final: closedOutcome,
+                fecha_cierre: today,
+                valor: ufParsed,
+                razon_perdida: closedOutcome === 'Perdido' ? (lossReason || null) : null,
+                escalo: !!ticket.escalo,
+                valor_total_final: ufParsed,
+                fecha_contacto: today
             };
 
-            const { error } = await supabase
-                .from('tickets')
-                .update(payload)
-                .eq('id', ticket.id);
+            const { data: cData, error: cErr } = await supabase
+                .from('cerrados')
+                .insert([closedRow])
+                .select('*')
+                .single();
 
-            if (error) throw error;
+            if (cErr) {
+                // El ticket ya quedó cerrado — avisamos sin romper la operación principal.
+                console.warn('No se pudo registrar ticket en cerrados:', cErr.message);
+                showToast(`Ticket cerrado, pero no se pudo registrar en Historial: ${cErr.message}`, 'warning');
+            } else if (cData?.id) {
+                // Link suave (si existe la tabla crm_entity_links).
+                try {
+                    await supabase.from('crm_entity_links').insert([{
+                        from_type: 'ticket',
+                        from_id: ticket.id,
+                        to_type: 'cerrado',
+                        to_id: cData.id,
+                        link_type: 'completion'
+                    }]);
+                } catch (e) { /* no-op */ }
 
-            await logEvent('tickets', ticket.id, 'ticket_closed', 'Ticket finalizado', { status: 'Cerrado', outcome: alsoClosed ? closedOutcome : null });
-
-            // 3) Si corresponde, crear registro en "cerrados" + link + evento
-            if (alsoClosed) {
-                const today = new Date().toISOString().split('T')[0];
-                const closedRow = {
-                    organizacion: ticket.organizacion,
-                    tipo: ticket.ticket,
-                    estado_final: closedOutcome,
-                    fecha_cierre: today,
-                    valor: ufValue ? parseFloat(ufValue) : null,
-                    razon_perdida: closedOutcome === 'Perdido' ? lossReason : null,
-                    escalo: !!ticket.escalo,
-                    valor_total_final: ufValue ? parseFloat(ufValue) : null,
-                    fecha_contacto: today
-                };
-
-                const { data: cData, error: cErr } = await supabase
-                    .from('cerrados')
-                    .insert([closedRow])
-                    .select('*')
-                    .single();
-
-                if (cErr) {
-                    console.warn('No se pudo registrar ticket en cerrados:', cErr.message);
-                } else if (cData?.id) {
-                    // link suave (si existe)
-                    try {
-                        await supabase.from('crm_entity_links').insert([{
-                            from_type: 'ticket',
-                            from_id: ticket.id,
-                            to_type: 'cerrado',
-                            to_id: cData.id,
-                            link_type: 'completion'
-                        }]);
-                    } catch (e) { /* no-op */ }
-
-                    await logEvent('cerrados', cData.id, 'ticket_closed_recorded', 'Ticket registrado en Cerrados', { ticket_id: ticket.id, outcome: closedOutcome });
-                    await loadCerrados();
-                }
+                await logEvent('cerrados', cData.id, 'ticket_closed_recorded', 'Ticket registrado en Cerrados', {
+                    ticket_id: ticket.id,
+                    outcome: closedOutcome
+                });
+                await loadCerrados();
             }
-
-            await loadTickets();
-        } catch (err) {
-            showToast('Error al finalizar ticket: ' + (err?.message || err), 'error');
         }
+
+        await loadTickets();
+        showToast('✅ Ticket finalizado', 'success');
+        closeCloseTicketModal();
     };
 
 
@@ -898,6 +902,8 @@ Recomendado: así queda como histórico y después puedes reactivarlo/convertirl
         filesModalOpen, filesEntityType, filesEntityId, filesEntityName,
         filesList, filesLoading, uploadingFile,
         openFilesModal, setFilesModalOpen,
+        // Close ticket
+        closeTicketOpen, closeTicketTarget, closeCloseTicketModal, submitCloseTicket,
         // Detail
         selectedEntity, openDetail, setSelectedEntity,
         // CRUD
