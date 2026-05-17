@@ -27,12 +27,14 @@ export default function LoginModal({ onLogin, onClose }) {
             });
             if (error) {
                 console.warn('OAuth error:', error);
-                showToast('OAuth no configurado aún. Usa email para ingresar.', 'warning');
+                // Mensaje específico — antes decía "no configurado aún" que confundía
+                // cuando el error en realidad era de redirect URI o de tenant.
+                showToast(`No se pudo iniciar sesión con Microsoft: ${error.message}`, 'error');
                 setShowEmail(true);
             }
         } catch (e) {
             console.warn('OAuth exception:', e);
-            showToast('OAuth no disponible. Usa email para ingresar.', 'warning');
+            showToast(`Error de conexión: ${e?.message || 'no se pudo contactar a Supabase'}`, 'error');
             setShowEmail(true);
         } finally {
             setLoading(false);
