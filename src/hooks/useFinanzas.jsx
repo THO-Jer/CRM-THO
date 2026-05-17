@@ -190,7 +190,7 @@ export default function useFinanzas({
         // Buscar en facturas emitidas (entradas)
         if (movimiento.tipo === 'entrada') {
             facturasEmitidas.forEach(f => {
-                if (f.estado === 'Cobrada' || f.estado === 'Reclamado' || f.estado === 'Reclamada') return;
+                if (f.estado === 'Cobrada' || f.estado === 'Reclamada') return;
                 
                 const fechaFac = f.fecha_pago || f.fecha_emision;
                 const montoFacCLP = parseFloat(f.monto_clp) || 0;
@@ -213,7 +213,7 @@ export default function useFinanzas({
         // Buscar en facturas recibidas (salidas)
         if (movimiento.tipo === 'salida') {
             facturasRecibidas.forEach(f => {
-                if (f.estado === 'Pagada' || f.estado === 'Reclamado' || f.estado === 'Reclamada') return;
+                if (f.estado === 'Pagada' || f.estado === 'Reclamada') return;
                 
                 const fechaFac = f.fecha_pago || f.fecha_emision;
                 const montoFacCLP = parseFloat(f.monto_clp) || 0;

@@ -203,9 +203,9 @@ export default function ContabilidadView({
             return valor >= desde && valor <= hasta;
         };
 
-        // Datos filtrados por período (excluir facturas anuladas "Reclamado")
-        const facturasEmiAct = facturasEmitidas.filter(f => f.estado !== 'Reclamado' && f.estado !== 'Reclamada' && estEnRango(f.fecha_emision));
-        const facturasRecAct = facturasRecibidas.filter(f => f.estado !== 'Reclamado' && f.estado !== 'Reclamada' && estEnRango(f.fecha_emision));
+        // Datos filtrados por período (excluir facturas anuladas: estado "Reclamada")
+        const facturasEmiAct = facturasEmitidas.filter(f => f.estado !== 'Reclamada' && estEnRango(f.fecha_emision));
+        const facturasRecAct = facturasRecibidas.filter(f => f.estado !== 'Reclamada' && estEnRango(f.fecha_emision));
         const boletasAct = boletasHonorarios.filter(b => estEnRango(b.fecha));
         const cajaAct = cajaChica.filter(c => estEnRango(c.fecha));
         const movBancAct = movimientosBancarios.filter(m => estEnRango(m.fecha));
@@ -247,12 +247,9 @@ export default function ContabilidadView({
                     }
                 }
 
-                // Schema drift defensivo: facturas_recibidas no tiene moneda_principal.
-                // Si el form legacy lo trae (ej: edición de un registro creado antes
-                // con esa key), lo removemos antes del insert/update para que no caiga.
-                if (table === 'facturas_recibidas') {
-                    delete cleanedData.moneda_principal;
-                }
+                // (Antes había aquí un parche defensivo que eliminaba moneda_principal
+                // antes de insertar en facturas_recibidas, porque la columna no existía.
+                // Se removió tras aplicar sql/limpieza-schema-A.sql en mayo 2026.)
                 
                 console.log('Guardando en tabla:', table);
                 console.log('Datos limpios a guardar:', cleanedData);
@@ -665,11 +662,11 @@ export default function ContabilidadView({
                                                     <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${
                                                         f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 
                                                         f.estado === 'Vencida' ? 'bg-red-100 text-red-800' :
-                                                        f.estado === 'Reclamado' || f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' :
+                                                        f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' :
                                                         'bg-yellow-100 text-yellow-800'
-                                                    }`}>{f.estado === 'Reclamado' || f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span></td>
+                                                    }`}>{f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span></td>
                                                     <td className="px-4 py-3 text-right space-x-2">
-                                                        {f.estado !== 'Reclamado' && f.estado !== 'Reclamada' && (
+                                                        {f.estado !== 'Reclamada' && (
                                                             <button 
                                                                 onClick={async () => {
                                                                     if (await confirmModal(`¿Anular factura #${f.numero_factura}? Esta acción la excluirá de los cálculos.`)) {
@@ -709,9 +706,9 @@ export default function ContabilidadView({
                                                 <span className={`px-2 py-1 text-xs rounded-full ${
                                                     f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : 
                                                     f.estado === 'Vencida' ? 'bg-red-100 text-red-800' : 
-                                                    f.estado === 'Reclamado' || f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' : 
+                                                    f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' : 
                                                     'bg-yellow-100 text-yellow-800'
-                                                }`}>{f.estado === 'Reclamado' || f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span>
+                                                }`}>{f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span>
                                             </div>
                                             <div className="text-sm space-y-1 mb-3">
                                                 <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{f.fecha_emision}</span></div>
@@ -778,11 +775,11 @@ export default function ContabilidadView({
                                                     <td className="px-4 py-3"><DualCurrency amountUF={f.monto_uf} amountCLP={f.monto_clp} ufValue={f.uf_dia || ufActual} size="sm" primary={monedaPreferida} /></td>
                                                     <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${
                                                         f.estado === 'Pagada' ? 'bg-green-100 text-green-800' :
-                                                        f.estado === 'Reclamado' || f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' :
+                                                        f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' :
                                                         'bg-yellow-100 text-yellow-800'
-                                                    }`}>{f.estado === 'Reclamado' || f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span></td>
+                                                    }`}>{f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span></td>
                                                     <td className="px-4 py-3 text-right space-x-2">
-                                                        {f.estado !== 'Reclamado' && f.estado !== 'Reclamada' && (
+                                                        {f.estado !== 'Reclamada' && (
                                                             <button 
                                                                 onClick={async () => {
                                                                     if (await confirmModal(`¿Anular factura de ${f.proveedor}? Esta acción la excluirá de los cálculos.`)) {
@@ -820,9 +817,9 @@ export default function ContabilidadView({
                                                 </div>
                                                 <span className={`px-2 py-1 text-xs rounded-full ${
                                                     f.estado === 'Pagada' ? 'bg-green-100 text-green-800' :
-                                                    f.estado === 'Reclamado' || f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' :
+                                                    f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' :
                                                     'bg-yellow-100 text-yellow-800'
-                                                }`}>{f.estado === 'Reclamado' || f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span>
+                                                }`}>{f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span>
                                             </div>
                                             <div className="text-sm space-y-1 mb-3">
                                                 <div className="flex justify-between"><span className="text-gray-600">Fecha:</span><span>{f.fecha_emision}</span></div>
@@ -1386,20 +1383,20 @@ export default function ContabilidadView({
                                     const mesNombre = new Date(añoSeleccionado, mes, 1).toLocaleDateString('es-CL', { month: 'short' });
                                     
                                     // Facturas Emitidas del mes (Ingresos - exentas de IVA)
-                                    // Excluir facturas "Reclamado" (anuladas por SII)
+                                    // Excluir facturas "Reclamada" (anuladas por SII)
                                     const emitidas = facturasEmitidas
                                         .filter(f => {
-                                            if (f.estado === 'Reclamado' || f.estado === 'Reclamada') return false; // Excluir anuladas
+                                            if (f.estado === 'Reclamada') return false; // Excluir anuladas
                                             const d = new Date(f.fecha_emision);
                                             return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
                                         })
                                         .reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0);
                                     
                                     // Facturas Recibidas del mes (Gastos operacionales con IVA incluido)
-                                    // Excluir facturas "Reclamado" (anuladas)
+                                    // Excluir facturas "Reclamada" (anuladas)
                                     const gastos = facturasRecibidas
                                         .filter(f => {
-                                            if (f.estado === 'Reclamado' || f.estado === 'Reclamada') return false; // Excluir anuladas
+                                            if (f.estado === 'Reclamada') return false; // Excluir anuladas
                                             const d = new Date(f.fecha_emision);
                                             return d.getMonth() === mes && d.getFullYear() === añoSeleccionado;
                                         })
