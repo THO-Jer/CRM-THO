@@ -817,69 +817,112 @@ export default function ContabilidadView({
                                 {movBancAct.filter(m => m.estado_conciliacion === 'pendiente').map(mov => {
                                     const resultado = buscarMatches(mov)
                                     const mejorMatch = resultado.matches[0]
+                                    // Acepta 'entrada'/'abono' y 'salida'/'cargo' (schema drift)
+                                    const movAny = mov as unknown as FinancialRecord
+                                    const tipoMov = String(movAny.tipo || mov.tipo || '').toLowerCase()
+                                    const esEntrada = tipoMov === 'entrada' || tipoMov === 'abono'
+                                    const montoCLPMov = Number(movAny.monto_clp || movAny.monto || mov.monto || 0)
                                     return (
                                         <div key={mov.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700">
                                             <div className="flex justify-between items-start mb-3">
                                                 <div className="flex-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`px-2 py-1 rounded text-xs ${mov.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{mov.tipo === 'entrada' ? '📈 Entrada' : '📉 Salida'}</span>
-                                                        <span className="text-sm text-gray-600">{mov.fecha}</span>
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className={`px-2 py-1 rounded text-xs font-medium ${esEntrada ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                            {esEntrada ? '📈 Entrada' : '📉 Salida'}
+                                                        </span>
+                                                        <span className="text-sm text-gray-500">{movAny.fecha || mov.fecha}</span>
+                                                        {movAny.sucursal && <span className="text-xs text-gray-400">{String(movAny.sucursal)}</span>}
                                                     </div>
-                                                    <div className="font-medium mt-1">{mov.descripcion}</div>
-                                                    <div className="text-lg font-bold mt-1"><DualCurrency amountUF={mov.monto_uf} ufValue={mov.uf_dia} size="md" primary={monedaPreferida} /></div>
+                                                    <div className="font-medium mt-1 dark:text-gray-100">{mov.descripcion}</div>
+                                                    <div className="text-lg font-bold mt-1">
+                                                        <span className={esEntrada ? 'text-verde' : 'text-red-600'}>
+                                                            {esEntrada ? '+' : '-'}${montoCLPMov.toLocaleString('es-CL')}
+                                                        </span>
+                                                        <DualCurrency amountUF={Number(movAny.monto_uf || mov.monto_uf || 0)} ufValue={Number(movAny.uf_dia || mov.uf_dia || ufActual)} size="sm" primary={monedaPreferida} />
+                                                    </div>
                                                 </div>
                                             </div>
+
+                                            {/* Match de alta confianza (≥60%) */}
                                             {mejorMatch && mejorMatch.score >= 0.60 ? (
-                                                <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded mb-2">
-                                                    <div className="text-sm font-medium text-azul mb-1">✨ Match sugerido ({Math.round(mejorMatch.score * 100)}% confianza)</div>
-                                                    <div className="text-sm">{mejorMatch.descripcion}</div>
-                                                    <div className="text-sm text-gray-600">${mejorMatch.monto_clp?.toLocaleString('es-CL')}</div>
-                                                    <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${mejorMatch.descripcion}?`)) { aplicarConciliacion(mov.id, mejorMatch.tipo, mejorMatch.id) } }} className="mt-2 px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 font-medium">✓ Aplicar Match</button>
-                                                    {resultado.matches.length > 1 && (
-                                                        <details className="mt-2"><summary className="text-xs text-gray-600 cursor-pointer">Ver otras opciones ({resultado.matches.length - 1})</summary>
-                                                            <div className="mt-2 space-y-1">
-                                                                {resultado.matches.slice(1, 4).map((match, idx) => (
-                                                                    <div key={idx} className="text-xs flex justify-between items-center p-2 bg-white rounded">
-                                                                        <span>{match.descripcion} ({Math.round(match.score * 100)}%)</span>
-                                                                        <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${match.descripcion}?`)) { aplicarConciliacion(mov.id, match.tipo, match.id) } }} className="px-2 py-1 bg-blue-600 text-white rounded text-xs">Aplicar</button>
-                                                                    </div>
-                                                                ))}
+                                                <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded mb-2 border border-blue-200 dark:border-blue-700">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <div className="text-sm font-medium text-azul">✨ Match sugerido</div>
+                                                        <div className="flex items-center gap-1">
+                                                            <div className="h-2 rounded-full bg-blue-200 w-16 overflow-hidden">
+                                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.round(mejorMatch.score * 100)}%` }} />
                                                             </div>
-                                                        </details>
-                                                    )}
+                                                            <span className="text-xs font-bold text-azul">{Math.round(mejorMatch.score * 100)}%</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-sm font-medium dark:text-gray-200">{mejorMatch.descripcion}</div>
+                                                    <div className="text-xs text-gray-500 mt-0.5">
+                                                        ${mejorMatch.monto_clp?.toLocaleString('es-CL')}
+                                                        {(mejorMatch as FinancialRecord).detalle && <span className="ml-2 italic">{String((mejorMatch as FinancialRecord).detalle)}</span>}
+                                                    </div>
+                                                    <div className="flex gap-2 mt-2 flex-wrap">
+                                                        <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${mejorMatch.descripcion}?`)) { aplicarConciliacion(mov.id, mejorMatch.tipo, mejorMatch.id) } }} className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 font-medium">✓ Aplicar</button>
+                                                        {resultado.matches.length > 1 && (
+                                                            <details className="flex-1"><summary className="text-xs text-gray-500 cursor-pointer pt-1">Otras opciones ({resultado.matches.length - 1})</summary>
+                                                                <div className="mt-2 space-y-1">
+                                                                    {resultado.matches.slice(1, 5).map((match, idx) => (
+                                                                        <div key={idx} className="text-xs flex justify-between items-center p-2 bg-white dark:bg-gray-700 rounded gap-2">
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <span className="truncate block">{match.descripcion}</span>
+                                                                                <span className="text-gray-400">${match.monto_clp?.toLocaleString('es-CL')} · {Math.round(match.score * 100)}%</span>
+                                                                            </div>
+                                                                            <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${match.descripcion}?`)) { aplicarConciliacion(mov.id, match.tipo, match.id) } }} className="px-2 py-1 bg-blue-600 text-white rounded text-xs shrink-0">Aplicar</button>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </details>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            ) : resultado.sugerenciaCategoria ? (
-                                                <div className="bg-yellow-50 p-3 rounded mb-2">
-                                                    <div className="text-sm font-medium text-yellow-700 mb-1">💡 Sugerencia: Crear en Caja Chica</div>
-                                                    <div className="text-sm">Categoría sugerida: {resultado.sugerenciaCategoria}</div>
-                                                    <button onClick={async () => { if (await confirmModal(`¿Crear gasto en Caja Chica como "${resultado.sugerenciaCategoria}"?`)) { crearGastoCajaChica(mov, resultado.sugerenciaCategoria!) } }} className="mt-2 px-3 py-1 bg-orange-600 text-white rounded text-sm">+ Crear Gasto</button>
-                                                </div>
+
                                             ) : resultado.matches.length > 0 ? (
-                                                <div className="bg-gray-50 p-3 rounded mb-2">
-                                                    <div className="text-sm font-medium text-gray-700 mb-2">Posibles matches (baja confianza):</div>
+                                                /* Matches de baja confianza (35-60%) */
+                                                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded mb-2 border border-gray-200 dark:border-gray-600">
+                                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">🔍 Posibles coincidencias (revisar manualmente)</div>
                                                     <div className="space-y-1">
-                                                        {resultado.matches.slice(0, 3).map((match, idx) => (
-                                                            <div key={idx} className="text-xs flex justify-between items-center p-2 bg-white rounded">
-                                                                <span>{match.descripcion} ({Math.round(match.score * 100)}%)</span>
-                                                                <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${match.descripcion}?`)) { aplicarConciliacion(mov.id, match.tipo, match.id) } }} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">Aplicar</button>
+                                                        {resultado.matches.slice(0, 4).map((match, idx) => (
+                                                            <div key={idx} className="text-xs flex justify-between items-center p-2 bg-white dark:bg-gray-700 rounded gap-2">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <span className="truncate block dark:text-gray-200">{match.descripcion}</span>
+                                                                    <span className="text-gray-400">${match.monto_clp?.toLocaleString('es-CL')} · {Math.round(match.score * 100)}% confianza</span>
+                                                                </div>
+                                                                <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${match.descripcion}?`)) { aplicarConciliacion(mov.id, match.tipo, match.id) } }} className="px-2 py-1 bg-gray-600 text-white rounded text-xs shrink-0">Aplicar</button>
                                                             </div>
                                                         ))}
                                                     </div>
                                                 </div>
                                             ) : null}
-                                            {mov.tipo === 'entrada' && (!resultado.matches || resultado.matches.length === 0 || resultado.matches[0].score < 0.60) && (
-                                                <div className="bg-green-50 p-3 rounded mb-2">
-                                                    <div className="text-sm font-medium text-green-700 mb-1">💡 Depósito sin factura registrada</div>
+
+                                            {/* Sin match → sugerencia Caja Chica (solo salidas) */}
+                                            {!esEntrada && resultado.sugerenciaCategoria && (mejorMatch?.score ?? 0) < 0.60 && (
+                                                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded mb-2 border border-yellow-200 dark:border-yellow-700">
+                                                    <div className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-1">💡 Sin documento registrado — proponer Caja Chica</div>
+                                                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">Categoría detectada: <span className="font-medium">{resultado.sugerenciaCategoria}</span></div>
+                                                    <button onClick={async () => { if (await confirmModal(`¿Crear gasto en Caja Chica (${resultado.sugerenciaCategoria})?`)) { crearGastoCajaChica(mov, resultado.sugerenciaCategoria!) } }} className="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700">+ Crear en Caja Chica</button>
+                                                </div>
+                                            )}
+
+                                            {/* Entrada sin factura */}
+                                            {esEntrada && (mejorMatch?.score ?? 0) < 0.60 && (
+                                                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded mb-2 border border-green-200 dark:border-green-700">
+                                                    <div className="text-sm font-medium text-green-700 dark:text-green-400 mb-1">💡 Depósito sin factura emitida registrada</div>
                                                     <button onClick={() => showToast('Próximamente: crear factura emitida prellenada', 'info')} className="px-3 py-1 bg-green-600 text-white rounded text-sm">✏️ Crear Factura</button>
                                                 </div>
                                             )}
-                                            <div className="flex gap-2 pt-2 border-t flex-wrap">
-                                                {mov.tipo === 'salida' && (<>
-                                                    <button onClick={async () => { const cat = resultado.sugerenciaCategoria || 'Otros'; if (await confirmModal(`¿Crear gasto en Caja Chica como "${cat}"?`)) { crearGastoCajaChica(mov, cat) } }} className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded">+ Gasto</button>
-                                                    <button onClick={() => showToast('Próximamente: crear factura recibida', 'info')} className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded">+ Factura Recibida</button>
-                                                </>)}
-                                                {mov.tipo === 'entrada' && (<button onClick={() => showToast('Próximamente: crear factura emitida', 'info')} className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">+ Factura Emitida</button>)}
-                                                <button onClick={() => ignorarMovimiento(mov.id)} className="text-xs px-2 py-1 text-gray-600 hover:text-gray-800">Ignorar</button>
+
+                                            <div className="flex gap-2 pt-2 border-t dark:border-gray-600 flex-wrap">
+                                                {!esEntrada && (
+                                                    <button onClick={async () => { const cat = resultado.sugerenciaCategoria || 'Otros'; if (await confirmModal(`¿Crear gasto en Caja Chica como "${cat}"?`)) { crearGastoCajaChica(mov, cat) } }} className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200">💵 Caja Chica</button>
+                                                )}
+                                                {esEntrada && (
+                                                    <button onClick={() => showToast('Próximamente: crear factura emitida', 'info')} className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">📤 Factura Emitida</button>
+                                                )}
+                                                <button onClick={() => ignorarMovimiento(mov.id)} className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400">🚫 Ignorar</button>
                                             </div>
                                         </div>
                                     )
