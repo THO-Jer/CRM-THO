@@ -681,7 +681,10 @@ export default function ContabilidadView({
                         <div className="space-y-4">
                             <div className="flex justify-between items-center">
                                 <h3 className="font-bold dark:text-gray-200">Caja Chica</h3>
-                                <button onClick={() => { setEditing(null); setModalType('caja'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Gasto</button>
+                                <div className="flex gap-2">
+                                    <button onClick={() => { setContaTab('conciliacion'); importarCartola() }} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🏦 Importar Cartola</button>
+                                    <button onClick={() => { setEditing(null); setModalType('caja'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Gasto</button>
+                                </div>
                             </div>
                             <div className="hidden md:block overflow-x-auto">
                                 <table className="min-w-full divide-y">
