@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/check-contabilidad-mensual",
+      "schedule": "0 12 26 * *"
+    }
+  ]
+}
