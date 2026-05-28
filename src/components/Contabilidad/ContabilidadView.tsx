@@ -221,7 +221,7 @@ export default function ContabilidadView({
 
     const totalEmitidas = facturasEmiAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0)
     const totalRecibidas = facturasRecAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0)
-    const totalBoletas = boletasAct.reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || 0), 0)
+    const totalBoletas = boletasAct.reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
     const totalCajaChica = cajaAct.reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0)
     const margen = totalEmitidas - totalRecibidas - totalBoletas - (totalCajaChica / (ufActual || 38000))
 
@@ -298,9 +298,10 @@ export default function ContabilidadView({
                 <div className="p-6">
                     {/* Dashboard */}
                     {contaTab === 'dashboard' && (() => {
+                        const montoUFBoleta = (b: FinancialRecord) => parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0
                         const emitidaActual = facturasEmiAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                         const gastosActual = facturasRecAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                        const honorariosActual = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0)
+                        const honorariosActual = boletasAct.reduce((s, b) => s + montoUFBoleta(b), 0)
                         const retenciones = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0)
                         const cajaActual = cajaAct.reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
                         const flujoNeto = emitidaActual - gastosActual - honorariosActual - cajaActual
@@ -315,11 +316,17 @@ export default function ContabilidadView({
                             const ph = new Date(prevHasta.getFullYear(), prevHasta.getMonth(), prevHasta.getDate())
                             return v >= pd && v <= ph
                         }
-                        const emitidaAnterior = facturasEmitidas.filter(f => estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                        const gastosAnterior = facturasRecibidas.filter(f => estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
+                        // Fix: excluir Reclamadas del período anterior (consistente con facturasEmiAct)
+                        const emitidaAnterior = facturasEmitidas.filter(f => f.estado !== 'Reclamada' && estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
+                        // Fix: incluir honorarios y caja en el período anterior para comparar manzanas con manzanas
+                        const gastosRecAnt = facturasRecibidas.filter(f => f.estado !== 'Reclamada' && estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
+                        const honorariosAnt = boletasHonorarios.filter(b => estEnPrev(b.fecha)).reduce((s, b) => s + montoUFBoleta(b), 0)
+                        const cajaAnt = cajaChica.filter(c => estEnPrev(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
+                        const gastosAnterior = gastosRecAnt + honorariosAnt + cajaAnt
 
-                        const porCobrar = facturasEmitidas.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                        const porPagar = facturasRecibidas.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
+                        // Fix: respetar rango de fechas para por cobrar/pagar
+                        const porCobrar = facturasEmiAct.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
+                        const porPagar = facturasRecAct.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
 
                         const datos6Meses = (() => {
                             const result: { label: string; ingresos: number; gastos: number }[] = []
@@ -338,7 +345,7 @@ export default function ContabilidadView({
                                 }
                                 const ing = facturasEmitidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                                 const gas = facturasRecibidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                                const hon = boletasHonorarios.filter(b => estEnMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0)
+                                const hon = boletasHonorarios.filter(b => estEnMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
                                 const caj = cajaChica.filter(c => estEnMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
                                 result.push({ label, ingresos: Math.round(ing), gastos: Math.round(gas + hon + caj) })
                                 m++
@@ -356,7 +363,8 @@ export default function ContabilidadView({
                         if (retenciones > 0) alertas.push({ tipo: 'fiscal', msg: `${Math.round(retenciones)} UF en retenciones del período (15.25%)` })
 
                         const cambioIngresos = emitidaAnterior > 0 ? ((emitidaActual - emitidaAnterior) / emitidaAnterior * 100) : (emitidaActual > 0 ? null : 0)
-                        const cambioGastos = gastosAnterior > 0 ? ((gastosActual - gastosAnterior) / gastosAnterior * 100) : (gastosActual > 0 ? null : 0)
+                        const gastosActualTotal = gastosActual + honorariosActual + cajaActual
+                        const cambioGastos = gastosAnterior > 0 ? ((gastosActualTotal - gastosAnterior) / gastosAnterior * 100) : (gastosActualTotal > 0 ? null : 0)
 
                         dashboardDataRef.current = { datos6Meses, gastosActual, honorariosActual, cajaActual }
 
@@ -934,7 +942,7 @@ export default function ContabilidadView({
                                 const inMes = (fechaStr: string) => { const d = new Date(fechaStr); return d.getMonth() === mes && d.getFullYear() === añoSeleccionado }
                                 const emitidas = facturasEmitidas.filter(f => f.estado !== 'Reclamada' && inMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                                 const gastos = facturasRecibidas.filter(f => f.estado !== 'Reclamada' && inMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                                const honorarios = boletasHonorarios.filter(b => inMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || 0), 0)
+                                const honorarios = boletasHonorarios.filter(b => inMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
                                 const sueldos = sueldosSocios.filter(s => inMes(s.fecha)).reduce((s, sv) => s + (parseFloat(sv.monto_uf) || 0), 0)
                                 const retenciones = boletasHonorarios.filter(b => inMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0)
                                 const cajaChicaUF = cajaChica.filter(c => inMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
