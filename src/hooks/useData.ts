@@ -198,6 +198,26 @@ export default function useData(user: User) {
         return () => clearInterval(t)
     }, [])
 
+    // Auto-refresh cuando el usuario vuelve al tab — evita que otro socio tenga que
+    // recargar la página para ver cambios que hizo un colega. Solo recarga datos core
+    // (no finanzas) para mantener el impacto en red mínimo.
+    useEffect(() => {
+        if (!user) return
+        let lastRefresh = Date.now()
+        const MIN_INTERVAL_MS = 60_000 // no más de una vez por minuto
+
+        const handleVisibility = () => {
+            if (document.hidden) return
+            const elapsed = Date.now() - lastRefresh
+            if (elapsed < MIN_INTERVAL_MS) return
+            lastRefresh = Date.now()
+            loadCoreData()
+        }
+
+        document.addEventListener('visibilitychange', handleVisibility)
+        return () => document.removeEventListener('visibilitychange', handleVisibility)
+    }, [user, loadCoreData])
+
     return {
         prospectos, setProspectos, cerrados, setCerrados, tickets, setTickets,
         keyAccounts, setKeyAccounts, contactos, setContactos, notas, setNotas,
