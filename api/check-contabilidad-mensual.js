@@ -36,7 +36,7 @@ function getRangoMes() {
     .toLocaleString("es-CL", { month: "long", year: "numeric" });
   const mesCorto = new Date(Date.UTC(y, now.getUTCMonth(), 1))
     .toLocaleString("es-CL", { month: "long" });
-  return { desde: `${y}-${m}-01`, hasta: `${y}-${m}-31`, mesLabel, mesCorto };
+  return { desde: `${y}-${m}-01`, hasta: `${y}-${m}-31`, mesYM: `${y}-${m}`, mesLabel, mesCorto };
 }
 
 async function contar(supabase, tabla, campoFecha, desde, hasta) {
@@ -136,7 +136,7 @@ async function enviarResumen(destinatarios, mesLabel, mesCorto, items) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "CRM THO <onboarding@resend.dev>", // cambiar a crm@tho.cl si verificas dominio en Resend
+      from: "CRM THO <crm@tho.cl>",
       to: destinatarios,
       subject: asunto,
       html,
@@ -163,13 +163,23 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Faltan env vars de Supabase" });
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { desde, hasta, mesLabel, mesCorto } = getRangoMes();
+  const { desde, hasta, mesYM, mesLabel, mesCorto } = getRangoMes();
+
+  // sueldos_socios usa columna "mes" en formato YYYY-MM, no fecha_pago
+  const contarSueldos = async () => {
+    const { count, error } = await supabase
+      .from("sueldos_socios")
+      .select("*", { count: "exact", head: true })
+      .eq("mes", mesYM);
+    if (error) { console.error("[cron] sueldos_socios:", error.message); return null; }
+    return count ?? 0;
+  };
 
   const [emitidas, recibidas, boletas, sueldos, pendientes] = await Promise.all([
     contar(supabase, "facturas_emitidas",  "fecha_emision", desde, hasta),
     contar(supabase, "facturas_recibidas", "fecha_emision", desde, hasta),
     contar(supabase, "boletas_honorarios", "fecha_emision", desde, hasta),
-    contar(supabase, "sueldos_socios",     "fecha_pago",    desde, hasta),
+    contarSueldos(),
     contarPendientes(supabase),
   ]);
 
