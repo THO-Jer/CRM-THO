@@ -241,6 +241,43 @@ export interface BoletaHonorario {
 }
 
 // ─────────────────────────────────────────────
+// CONTABILIDAD — LIQUIDACIONES DE SUELDO
+// ─────────────────────────────────────────────
+
+export type EstadoLiquidacion = 'Pagada' | 'Pendiente' | 'Anulada'
+
+export interface Liquidacion {
+  id: string | number
+  trabajador: string
+  rut_trabajador: string | null
+  periodo: DateString                      // 'YYYY-MM-DD' primer día del mes
+  sueldo_base: number | null
+  gratificacion: number | null
+  colacion: number | null
+  movilizacion: number | null
+  otros_haberes: number | null
+  total_haberes: number | null             // columna generada
+  nombre_afp: string | null
+  sistema_salud: string | null
+  afp_trabajador: number | null
+  salud_trabajador: number | null
+  afc_trabajador: number | null
+  impuesto_unico: number | null
+  otros_descuentos: number | null
+  total_descuentos: number | null          // columna generada
+  liquido_pagar: number | null             // columna generada
+  afp_empleador: number | null
+  afc_empleador: number | null
+  seguro_accidentes: number | null
+  costo_total_empleador: number | null     // columna generada
+  uf_dia: number | null
+  monto_uf: number | null
+  estado: EstadoLiquidacion | string
+  notas: string | null
+  created_at: TimestampString | null
+}
+
+// ─────────────────────────────────────────────
 // CONTABILIDAD — MOVIMIENTOS BANCARIOS
 // ─────────────────────────────────────────────
 

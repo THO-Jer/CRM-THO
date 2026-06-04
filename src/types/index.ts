@@ -29,6 +29,8 @@ export type {
   FacturaEmitida,
   FacturaRecibida,
   BoletaHonorario,
+  Liquidacion,
+  EstadoLiquidacion,
   MovimientoBancario,
   SueldoSocio,
   CajaChica,
@@ -100,6 +102,7 @@ export type TipoDocumento =
   | 'factura_emitida'
   | 'factura_recibida'
   | 'boleta_honorario'
+  | 'liquidacion'
   | 'movimiento_bancario'
   | 'sueldo_socio'
   | 'caja_chica'

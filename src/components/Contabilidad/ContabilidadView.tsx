@@ -12,7 +12,7 @@ import type { Ticket, KeyAccount } from '../../types'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FinancialRecord = Record<string, any>
 type ChartCanvas = HTMLCanvasElement & { chart?: InstanceType<typeof Chart> | null }
-type ContaType = 'emitida' | 'recibida' | 'boleta' | 'sueldo' | 'caja'
+type ContaType = 'emitida' | 'recibida' | 'boleta' | 'sueldo' | 'caja' | 'liquidacion'
 type ModalType = ContaType | null
 
 interface DateRange { desde?: string; hasta?: string }
@@ -25,6 +25,7 @@ interface ContabilidadViewProps {
     facturasRecibidas: FinancialRecord[]
     cajaChica: FinancialRecord[]
     boletasHonorarios: FinancialRecord[]
+    liquidaciones: FinancialRecord[]
     sueldosSocios: FinancialRecord[]
     movimientosBancarios: FinancialRecord[]
     tickets: Ticket[]
@@ -49,7 +50,7 @@ interface ContabilidadViewProps {
 }
 
 export default function ContabilidadView({
-    facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, sueldosSocios,
+    facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, liquidaciones, sueldosSocios,
     movimientosBancarios, tickets, keyAccounts, ufActual, contaTab, setContaTab,
     monedaPreferida, alertasValidacion, setAlertasValidacion,
     importarBoletasExcel, importarFacturasEmitidasExcel, importarFacturasRecibidasExcel,
@@ -113,7 +114,7 @@ export default function ContabilidadView({
                 canvasD.chart = new Chart(canvasD, {
                     type: 'doughnut',
                     data: {
-                        labels: ['Operacionales', 'Honorarios', 'Gastos Menores'],
+                        labels: ['Operacionales', 'Remuneraciones', 'Gastos Menores'],
                         datasets: [{
                             data: [
                                 totalG > 0 ? Math.round(dashboardDataRef.current.gastosActual) : 0,
@@ -183,6 +184,7 @@ export default function ContabilidadView({
     const facturasEmiAct = facturasEmitidas.filter(f => f.estado !== 'Reclamada' && estEnRango(f.fecha_emision))
     const facturasRecAct = facturasRecibidas.filter(f => f.estado !== 'Reclamada' && estEnRango(f.fecha_emision))
     const boletasAct = boletasHonorarios.filter(b => estEnRango(b.fecha))
+    const liquidacionesAct = liquidaciones.filter(l => estEnRango(l.periodo))
     const cajaAct = cajaChica.filter(c => estEnRango(c.fecha))
     const movBancAct = movimientosBancarios.filter(m => estEnRango(m.fecha))
     const sueldosAct = sueldosSocios.filter(s => estEnRango(s.fecha))
@@ -193,9 +195,13 @@ export default function ContabilidadView({
                          modalType === 'recibida' ? 'facturas_recibidas' :
                          modalType === 'boleta' ? 'boletas_honorarios' :
                          modalType === 'sueldo' ? 'sueldos_socios' :
+                         modalType === 'liquidacion' ? 'liquidaciones' :
                          'caja_chica'
+            // Columnas generadas por Supabase — no se pueden insertar/actualizar
+            const GENERATED_COLS = new Set(['total_haberes', 'total_descuentos', 'liquido_pagar', 'costo_total_empleador'])
             const cleanedData: FinancialRecord = {}
             for (const [key, value] of Object.entries(data)) {
+                if (GENERATED_COLS.has(key)) continue
                 if (value === '' && (key.includes('monto') || key.includes('uf_dia') || key.includes('numero'))) {
                     cleanedData[key] = null
                 } else {
@@ -221,6 +227,7 @@ export default function ContabilidadView({
         const table = type === 'emitida' ? 'facturas_emitidas' :
                      type === 'recibida' ? 'facturas_recibidas' :
                      type === 'boleta' ? 'boletas_honorarios' :
+                     type === 'liquidacion' ? 'liquidaciones' :
                      'caja_chica'
         await supabase.from(table).delete().eq('id', id)
         onReload()
@@ -289,7 +296,7 @@ export default function ContabilidadView({
                                 { id: 'pl', nombre: '📋 Estado de Resultados' },
                                 { id: 'emitidas', nombre: '📤 Emitidas' },
                                 { id: 'recibidas', nombre: '📥 Recibidas' },
-                                { id: 'boletas', nombre: '👤 Honorarios' },
+                                { id: 'boletas', nombre: '👤 Remuneraciones' },
                                 { id: 'sueldos', nombre: '💼 Retiros' },
                                 { id: 'caja', nombre: '💵 Gastos Menores' },
                             ].map(tab => (
@@ -306,12 +313,14 @@ export default function ContabilidadView({
                     {/* Dashboard */}
                     {contaTab === 'dashboard' && (() => {
                         const montoUFBoleta = (b: FinancialRecord) => parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0
+                        const montoUFLiquidacion = (l: FinancialRecord) => parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0
                         const emitidaActual = facturasEmiAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                         const gastosActual = facturasRecAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                         const honorariosActual = boletasAct.reduce((s, b) => s + montoUFBoleta(b), 0)
+                        const liquidacionesActual = liquidacionesAct.reduce((s, l) => s + montoUFLiquidacion(l), 0)
                         const retenciones = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0)
                         const cajaActual = cajaAct.reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
-                        const flujoNeto = emitidaActual - gastosActual - honorariosActual - cajaActual
+                        const flujoNeto = emitidaActual - gastosActual - honorariosActual - liquidacionesActual - cajaActual
 
                         const largo = rango.hasta.getTime() - rango.desde.getTime()
                         const prevHasta = new Date(rango.desde.getTime() - 1)
@@ -328,8 +337,9 @@ export default function ContabilidadView({
                         // Fix: incluir honorarios y caja en el período anterior para comparar manzanas con manzanas
                         const gastosRecAnt = facturasRecibidas.filter(f => f.estado !== 'Reclamada' && estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                         const honorariosAnt = boletasHonorarios.filter(b => estEnPrev(b.fecha)).reduce((s, b) => s + montoUFBoleta(b), 0)
+                        const liquidacionesAnt = liquidaciones.filter(l => estEnPrev(l.periodo)).reduce((s, l) => s + montoUFLiquidacion(l), 0)
                         const cajaAnt = cajaChica.filter(c => estEnPrev(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
-                        const gastosAnterior = gastosRecAnt + honorariosAnt + cajaAnt
+                        const gastosAnterior = gastosRecAnt + honorariosAnt + liquidacionesAnt + cajaAnt
 
                         // Fix: respetar rango de fechas para por cobrar/pagar
                         const porCobrar = facturasEmiAct.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
@@ -353,15 +363,16 @@ export default function ContabilidadView({
                                 const ing = facturasEmitidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                                 const gas = facturasRecibidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                                 const hon = boletasHonorarios.filter(b => estEnMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
+                                const liq = liquidaciones.filter(l => estEnMes(l.periodo)).reduce((s, l) => s + (parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0), 0)
                                 const caj = cajaChica.filter(c => estEnMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
-                                result.push({ label, ingresos: Math.round(ing), gastos: Math.round(gas + hon + caj) })
+                                result.push({ label, ingresos: Math.round(ing), gastos: Math.round(gas + hon + liq + caj) })
                                 m++
                                 if (m > 11) { m = 0; y++ }
                             }
                             return result
                         })()
 
-                        const totalGastosDonut = gastosActual + honorariosActual + cajaActual
+                        const totalGastosDonut = gastosActual + honorariosActual + liquidacionesActual + cajaActual
 
                         const alertas: { tipo: string; msg: string }[] = []
                         if (flujoNeto < 0) alertas.push({ tipo: 'danger', msg: `Flujo neto negativo en el período: ${Math.round(flujoNeto)} UF` })
@@ -370,10 +381,10 @@ export default function ContabilidadView({
                         if (retenciones > 0) alertas.push({ tipo: 'fiscal', msg: `${Math.round(retenciones)} UF en retenciones del período (15.25%)` })
 
                         const cambioIngresos = emitidaAnterior > 0 ? ((emitidaActual - emitidaAnterior) / emitidaAnterior * 100) : (emitidaActual > 0 ? null : 0)
-                        const gastosActualTotal = gastosActual + honorariosActual + cajaActual
+                        const gastosActualTotal = gastosActual + honorariosActual + liquidacionesActual + cajaActual
                         const cambioGastos = gastosAnterior > 0 ? ((gastosActualTotal - gastosAnterior) / gastosAnterior * 100) : (gastosActualTotal > 0 ? null : 0)
 
-                        dashboardDataRef.current = { datos6Meses, gastosActual, honorariosActual, cajaActual }
+                        dashboardDataRef.current = { datos6Meses, gastosActual, honorariosActual: honorariosActual + liquidacionesActual, cajaActual }
 
                         return (
                             <div className="space-y-6">
@@ -466,6 +477,7 @@ export default function ContabilidadView({
                                         <div className="mt-3 space-y-1 text-xs">
                                             <div className="flex justify-between items-center"><div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-orange-400"></span> Operacionales</div><span className="font-medium">{totalGastosDonut > 0 ? Math.round(gastosActual / totalGastosDonut * 100) : 0}%</span></div>
                                             <div className="flex justify-between items-center"><div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-blue-400"></span> Honorarios</div><span className="font-medium">{totalGastosDonut > 0 ? Math.round(honorariosActual / totalGastosDonut * 100) : 0}%</span></div>
+                                            {liquidacionesActual > 0 && <div className="flex justify-between items-center"><div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-teal-400"></span> Sueldos</div><span className="font-medium">{totalGastosDonut > 0 ? Math.round(liquidacionesActual / totalGastosDonut * 100) : 0}%</span></div>}
                                             <div className="flex justify-between items-center"><div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-purple-400"></span> Gastos Menores</div><span className="font-medium">{totalGastosDonut > 0 ? Math.round(cajaActual / totalGastosDonut * 100) : 0}%</span></div>
                                         </div>
                                     </div>
@@ -840,8 +852,11 @@ export default function ContabilidadView({
                         </div>
                     )}
 
-                    {/* Boletas de Honorarios */}
+                    {/* Remuneraciones: Boletas de Honorarios + Liquidaciones */}
                     {contaTab === 'boletas' && (
+                        <div className="space-y-8">
+
+                        {/* ── Boletas de Honorarios ── */}
                         <div className="space-y-4">
                             <div className="flex justify-between items-center">
                                 <h3 className="font-bold dark:text-gray-200">Boletas de Honorarios</h3>
@@ -896,6 +911,66 @@ export default function ContabilidadView({
                                     </div>
                                 ))}
                             </div>
+                        </div>{/* fin boletas honorarios */}
+
+                        {/* ── Liquidaciones de Sueldo ── */}
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <h3 className="font-bold dark:text-gray-200">Liquidaciones de Sueldo</h3>
+                                <button onClick={() => { setEditing(null); setModalType('liquidacion'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Liquidación</button>
+                            </div>
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="min-w-full divide-y">
+                                    <thead className="bg-gray-50 dark:bg-gray-700">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Trabajador</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Período</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Total Haberes</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Líquido Pagar</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Costo Empresa</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Estado</th>
+                                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {liquidacionesAct.length === 0 ? (
+                                            <tr><td colSpan={7} className="px-4 py-4 text-center text-sm text-gray-500">Sin liquidaciones registradas</td></tr>
+                                        ) : liquidacionesAct.map(l => (
+                                            <tr key={l.id} className="hover:bg-gray-50 dark:bg-gray-700">
+                                                <td className="px-4 py-3 text-sm font-medium">{l.trabajador}</td>
+                                                <td className="px-4 py-3 text-sm">{l.periodo ? new Date(l.periodo + 'T12:00:00').toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }) : ''}</td>
+                                                <td className="px-4 py-3 text-sm">${Math.round(l.total_haberes || 0).toLocaleString('es-CL')}</td>
+                                                <td className="px-4 py-3 text-sm font-medium text-verde">${Math.round(l.liquido_pagar || 0).toLocaleString('es-CL')}</td>
+                                                <td className="px-4 py-3 text-sm">${Math.round(l.costo_total_empleador || 0).toLocaleString('es-CL')}{l.monto_uf ? <span className="text-gray-400 text-xs ml-1">({l.monto_uf} UF)</span> : null}</td>
+                                                <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full ${l.estado === 'Pagada' ? 'bg-green-100 text-green-700' : l.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{l.estado}</span></td>
+                                                <td className="px-4 py-3 text-right space-x-2">
+                                                    <button onClick={() => { setEditing(l); setModalType('liquidacion'); setShowModal(true) }} className="text-azul text-sm">Editar</button>
+                                                    <button onClick={() => handleDelete(l.id, 'liquidacion')} className="text-red-600 text-sm">Eliminar</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="md:hidden space-y-3">
+                                {liquidacionesAct.map(l => (
+                                    <div key={l.id} className="border rounded-lg p-4">
+                                        <div className="flex justify-between">
+                                            <div>
+                                                <div className="font-bold dark:text-gray-200">{l.trabajador}</div>
+                                                <div className="text-sm text-gray-600">{l.periodo ? new Date(l.periodo + 'T12:00:00').toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }) : ''}</div>
+                                            </div>
+                                            <span className="text-sm font-medium text-verde">${Math.round(l.liquido_pagar || 0).toLocaleString('es-CL')}</span>
+                                        </div>
+                                        <div className="flex gap-2 pt-2 border-t mt-2">
+                                            <button onClick={() => { setEditing(l); setModalType('liquidacion'); setShowModal(true) }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
+                                            <button onClick={() => handleDelete(l.id, 'liquidacion')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>{/* fin liquidaciones */}
+
                         </div>
                     )}
 
@@ -1084,6 +1159,7 @@ export default function ContabilidadView({
                             ...facturasEmitidas.map(f => new Date(f.fecha_emision).getFullYear()),
                             ...facturasRecibidas.map(f => new Date(f.fecha_emision).getFullYear()),
                             ...boletasHonorarios.map(b => new Date(b.fecha).getFullYear()),
+                            ...liquidaciones.map(l => new Date(l.periodo).getFullYear()),
                             ...cajaChica.map(c => new Date(c.fecha).getFullYear())
                         ])].sort((a, b) => b - a)
                         if (añosDisponibles.length === 0) añosDisponibles.push(new Date().getFullYear())
@@ -1097,11 +1173,12 @@ export default function ContabilidadView({
                                 const gastos = facturasRecibidas.filter(f => f.estado !== 'Reclamada' && inMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                                 const honorarios = boletasHonorarios.filter(b => inMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
                                 const sueldos = sueldosSocios.filter(s => inMes(s.fecha)).reduce((s, sv) => s + (parseFloat(sv.monto_uf) || 0), 0)
+                                const liquidacionesMes = liquidaciones.filter(l => inMes(l.periodo)).reduce((s, l) => s + (parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0), 0)
                                 const retenciones = boletasHonorarios.filter(b => inMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0)
                                 const cajaChicaUF = cajaChica.filter(c => inMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
-                                const totalGastos = gastos + honorarios + sueldos + cajaChicaUF
+                                const totalGastos = gastos + honorarios + sueldos + liquidacionesMes + cajaChicaUF
                                 const utilidadOperacional = emitidas - totalGastos
-                                meses.push({ mes: mesNombre, emitidas: Math.round(emitidas * 10) / 10, gastos: Math.round(gastos * 10) / 10, honorarios: Math.round(honorarios * 10) / 10, sueldos: Math.round(sueldos * 10) / 10, cajaChica: Math.round(cajaChicaUF * 10) / 10, retenciones: Math.round(retenciones * 10) / 10, utilidadOperacional: Math.round(utilidadOperacional * 10) / 10, utilidadNeta: Math.round(utilidadOperacional * 10) / 10 })
+                                meses.push({ mes: mesNombre, emitidas: Math.round(emitidas * 10) / 10, gastos: Math.round(gastos * 10) / 10, honorarios: Math.round(honorarios * 10) / 10, sueldos: Math.round(sueldos * 10) / 10, liquidaciones: Math.round(liquidacionesMes * 10) / 10, cajaChica: Math.round(cajaChicaUF * 10) / 10, retenciones: Math.round(retenciones * 10) / 10, utilidadOperacional: Math.round(utilidadOperacional * 10) / 10, utilidadNeta: Math.round(utilidadOperacional * 10) / 10 })
                             }
                             return meses
                         }
@@ -1110,9 +1187,10 @@ export default function ContabilidadView({
                         const totGastos = datosPL.reduce((s, m) => s + m.gastos, 0)
                         const totHonorarios = datosPL.reduce((s, m) => s + m.honorarios, 0)
                         const totSueldos = datosPL.reduce((s, m) => s + m.sueldos, 0)
+                        const totLiquidaciones = datosPL.reduce((s, m) => s + (m.liquidaciones || 0), 0)
                         const totCaja = datosPL.reduce((s, m) => s + m.cajaChica, 0)
                         const totRetenciones = datosPL.reduce((s, m) => s + m.retenciones, 0)
-                        const totGastosConsolidado = totGastos + totHonorarios + totSueldos + totCaja
+                        const totGastosConsolidado = totGastos + totHonorarios + totSueldos + totLiquidaciones + totCaja
                         const utilidadOp = totEmitidas - totGastosConsolidado
                         const impuestosEstimados = Math.max(0, utilidadOp * 0.20)
                         const utilidadDespuesImpuestos = utilidadOp - impuestosEstimados
@@ -1171,6 +1249,7 @@ export default function ContabilidadView({
                                         <div className="grid grid-cols-1 gap-2">
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Gastos Operacionales (+ IVA):</span><span className="font-bold text-naranja">{fmtVal(totGastos)}</span></div>
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Honorarios (bruto):</span><span className="font-bold text-azul">{fmtVal(totHonorarios)}</span></div>
+                                            {totLiquidaciones > 0 && <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Sueldos (costo empresa):</span><span className="font-bold text-teal-600">{fmtVal(totLiquidaciones)}</span></div>}
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Gastos Menores:</span><span className="font-bold text-fucsia">{fmtVal(totCaja)}</span></div>
                                             <div className="flex justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded font-bold"><span>TOTAL GASTOS:</span><span className="text-naranja">{fmtVal(totGastosConsolidado)}</span></div>
                                         </div>

@@ -5,7 +5,7 @@ import TextAreaField from '../shared/TextAreaField'
 import useEscapeKey from '../../hooks/useEscapeKey'
 import type { Ticket, KeyAccount } from '../../types'
 
-type ContaType = 'emitida' | 'recibida' | 'boleta' | 'sueldo' | 'caja'
+type ContaType = 'emitida' | 'recibida' | 'boleta' | 'sueldo' | 'caja' | 'liquidacion'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FormState = Record<string, any>
@@ -28,6 +28,15 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
         if (type === 'recibida') return { numero_factura: '', proveedor: '', categoria: 'Servicios', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, moneda_principal: 'UF' }
         if (type === 'boleta') return { fecha: new Date().toISOString().split('T')[0], prestador: '', rut: '', monto_bruto_uf: '', monto_bruto_clp: '', uf_dia: ufActual, porcentaje_retencion: 15.25, monto_retencion_uf: '', monto_retencion_clp: '', monto_liquido_uf: '', monto_liquido_clp: '', descripcion: '', mes_servicio: '', proyecto: '', moneda_principal: 'UF' }
         if (type === 'sueldo') return { fecha: new Date().toISOString().split('T')[0], socio: 'Jere', monto_uf: '', monto_clp: '', uf_dia: ufActual, concepto: '', mes_servicio: '', moneda_principal: 'UF' }
+        if (type === 'liquidacion') return {
+            trabajador: '', rut_trabajador: '',
+            periodo: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+            sueldo_base: '', gratificacion: '', colacion: '', movilizacion: '', otros_haberes: '',
+            nombre_afp: '', sistema_salud: '',
+            afp_trabajador: '', salud_trabajador: '', afc_trabajador: '', impuesto_unico: '', otros_descuentos: '',
+            afp_empleador: '', afc_empleador: '', seguro_accidentes: '',
+            uf_dia: ufActual, monto_uf: '', estado: 'Pagada', notas: ''
+        }
         // caja
         return { fecha: new Date().toISOString().split('T')[0], concepto: '', monto_clp: '', categoria: 'Otros', responsable: '', comprobante: '' }
     }
@@ -93,6 +102,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             type === 'recibida' ? 'Factura Recibida' :
                             type === 'boleta' ? 'Boleta de Honorarios' :
                             type === 'sueldo' ? 'Sueldo Socio' :
+                            type === 'liquidacion' ? 'Liquidación de Sueldo' :
                             'Gasto Menor'
                         }
                     </h3>
@@ -281,6 +291,79 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                         <TextAreaField label="Descripción del servicio" value={form.descripcion || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm({ ...form, descripcion: e.target.value })} />
                         <InputField label="Proyecto (opcional)" value={form.proyecto || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, proyecto: e.target.value })} placeholder="CChC, Club34, etc." />
                     </>)}
+
+                    {type === 'liquidacion' && (() => {
+                        const clp = (field: string) => parseFloat(form[field]) || 0
+                        const totalHaberes = clp('sueldo_base') + clp('gratificacion') + clp('colacion') + clp('movilizacion') + clp('otros_haberes')
+                        const totalDescuentos = clp('afp_trabajador') + clp('salud_trabajador') + clp('afc_trabajador') + clp('impuesto_unico') + clp('otros_descuentos')
+                        const liquidoPagar = totalHaberes - totalDescuentos
+                        const costoTotal = totalHaberes + clp('afp_empleador') + clp('afc_empleador') + clp('seguro_accidentes')
+                        return (<>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <InputField label="Trabajador" required value={form.trabajador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, trabajador: e.target.value })} placeholder="Nombre completo" />
+                                <InputField label="RUT (opcional)" value={form.rut_trabajador || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, rut_trabajador: e.target.value })} placeholder="12.345.678-9" />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <InputField label="Período (primer día del mes)" type="date" required value={form.periodo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, periodo: e.target.value })} />
+                                <SelectField label="Estado" value={form.estado} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, estado: e.target.value })} options={['Pagada', 'Pendiente', 'Anulada']} />
+                            </div>
+
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
+                                <h4 className="font-bold text-sm text-green-900">💰 Haberes (CLP)</h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    <InputField label="Sueldo Base" type="number" required value={form.sueldo_base} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, sueldo_base: e.target.value })} />
+                                    <InputField label="Gratificación" type="number" value={form.gratificacion} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, gratificacion: e.target.value })} />
+                                    <InputField label="Colación" type="number" value={form.colacion} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, colacion: e.target.value })} />
+                                    <InputField label="Movilización" type="number" value={form.movilizacion} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, movilizacion: e.target.value })} />
+                                    <InputField label="Otros Haberes" type="number" value={form.otros_haberes} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, otros_haberes: e.target.value })} />
+                                </div>
+                                <div className="text-sm font-bold text-green-800 text-right">Total Haberes: ${totalHaberes.toLocaleString('es-CL')}</div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <InputField label="AFP" value={form.nombre_afp || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, nombre_afp: e.target.value })} placeholder="MODELO, HABITAT, CUPRUM…" />
+                                <InputField label="Sistema de Salud" value={form.sistema_salud || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, sistema_salud: e.target.value })} placeholder="FONASA, ISAPRE COLMENA…" />
+                            </div>
+
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+                                <h4 className="font-bold text-sm text-red-900">➖ Descuentos Trabajador (CLP)</h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    <InputField label="AFP Trabajador" type="number" value={form.afp_trabajador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, afp_trabajador: e.target.value })} />
+                                    <InputField label="Salud (7%)" type="number" value={form.salud_trabajador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, salud_trabajador: e.target.value })} />
+                                    <InputField label="AFC Trabajador" type="number" value={form.afc_trabajador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, afc_trabajador: e.target.value })} />
+                                    <InputField label="Impuesto Único" type="number" value={form.impuesto_unico} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, impuesto_unico: e.target.value })} />
+                                    <InputField label="Otros Descuentos" type="number" value={form.otros_descuentos} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, otros_descuentos: e.target.value })} />
+                                </div>
+                                <div className="text-sm font-bold text-red-800 text-right">Total Descuentos: ${totalDescuentos.toLocaleString('es-CL')}</div>
+                            </div>
+
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                                <h4 className="font-bold text-sm text-blue-900">🏢 Cotizaciones Empleador (CLP)</h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    <InputField label="AFP Empleador (SIS)" type="number" value={form.afp_empleador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, afp_empleador: e.target.value })} />
+                                    <InputField label="AFC Empleador" type="number" value={form.afc_empleador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, afc_empleador: e.target.value })} />
+                                    <InputField label="Seguro Accidentes" type="number" value={form.seguro_accidentes} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, seguro_accidentes: e.target.value })} />
+                                </div>
+                            </div>
+
+                            <div className="bg-gray-50 border rounded-lg p-4 space-y-2 text-sm">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, uf_dia: parseFloat(e.target.value) || ufActual })} />
+                                    <InputField label="Equiv. UF (costo empleador)" type="number" step="0.01" disabled value={form.uf_dia ? (costoTotal / form.uf_dia).toFixed(2) : ''} className="bg-gray-100" />
+                                </div>
+                                <div className="flex justify-between font-bold text-base border-t pt-2">
+                                    <span>💵 Líquido a Pagar:</span>
+                                    <span className="text-verde">${liquidoPagar.toLocaleString('es-CL')}</span>
+                                </div>
+                                <div className="flex justify-between text-gray-600">
+                                    <span>🏢 Costo Total Empleador:</span>
+                                    <span className="font-medium">${costoTotal.toLocaleString('es-CL')}</span>
+                                </div>
+                            </div>
+
+                            <TextAreaField label="Notas (opcional)" value={form.notas || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm({ ...form, notas: e.target.value })} />
+                        </>)
+                    })()}
 
                     <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
                         <button type="submit" disabled={saving} className="flex-1 px-4 py-2.5 color-naranja text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed">{saving ? 'Guardando…' : 'Guardar'}</button>

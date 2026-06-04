@@ -5,7 +5,7 @@ import { showToast } from '../utils/toast'
 import type {
     Prospecto, Cerrado, Ticket, KeyAccount, Contacto, Nota,
     FacturaEmitida, FacturaRecibida, BoletaHonorario, SueldoSocio,
-    CajaChica, MovimientoBancario
+    CajaChica, MovimientoBancario, Liquidacion
 } from '../types'
 
 type User = { email?: string; id?: string } | null
@@ -34,6 +34,7 @@ export default function useData(user: User) {
     const [boletasHonorarios, setBoletasHonorarios] = useState<BoletaHonorario[]>([])
     const [sueldosSocios, setSueldosSocios] = useState<SueldoSocio[]>([])
     const [movimientosBancarios, setMovimientosBancarios] = useState<MovimientoBancario[]>([])
+    const [liquidaciones, setLiquidaciones] = useState<Liquidacion[]>([])
     const [ufActual, setUfActual] = useState<number>(38000)
 
     const [coreLoading, setCoreLoading] = useState(true)
@@ -149,6 +150,12 @@ export default function useData(user: User) {
         if (data) setSueldosSocios(data as SueldoSocio[])
     }, [])
 
+    const loadLiquidaciones = useCallback(async () => {
+        const { data, error } = await supabase.from('liquidaciones').select('*').order('periodo', { ascending: false })
+        reportLoadError('liquidaciones', error)
+        if (data) setLiquidaciones(data as Liquidacion[])
+    }, [])
+
     const loadMovimientosBancarios = useCallback(async () => {
         const { data, error } = await supabase.from('movimientos_bancarios').select('*').order('fecha', { ascending: false })
         reportLoadError('movimientos bancarios', error)
@@ -166,9 +173,9 @@ export default function useData(user: User) {
         await Promise.all([
             loadFacturasEmitidas(), loadFacturasRecibidas(),
             loadCajaChica(), loadBoletasHonorarios(), loadSueldosSocios(),
-            loadMovimientosBancarios()
+            loadMovimientosBancarios(), loadLiquidaciones()
         ])
-    }, [loadFacturasEmitidas, loadFacturasRecibidas, loadCajaChica, loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios])
+    }, [loadFacturasEmitidas, loadFacturasRecibidas, loadCajaChica, loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios, loadLiquidaciones])
 
     const loadAllData = useCallback(async () => {
         await Promise.all([loadCoreData(), loadFinanceData()])
@@ -224,11 +231,12 @@ export default function useData(user: User) {
         actividadReciente, facturasEmitidas, setFacturasEmitidas,
         facturasRecibidas, setFacturasRecibidas, cajaChica, setCajaChica,
         boletasHonorarios, setBoletasHonorarios, sueldosSocios, setSueldosSocios,
-        movimientosBancarios, setMovimientosBancarios, ufActual,
+        movimientosBancarios, setMovimientosBancarios,
+        liquidaciones, setLiquidaciones, ufActual,
         loadProspectos, loadCerrados, loadTickets, loadKeyAccounts,
         loadContactos, loadNotas, loadActividad, loadAllData,
         loadFacturasEmitidas, loadFacturasRecibidas, loadCajaChica,
-        loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios,
+        loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios, loadLiquidaciones,
         loadCoreData, loadFinanceData, ensureFinanceData,
         coreLoading, financeLoading, financeLoaded
     }

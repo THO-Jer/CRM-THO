@@ -166,7 +166,7 @@ function CRMApp() {
     const data = useData(user);
     const { prospectos, cerrados, tickets, keyAccounts, contactos, notas, actividadReciente,
         facturasEmitidas, facturasRecibidas, cajaChica, boletasHonorarios, sueldosSocios,
-        movimientosBancarios, ufActual,
+        movimientosBancarios, liquidaciones, ufActual,
         loadProspectos, loadCerrados, loadTickets, loadKeyAccounts, loadContactos, loadNotas,
         loadActividad, loadFacturasEmitidas, loadFacturasRecibidas,
         loadCajaChica, loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios,
@@ -551,6 +551,7 @@ function CRMApp() {
                         facturasRecibidas={facturasRecibidas}
                         cajaChica={cajaChica}
                         boletasHonorarios={boletasHonorarios}
+                        liquidaciones={liquidaciones}
                         sueldosSocios={sueldosSocios}
                         dateRange={dateRange}
                         movimientosBancarios={movimientosBancarios}
