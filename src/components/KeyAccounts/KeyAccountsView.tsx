@@ -2,6 +2,18 @@ import { useMemo } from 'react'
 import MetricCard from '../shared/MetricCard'
 import type { KeyAccount } from '../../types'
 
+// Calcula salud automáticamente desde fin_contrato (para display, no sobreescribe BD)
+function autoSalud(ka: KeyAccount): string {
+    if (!ka.fin_contrato) return ka.salud || 'Sin fecha'
+    const hoy = new Date()
+    const fin = new Date(ka.fin_contrato)
+    const dias = Math.floor((fin.getTime() - hoy.getTime()) / 86400000)
+    if (dias < 0) return 'Vencido'
+    if (dias <= 30) return 'Crítico'
+    if (dias <= 60) return 'Riesgo'
+    return ka.salud && ka.salud !== 'OK' ? ka.salud : 'Excelente'
+}
+
 interface KeyAccountsViewProps {
     keyAccounts: KeyAccount[]
     onAdd: () => void
@@ -23,7 +35,24 @@ interface OrgGroup {
 
 export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles, onDetail, ufActual = 38000 }: KeyAccountsViewProps) {
     const totalMRR = keyAccounts.reduce((sum, ka) => sum + (parseFloat(String(ka.uf_mes)) || 0), 0)
-    const saludBadge = (s: string) => s === 'Excelente' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : s === 'Buena' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : s === 'Riesgo' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+    const saludBadge = (s: string) => {
+        if (s === 'Excelente' || s === 'Buena') return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+        if (s === 'Riesgo') return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+    }
+
+    // Renovaciones próximas (contratos que vencen en ≤60 días)
+    const renovacionesProximas = useMemo(() => {
+        const hoy = new Date()
+        return keyAccounts
+            .filter(ka => {
+                if (!ka.fin_contrato) return false
+                const fin = new Date(ka.fin_contrato)
+                const dias = Math.floor((fin.getTime() - hoy.getTime()) / 86400000)
+                return dias >= -30 && dias <= 60 // incluye hasta 30 días vencidos
+            })
+            .sort((a, b) => new Date(a.fin_contrato!).getTime() - new Date(b.fin_contrato!).getTime())
+    }, [keyAccounts])
 
     const grouped = useMemo((): OrgGroup[] => {
         const map: Record<string, OrgGroup> = {}
@@ -49,7 +78,41 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <MetricCard title="MRR" value={`${Math.round(totalMRR)} UF/mes`} subtitle={`~$${Math.round(totalMRR * (ufActual || 38000)).toLocaleString('es-CL')}`} color="verde" />
                 <MetricCard title="Clientes" value={String(uniqueOrgs)} subtitle={`${keyAccounts.length} servicio${keyAccounts.length !== 1 ? 's' : ''} activo${keyAccounts.length !== 1 ? 's' : ''}`} color="azul" />
+                {renovacionesProximas.length > 0 && (
+                    <MetricCard title="Renovar pronto" value={String(renovacionesProximas.length)} subtitle="contratos a ≤60 días" color="naranja" />
+                )}
             </div>
+
+            {/* Alerta de renovaciones próximas */}
+            {renovacionesProximas.length > 0 && (
+                <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-700/40 rounded-xl p-4">
+                    <h3 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-3 flex items-center gap-2">
+                        🔔 Renovaciones próximas
+                    </h3>
+                    <div className="space-y-2">
+                        {renovacionesProximas.map(ka => {
+                            const fin = new Date(ka.fin_contrato!)
+                            const dias = Math.floor((fin.getTime() - new Date().getTime()) / 86400000)
+                            const s = autoSalud(ka)
+                            return (
+                                <div key={ka.id} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg px-3 py-2 border dark:border-gray-700">
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{ka.organizacion}</span>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{ka.servicio}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                            {dias < 0 ? `Venció hace ${Math.abs(dias)}d` : dias === 0 ? 'Vence hoy' : `${dias}d`}
+                                        </span>
+                                        <span className={`px-2 py-0.5 text-[10px] rounded-full font-medium ${saludBadge(s)}`}>{s}</span>
+                                        <span className="text-xs font-medium text-verde">{ka.uf_mes} UF</span>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* DESKTOP */}
             <div className="hidden md:block space-y-4">
@@ -74,7 +137,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{ka.servicio}</span>
-                                            <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${saludBadge(ka.salud || '')}`}>{ka.salud || '-'}</span>
+                                            <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${saludBadge(autoSalud(ka))}`}>{autoSalud(ka)}</span>
                                         </div>
                                         <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                                             {ka.inicio_contrato && `Desde ${ka.inicio_contrato}`}
@@ -117,7 +180,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                                 <div className="flex justify-between items-center mb-1">
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm font-medium dark:text-gray-200">{ka.servicio}</span>
-                                        <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${saludBadge(ka.salud || '')}`}>{ka.salud || '-'}</span>
+                                        <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${saludBadge(autoSalud(ka))}`}>{autoSalud(ka)}</span>
                                     </div>
                                     <span className="text-sm dark:text-gray-300">{ka.uf_mes} UF</span>
                                 </div>

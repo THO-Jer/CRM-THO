@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
 import { confirmModal } from '../../utils/confirmModal'
@@ -9,6 +9,34 @@ const tipoIcons: Record<string, string> = { nota: '📝', llamada: '📞', reuni
 const tipoLabels: Record<string, string> = { nota: 'Nota', llamada: 'Llamada', reunion: 'Reunión', email: 'Email', tarea: 'Tarea' }
 const tableMap: Record<string, string> = { prospecto: 'prospectos', cerrado: 'cerrados', ticket: 'tickets', keyaccount: 'key_accounts' }
 const servicioOptions = ['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG', 'Key Account Nivel 1', 'Key Account Nivel 2', 'Key Account Nivel 3', 'Gestión de Contenido']
+
+// Lifecycle helpers
+const lcTypeName = (t: string) => ({ prospecto: 'Prospecto', ticket: 'Ticket', key_account: 'Key Account', keyaccount: 'Key Account', cerrado: 'Cerrado' }[t] || t)
+const lcEventIcon = (t: string) => {
+    if (!t) return '📋'
+    if (t.startsWith('created_from')) return '🔄'
+    if (t.includes('renewal')) return '🔑'
+    if (t.includes('file')) return '📎'
+    if (t.includes('closed') || t.includes('cancel')) return '✅'
+    if (t.includes('created')) return '✨'
+    if (t.includes('stage') || t.includes('estado') || t.includes('moved')) return '📍'
+    return '📋'
+}
+const lcEventLabel = (t: string) => {
+    const m: Record<string, string> = {
+        created_from_prospecto: 'Creado desde Prospecto', created_from_ticket: 'Creado desde Ticket',
+        renewal_created: 'Renovación registrada', ticket_closed: 'Ticket cerrado',
+        ka_cancelled: 'Contrato cancelado', file_uploaded: 'Archivo adjunto'
+    }
+    return m[t] || (t || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+interface LifecycleItem {
+    id: string; kind: 'event' | 'link'; created_at: string
+    icon: string; label: string; title: string; email?: string
+    payload?: Record<string, unknown>
+}
+interface LifecycleOrigin { tipo: string; id: string; org: string; fecha: string }
 
 type EntityType = 'prospecto' | 'cerrado' | 'ticket' | 'keyaccount'
 
@@ -55,6 +83,16 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     const [saving, setSaving] = useState(false)
     const [newNota, setNewNota] = useState({ tipo: 'nota', contenido: '' })
     const [newContacto, setNewContacto] = useState({ nombre: '', cargo: '', email: '', telefono: '' })
+    const [lifecycleItems, setLifecycleItems] = useState<LifecycleItem[]>([])
+    const [lifecycleLoading, setLifecycleLoading] = useState(false)
+    const [lifecycleLoaded, setLifecycleLoaded] = useState(false)
+    const [lifecycleOrigin, setLifecycleOrigin] = useState<LifecycleOrigin | null>(null)
+
+    useEffect(() => {
+        if (activeSection !== 'timeline' || lifecycleLoaded) return
+        void loadLifecycle()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeSection])
 
     const entityNotas = useMemo(() =>
         notas.filter(n => n.entidad_tipo === type && n.entidad_id === item.id)
@@ -114,6 +152,74 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
         onRefresh()
     }
     const fmtDateTime = (d: string | undefined) => d ? new Date(d).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
+    const fmtDate = (d: string | undefined) => d ? new Date(d).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+
+    const loadLifecycle = async () => {
+        setLifecycleLoading(true)
+        try {
+            const table = tableMap[type]
+            const { data: events } = await supabase
+                .from('crm_events')
+                .select('id, event_type, title, payload, created_at, created_by_email')
+                .eq('entity_type', table)
+                .eq('entity_id', item.id)
+                .order('created_at', { ascending: true })
+                .limit(100)
+
+            const { data: links } = await supabase
+                .from('crm_entity_links')
+                .select('id, from_type, from_id, to_type, to_id, link_type, created_at')
+                .or(`from_id.eq.${item.id},to_id.eq.${item.id}`)
+                .order('created_at', { ascending: true })
+                .limit(50)
+
+            // Resolve origin entity name if this was converted from another entity
+            const incomingLink = (links || []).find((l: Record<string, string>) => l.to_id === item.id)
+            let origin: LifecycleOrigin | null = null
+            if (incomingLink) {
+                const srcTableMap: Record<string, string> = { prospecto: 'prospectos', ticket: 'tickets', key_account: 'key_accounts', keyaccount: 'key_accounts', cerrado: 'cerrados' }
+                const srcTable = srcTableMap[incomingLink.from_type]
+                if (srcTable) {
+                    const { data: src } = await supabase.from(srcTable).select('organizacion').eq('id', incomingLink.from_id).single()
+                    if (src) origin = { tipo: incomingLink.from_type, id: incomingLink.from_id, org: (src as { organizacion: string }).organizacion, fecha: incomingLink.created_at }
+                }
+            }
+            setLifecycleOrigin(origin)
+
+            // Build unified lifecycle items (events + links), sorted ascending
+            const items: LifecycleItem[] = [
+                ...(events || []).map((e: Record<string, unknown>) => ({
+                    id: String(e.id), kind: 'event' as const, created_at: (e.created_at as string) || '',
+                    icon: lcEventIcon(e.event_type as string), label: lcEventLabel(e.event_type as string),
+                    title: (e.title as string) || '', email: (e.created_by_email as string) || '',
+                    payload: e.payload as Record<string, unknown>
+                })),
+                ...(links || []).map((l: Record<string, string>) => ({
+                    id: String(l.id), kind: 'link' as const, created_at: l.created_at || '',
+                    icon: '🔄',
+                    label: l.from_id === item.id ? `Convertido a ${lcTypeName(l.to_type)}` : `Creado desde ${lcTypeName(l.from_type)}`,
+                    title: '', email: ''
+                }))
+            ].filter(e => e.created_at).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+
+            setLifecycleItems(items)
+            setLifecycleLoaded(true)
+        } catch (err) {
+            console.error('Error cargando ciclo de vida:', err)
+        } finally {
+            setLifecycleLoading(false)
+        }
+    }
+
+    // Merge notas + lifecycle events chronologically (ascending = oldest first)
+    const allTimelineItems = useMemo(() => {
+        const notaItems = [...entityNotas].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        const merged: Array<{ kind: 'nota'; data: Nota } | { kind: 'lc'; data: LifecycleItem }> = [
+            ...notaItems.map(n => ({ kind: 'nota' as const, data: n })),
+            ...lifecycleItems.map(e => ({ kind: 'lc' as const, data: e }))
+        ]
+        return merged.sort((a, b) => new Date(a.data.created_at).getTime() - new Date(b.data.created_at).getTime())
+    }, [entityNotas, lifecycleItems])
 
     const org: string = formData.organizacion || formData.ticket || 'Sin nombre'
     const info = (() => {
@@ -128,7 +234,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
 
     const sections = [
         { id: 'ficha', label: '📄 Ficha' },
-        { id: 'timeline', label: '📋 Timeline', count: entityNotas.length },
+        { id: 'timeline', label: '📋 Timeline', count: entityNotas.length + lifecycleItems.length },
         { id: 'contactos', label: '👤 Contactos', count: entityContactos.length },
     ]
 
@@ -290,6 +396,21 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                     {/* TIMELINE */}
                     {activeSection === 'timeline' && (
                         <div className="space-y-4">
+                            {/* Origen: si esta entidad fue convertida desde otra */}
+                            {lifecycleOrigin && (
+                                <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-xl px-4 py-3">
+                                    <span className="text-lg">🔗</span>
+                                    <div>
+                                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">Origen</p>
+                                        <p className="text-sm text-blue-800 dark:text-blue-200">
+                                            {lcTypeName(lifecycleOrigin.tipo)}: <span className="font-medium">{lifecycleOrigin.org}</span>
+                                        </p>
+                                        <p className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5">Convertido el {fmtDate(lifecycleOrigin.fecha)}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Add nota form */}
                             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
                                 <div className="flex gap-1.5 mb-2 flex-wrap">
                                     {Object.entries(tipoLabels).map(([k, v]) => (
@@ -307,35 +428,58 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                 </div>
                             </div>
 
-                            {entityNotas.length === 0 ? (
+                            {/* Unified chronological feed */}
+                            {lifecycleLoading && (
+                                <p className="text-xs text-gray-400 text-center py-2 animate-pulse">Cargando ciclo de vida…</p>
+                            )}
+                            {allTimelineItems.length === 0 && !lifecycleLoading ? (
                                 <p className="text-sm text-gray-400 text-center py-6">Sin actividades registradas</p>
                             ) : (
                                 <div className="relative">
                                     <div className="absolute left-4 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"></div>
-                                    {entityNotas.map(n => (
-                                        <div key={n.id} className="relative pl-10 pb-3 group">
-                                            <div className="absolute left-2.5 top-1 w-3 h-3 rounded-full bg-white dark:bg-gray-800 border-2 border-naranja"></div>
-                                            <div className="bg-white dark:bg-gray-700 rounded-lg p-3 border dark:border-gray-600 shadow-sm">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs">{tipoIcons[n.tipo] || '📝'}</span>
-                                                        <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase">{tipoLabels[n.tipo] || n.tipo}</span>
-                                                        {n.tipo === 'tarea' && (
-                                                            <button onClick={() => handleToggleTarea(n)} className={`text-[10px] px-1.5 py-0.5 rounded ${n.completada ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>
-                                                                {n.completada ? '✓ Hecha' : 'Pendiente'}
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] text-gray-400">{fmtDateTime(n.created_at)}</span>
-                                                        <button onClick={() => handleDeleteNota(n.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs transition">✕</button>
+                                    {allTimelineItems.map((entry, idx) => {
+                                        if (entry.kind === 'lc') {
+                                            const e = entry.data
+                                            return (
+                                                <div key={`lc-${e.id}-${idx}`} className="relative pl-10 pb-3">
+                                                    <div className="absolute left-2 top-1.5 w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-500 flex items-center justify-center text-[9px]">{e.icon}</div>
+                                                    <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg px-3 py-2 border border-gray-200 dark:border-gray-600/50">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{e.label}</span>
+                                                            <span className="text-[10px] text-gray-400">{fmtDateTime(e.created_at)}</span>
+                                                        </div>
+                                                        {e.title && <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">{e.title}</p>}
+                                                        {e.email && <p className="text-[10px] text-gray-400 mt-0.5">{e.email.split('@')[0]}</p>}
                                                     </div>
                                                 </div>
-                                                <p className={`text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap ${n.tipo === 'tarea' && n.completada ? 'line-through text-gray-400' : ''}`}>{n.contenido}</p>
-                                                {n.created_by_email && <p className="text-[10px] text-gray-400 mt-1">{n.created_by_email.split('@')[0]}</p>}
+                                            )
+                                        }
+                                        const n = entry.data
+                                        return (
+                                            <div key={`nota-${n.id}-${idx}`} className="relative pl-10 pb-3 group">
+                                                <div className="absolute left-2.5 top-1 w-3 h-3 rounded-full bg-white dark:bg-gray-800 border-2 border-naranja"></div>
+                                                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 border dark:border-gray-600 shadow-sm">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs">{tipoIcons[n.tipo] || '📝'}</span>
+                                                            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase">{tipoLabels[n.tipo] || n.tipo}</span>
+                                                            {n.tipo === 'tarea' && (
+                                                                <button onClick={() => handleToggleTarea(n)} className={`text-[10px] px-1.5 py-0.5 rounded ${n.completada ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>
+                                                                    {n.completada ? '✓ Hecha' : 'Pendiente'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] text-gray-400">{fmtDateTime(n.created_at)}</span>
+                                                            <button onClick={() => handleDeleteNota(n.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs transition">✕</button>
+                                                        </div>
+                                                    </div>
+                                                    <p className={`text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap ${n.tipo === 'tarea' && n.completada ? 'line-through text-gray-400' : ''}`}>{n.contenido}</p>
+                                                    {n.created_by_email && <p className="text-[10px] text-gray-400 mt-1">{n.created_by_email.split('@')[0]}</p>}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                             )}
                         </div>
