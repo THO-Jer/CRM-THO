@@ -61,6 +61,13 @@ export default function ContabilidadView({
     const [modalType, setModalType] = useState<ModalType>(null)
     const [editing, setEditing] = useState<FinancialRecord | null>(null)
     const [añoSeleccionado, setAñoSeleccionado] = useState(new Date().getFullYear())
+    const [tablasLimpiar, setTablasLimpiar] = useState({
+        facturas_emitidas: true,
+        facturas_recibidas: true,
+        boletas_honorarios: true,
+        sueldos_socios: true,
+        caja_chica: true,
+    })
 
     const [periodo, setPeriodo] = useState('mes_actual')
     const [fechaDesdeCustom, setFechaDesdeCustom] = useState('')
@@ -106,7 +113,7 @@ export default function ContabilidadView({
                 canvasD.chart = new Chart(canvasD, {
                     type: 'doughnut',
                     data: {
-                        labels: ['Operacionales', 'Honorarios', 'Caja Chica'],
+                        labels: ['Operacionales', 'Honorarios', 'Gastos Menores'],
                         datasets: [{
                             data: [
                                 totalG > 0 ? Math.round(dashboardDataRef.current.gastosActual) : 0,
@@ -269,7 +276,7 @@ export default function ContabilidadView({
                     <MetricCard title="💵 Emitidas" value={`${Math.round(totalEmitidas)} UF`} subtitle={`$${Math.round(totalEmitidas * ufActual).toLocaleString('es-CL')}`} color="verde" />
                     <MetricCard title="📥 Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * ufActual).toLocaleString('es-CL')}`} color="naranja" />
                     <MetricCard title="👤 Honorarios" value={`${Math.round(totalBoletas)} UF`} subtitle={`Bruto (15.25% ret.)`} color="azul" />
-                    <MetricCard title="💵 Caja Chica" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / ufActual)} UF`} color="fucsia" />
+                    <MetricCard title="💵 Gastos Menores" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / ufActual)} UF`} color="fucsia" />
                     <MetricCard title="📊 Margen" value={`${Math.round(margen)} UF`} subtitle={margen >= 0 ? '🟢 Positivo' : '🔴 Negativo'} color={margen >= 0 ? 'verde' : 'naranja'} />
                 </div>
             )}
@@ -284,7 +291,7 @@ export default function ContabilidadView({
                                 { id: 'recibidas', nombre: '📥 Recibidas' },
                                 { id: 'boletas', nombre: '👤 Honorarios' },
                                 { id: 'sueldos', nombre: '💼 Retiros' },
-                                { id: 'caja', nombre: '💵 Caja Chica' },
+                                { id: 'caja', nombre: '💵 Gastos Menores' },
                             ].map(tab => (
                                 <button key={tab.id} onClick={() => setContaTab(tab.id)}
                                     className={`py-3 px-1 border-b-2 font-medium text-xs whitespace-nowrap ${contaTab === tab.id ? 'border-naranja text-naranja' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -459,7 +466,7 @@ export default function ContabilidadView({
                                         <div className="mt-3 space-y-1 text-xs">
                                             <div className="flex justify-between items-center"><div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-orange-400"></span> Operacionales</div><span className="font-medium">{totalGastosDonut > 0 ? Math.round(gastosActual / totalGastosDonut * 100) : 0}%</span></div>
                                             <div className="flex justify-between items-center"><div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-blue-400"></span> Honorarios</div><span className="font-medium">{totalGastosDonut > 0 ? Math.round(honorariosActual / totalGastosDonut * 100) : 0}%</span></div>
-                                            <div className="flex justify-between items-center"><div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-purple-400"></span> Caja Chica</div><span className="font-medium">{totalGastosDonut > 0 ? Math.round(cajaActual / totalGastosDonut * 100) : 0}%</span></div>
+                                            <div className="flex justify-between items-center"><div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-purple-400"></span> Gastos Menores</div><span className="font-medium">{totalGastosDonut > 0 ? Math.round(cajaActual / totalGastosDonut * 100) : 0}%</span></div>
                                         </div>
                                     </div>
                                 </div>
@@ -470,9 +477,109 @@ export default function ContabilidadView({
                                         <button onClick={() => { setContaTab('emitidas'); setEditing(null); setModalType('emitida'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-green-50 hover:bg-green-100 rounded-lg transition"><span className="text-xl">📤</span><span className="text-xs font-medium text-green-700">Nueva Factura</span></button>
                                         <button onClick={() => { setContaTab('recibidas'); setEditing(null); setModalType('recibida'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-orange-50 hover:bg-orange-100 rounded-lg transition"><span className="text-xl">📥</span><span className="text-xs font-medium text-orange-700">Nuevo Gasto</span></button>
                                         <button onClick={() => { setContaTab('boletas'); setEditing(null); setModalType('boleta'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition"><span className="text-xl">👤</span><span className="text-xs font-medium text-blue-700">Boleta Honor.</span></button>
-                                        <button onClick={() => { setContaTab('caja'); setEditing(null); setModalType('caja'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition"><span className="text-xl">💵</span><span className="text-xs font-medium text-purple-700">Caja Chica</span></button>
+                                        <button onClick={() => { setContaTab('caja'); setEditing(null); setModalType('caja'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition"><span className="text-xl">💵</span><span className="text-xs font-medium text-purple-700">Gastos Menores</span></button>
                                     </div>
                                 </div>
+
+                                {/* Zona de limpieza */}
+                                <details className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                                    <summary className="px-4 py-3 text-sm font-medium text-red-700 dark:text-red-400 cursor-pointer select-none">🗑️ Zona de administración — Limpiar datos EERR</summary>
+                                    <div className="px-4 pb-4 pt-2 space-y-4">
+                                        <p className="text-xs text-red-600 dark:text-red-400">Selecciona qué tablas y qué año limpiar. <strong>No se puede deshacer.</strong></p>
+
+                                        {/* Selector de año */}
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-red-700 dark:text-red-400 font-medium">Año:</span>
+                                            <select
+                                                value={añoSeleccionado}
+                                                onChange={e => setAñoSeleccionado(Number(e.target.value))}
+                                                className="border border-red-300 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800 dark:text-gray-200"
+                                            >
+                                                {[2024, 2025, 2026, 2027].map(y => (
+                                                    <option key={y} value={y}>{y}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Checkboxes por tabla */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {([
+                                                { key: 'facturas_emitidas', label: '📤 Facturas emitidas' },
+                                                { key: 'facturas_recibidas', label: '📥 Facturas recibidas' },
+                                                { key: 'boletas_honorarios', label: '👤 Boletas de honorarios' },
+                                                { key: 'sueldos_socios', label: '💼 Retiros de socios' },
+                                                { key: 'caja_chica', label: '💵 Gastos menores' },
+                                            ] as { key: keyof typeof tablasLimpiar; label: string }[]).map(({ key, label }) => (
+                                                <label key={key} className="flex items-center gap-2 text-sm text-red-700 dark:text-red-300 cursor-pointer select-none">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={tablasLimpiar[key]}
+                                                        onChange={e => setTablasLimpiar(prev => ({ ...prev, [key]: e.target.checked }))}
+                                                        className="w-4 h-4 accent-red-600"
+                                                    />
+                                                    {label}
+                                                </label>
+                                            ))}
+                                        </div>
+
+                                        {/* Atajos seleccionar/deseleccionar */}
+                                        <div className="flex gap-3 text-xs">
+                                            <button onClick={() => setTablasLimpiar({ facturas_emitidas: true, facturas_recibidas: true, boletas_honorarios: true, sueldos_socios: true, caja_chica: true })} className="text-red-500 hover:underline">Seleccionar todo</button>
+                                            <button onClick={() => setTablasLimpiar({ facturas_emitidas: false, facturas_recibidas: false, boletas_honorarios: false, sueldos_socios: false, caja_chica: false })} className="text-red-500 hover:underline">Deseleccionar todo</button>
+                                        </div>
+
+                                        <button
+                                            disabled={!Object.values(tablasLimpiar).some(Boolean)}
+                                            onClick={async () => {
+                                                const seleccionadas = (Object.entries(tablasLimpiar) as [keyof typeof tablasLimpiar, boolean][])
+                                                    .filter(([, v]) => v).map(([k]) => k)
+                                                const etiquetas: Record<keyof typeof tablasLimpiar, string> = {
+                                                    facturas_emitidas: 'Facturas emitidas',
+                                                    facturas_recibidas: 'Facturas recibidas',
+                                                    boletas_honorarios: 'Boletas de honorarios',
+                                                    sueldos_socios: 'Retiros de socios',
+                                                    caja_chica: 'Gastos menores',
+                                                }
+                                                const listado = seleccionadas.map(k => etiquetas[k]).join(', ')
+                                                if (!(await confirmModal(
+                                                    `¿Eliminar registros del año ${añoSeleccionado} de: ${listado}?`,
+                                                    { title: `Limpiar EERR ${añoSeleccionado}`, danger: true, confirmLabel: 'Sí, eliminar' }
+                                                ))) return
+                                                const verificacion = window.prompt(`Para confirmar, escribe ELIMINAR ${añoSeleccionado}:`)
+                                                if (verificacion !== `ELIMINAR ${añoSeleccionado}`) { showToast('Operación cancelada', 'info'); return }
+
+                                                const desde = `${añoSeleccionado}-01-01`
+                                                const hasta = `${añoSeleccionado}-12-31`
+                                                const fechaCol: Record<keyof typeof tablasLimpiar, string> = {
+                                                    facturas_emitidas: 'fecha_emision',
+                                                    facturas_recibidas: 'fecha_emision',
+                                                    boletas_honorarios: 'fecha',
+                                                    sueldos_socios: 'fecha',
+                                                    caja_chica: 'fecha',
+                                                }
+                                                const resultados = await Promise.all(
+                                                    seleccionadas.map(tabla =>
+                                                        supabase.from(tabla).delete()
+                                                            .gte(fechaCol[tabla], desde)
+                                                            .lte(fechaCol[tabla], hasta)
+                                                    )
+                                                )
+                                                const errores = resultados.filter(r => r.error).map(r => r.error!.message)
+                                                if (errores.length > 0) {
+                                                    showToast('Error parcial: ' + errores.join(', '), 'error')
+                                                } else {
+                                                    showToast(`✅ ${listado} del año ${añoSeleccionado} eliminados.`, 'success')
+                                                }
+                                                onReload()
+                                            }}
+                                            className="px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition"
+                                        >
+                                            🗑️ Limpiar selección — {añoSeleccionado}
+                                        </button>
+
+                                        <p className="text-xs text-red-500">Los movimientos bancarios se limpian desde la pestaña de Conciliación.</p>
+                                    </div>
+                                </details>
                             </div>
                         )
                     })()}
@@ -676,11 +783,11 @@ export default function ContabilidadView({
                         </div>
                     )}
 
-                    {/* Caja Chica */}
+                    {/* Gastos Menores */}
                     {contaTab === 'caja' && (
                         <div className="space-y-4">
                             <div className="flex justify-between items-center">
-                                <h3 className="font-bold dark:text-gray-200">Caja Chica</h3>
+                                <h3 className="font-bold dark:text-gray-200">Gastos Menores</h3>
                                 <div className="flex gap-2">
                                     <button onClick={() => { setContaTab('conciliacion'); importarCartola() }} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🏦 Importar Cartola</button>
                                     <button onClick={() => { setEditing(null); setModalType('caja'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Gasto</button>
@@ -700,7 +807,7 @@ export default function ContabilidadView({
                                     </thead>
                                     <tbody className="divide-y">
                                         {cajaAct.length === 0 ? (
-                                            <tr><td colSpan={6} className="px-4 py-4 text-center text-sm text-gray-500">Sin gastos de caja chica</td></tr>
+                                            <tr><td colSpan={6} className="px-4 py-4 text-center text-sm text-gray-500">Sin gastos menores registrados</td></tr>
                                         ) : cajaAct.map(c => (
                                             <tr key={c.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                 <td className="px-4 py-3 text-sm">{c.fecha}</td>
@@ -901,9 +1008,9 @@ export default function ContabilidadView({
                                             {/* Sin match → sugerencia Caja Chica (solo salidas) */}
                                             {!esEntrada && resultado.sugerenciaCategoria && (mejorMatch?.score ?? 0) < 0.60 && (
                                                 <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded mb-2 border border-yellow-200 dark:border-yellow-700">
-                                                    <div className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-1">💡 Sin documento registrado — proponer Caja Chica</div>
+                                                    <div className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-1">💡 Sin documento registrado — proponer Gasto Menor</div>
                                                     <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">Categoría detectada: <span className="font-medium">{resultado.sugerenciaCategoria}</span></div>
-                                                    <button onClick={async () => { if (await confirmModal(`¿Crear gasto en Caja Chica (${resultado.sugerenciaCategoria})?`)) { crearGastoCajaChica(mov, resultado.sugerenciaCategoria!) } }} className="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700">+ Crear en Caja Chica</button>
+                                                    <button onClick={async () => { if (await confirmModal(`¿Crear en Gastos Menores (${resultado.sugerenciaCategoria})?`)) { crearGastoCajaChica(mov, resultado.sugerenciaCategoria!) } }} className="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700">+ Crear en Gastos Menores</button>
                                                 </div>
                                             )}
 
@@ -917,7 +1024,7 @@ export default function ContabilidadView({
 
                                             <div className="flex gap-2 pt-2 border-t dark:border-gray-600 flex-wrap">
                                                 {!esEntrada && (
-                                                    <button onClick={async () => { const cat = resultado.sugerenciaCategoria || 'Otros'; if (await confirmModal(`¿Crear gasto en Caja Chica como "${cat}"?`)) { crearGastoCajaChica(mov, cat) } }} className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200">💵 Caja Chica</button>
+                                                    <button onClick={async () => { const cat = resultado.sugerenciaCategoria || 'Otros'; if (await confirmModal(`¿Crear en Gastos Menores como "${cat}"?`)) { crearGastoCajaChica(mov, cat) } }} className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200">💵 Gastos Menores</button>
                                                 )}
                                                 {esEntrada && (
                                                     <button onClick={() => showToast('Próximamente: crear factura emitida', 'info')} className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">📤 Factura Emitida</button>
@@ -1021,7 +1128,7 @@ export default function ContabilidadView({
                                     </div>
                                     <button onClick={() => {
                                         const data = generarDatosPL()
-                                        const csv = [['Mes', 'Ingresos', 'Gastos', 'Honorarios', 'Caja Chica', 'Retenciones', 'Utilidad'], ...data.map(m => [m.mes, m.emitidas, m.gastos, m.honorarios, m.cajaChica, m.retenciones, m.utilidadNeta])].map(r => r.join(',')).join('\n')
+                                        const csv = [['Mes', 'Ingresos', 'Gastos', 'Honorarios', 'Gastos Menores', 'Retenciones', 'Utilidad'], ...data.map(m => [m.mes, m.emitidas, m.gastos, m.honorarios, m.cajaChica, m.retenciones, m.utilidadNeta])].map(r => r.join(',')).join('\n')
                                         const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
                                         const url = window.URL.createObjectURL(blob)
                                         const a = document.createElement('a'); a.href = url; a.download = `estado-resultados-${añoSeleccionado}.csv`; a.click()
@@ -1038,7 +1145,7 @@ export default function ContabilidadView({
                                             ['  Proveedores (+ IVA)', ...data.map(m => Math.round((m.gastos || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.gastos || 0), 0) * uf)],
                                             ['  Honorarios (bruto)', ...data.map(m => Math.round((m.honorarios || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.honorarios || 0), 0) * uf)],
                                             ['  Retiros Socios', ...data.map(m => Math.round((m.sueldos || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.sueldos || 0), 0) * uf)],
-                                            ['  Caja Chica', ...data.map(m => Math.round((m.cajaChica || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.cajaChica || 0), 0) * uf)],
+                                            ['  Gastos Menores', ...data.map(m => Math.round((m.cajaChica || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.cajaChica || 0), 0) * uf)],
                                             ['TOTAL GASTOS', ...data.map(m => Math.round(((m.gastos || 0) + (m.honorarios || 0) + (m.sueldos || 0) + (m.cajaChica || 0)) * uf)), Math.round(data.reduce((s, m) => s + (m.gastos || 0) + (m.honorarios || 0) + (m.sueldos || 0) + (m.cajaChica || 0), 0) * uf)], [],
                                             ['UTILIDAD OPERACIONAL', ...data.map(m => Math.round((m.utilidadOperacional || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.utilidadOperacional || 0), 0) * uf)], [],
                                             ['  Retención Boletas', ...data.map(m => Math.round((m.retenciones || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.retenciones || 0), 0) * uf)], [],
@@ -1064,7 +1171,7 @@ export default function ContabilidadView({
                                         <div className="grid grid-cols-1 gap-2">
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Gastos Operacionales (+ IVA):</span><span className="font-bold text-naranja">{fmtVal(totGastos)}</span></div>
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Honorarios (bruto):</span><span className="font-bold text-azul">{fmtVal(totHonorarios)}</span></div>
-                                            <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Caja Chica (boletas):</span><span className="font-bold text-fucsia">{fmtVal(totCaja)}</span></div>
+                                            <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Gastos Menores:</span><span className="font-bold text-fucsia">{fmtVal(totCaja)}</span></div>
                                             <div className="flex justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded font-bold"><span>TOTAL GASTOS:</span><span className="text-naranja">{fmtVal(totGastosConsolidado)}</span></div>
                                         </div>
                                     </div>

@@ -93,7 +93,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             type === 'recibida' ? 'Factura Recibida' :
                             type === 'boleta' ? 'Boleta de Honorarios' :
                             type === 'sueldo' ? 'Sueldo Socio' :
-                            'Gasto Caja Chica'
+                            'Gasto Menor'
                         }
                     </h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl transition">✕</button>

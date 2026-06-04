@@ -299,16 +299,30 @@ export default function useFinanzas({
 
                 movimientos.forEach(m => { m.archivo_origen = file.name })
 
-                // Deduplicación: comparar fecha + descripción + monto
+                // Deduplicación nivel 1: ¿ya se importó este mismo archivo?
+                const { data: existentesPorArchivo } = await supabase
+                    .from('movimientos_bancarios')
+                    .select('id')
+                    .eq('archivo_origen', file.name)
+                    .limit(1)
+
+                if (existentesPorArchivo && existentesPorArchivo.length > 0) {
+                    showToast(`⚠️ Este archivo ya fue importado anteriormente (${file.name}). Si quieres reimportar, primero usa "Limpiar Todo".`, 'warning')
+                    return
+                }
+
+                // Deduplicación nivel 2: comparar fecha + descripción (normalizada) + monto
                 const { data: existentes } = await supabase
                     .from('movimientos_bancarios')
                     .select('fecha, descripcion, monto_clp')
+
+                const normDesc = (s: string) => String(s).trim().toLowerCase().replace(/\s+/g, ' ')
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const movimientosNuevos = movimientos.filter((m: any) =>
                     !(existentes ?? []).some((e: Record<string, unknown>) =>
                         e.fecha === m.fecha &&
-                        e.descripcion === m.descripcion &&
+                        normDesc(String(e.descripcion ?? '')) === normDesc(String(m.descripcion ?? '')) &&
                         Math.abs(Number(e.monto_clp) - m.monto_clp) < 1
                     )
                 )
@@ -508,7 +522,7 @@ export default function useFinanzas({
                     matches.push({
                         tipo: 'caja_chica',
                         id: String(c.id),
-                        descripcion: `Caja Chica: ${cAny.concepto ?? c.descripcion ?? ''}`,
+                        descripcion: `Gasto Menor: ${cAny.concepto ?? c.descripcion ?? ''}`,
                         monto_clp: montoCajaChica,
                         monto_uf: montoCajaChica / uf,
                         fecha: fechaDoc || null,
