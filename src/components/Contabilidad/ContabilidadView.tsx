@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { parseLiquidacionPDF } from '../../utils/parseLiquidacionPDF'
 import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
 import { confirmModal } from '../../utils/confirmModal'
@@ -232,6 +233,27 @@ export default function ContabilidadView({
         await supabase.from(table).delete().eq('id', id)
         onReload()
     }
+
+    const handleImportarLiquidacionPDF = useCallback(() => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.pdf'
+        input.onchange = async (e: Event) => {
+            const file = (e.target as HTMLInputElement).files?.[0]
+            if (!file) return
+            try {
+                showToast('⏳ Leyendo PDF…', 'info')
+                const parsed = await parseLiquidacionPDF(file)
+                setEditing(parsed as unknown as FinancialRecord)
+                setModalType('liquidacion')
+                setShowModal(true)
+                showToast('✅ PDF leído — revisa los datos antes de guardar', 'success')
+            } catch (err) {
+                showToast('❌ No se pudo leer el PDF: ' + (err as Error).message, 'error')
+            }
+        }
+        input.click()
+    }, [])
 
     const totalEmitidas = facturasEmiAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0)
     const totalRecibidas = facturasRecAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0)
@@ -917,7 +939,10 @@ export default function ContabilidadView({
                         <div className="space-y-4">
                             <div className="flex justify-between items-center">
                                 <h3 className="font-bold dark:text-gray-200">Liquidaciones de Sueldo</h3>
-                                <button onClick={() => { setEditing(null); setModalType('liquidacion'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Liquidación</button>
+                                <div className="flex gap-2">
+                                    <button onClick={handleImportarLiquidacionPDF} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">📄 Importar PDF</button>
+                                    <button onClick={() => { setEditing(null); setModalType('liquidacion'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
+                                </div>
                             </div>
                             <div className="hidden md:block overflow-x-auto">
                                 <table className="min-w-full divide-y">
