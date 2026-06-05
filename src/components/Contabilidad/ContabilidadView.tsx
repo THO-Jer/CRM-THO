@@ -19,7 +19,7 @@ type ModalType = ContaType | null
 interface DateRange { desde?: string; hasta?: string }
 interface AlertaValidacion { tipo: 'error' | 'warning' | 'info'; mensaje: string }
 interface MatchResult { matches: FinancialRecord[]; sugerenciaCategoria?: string }
-interface DashboardData { datos6Meses: { label: string; ingresos: number; gastos: number }[]; gastosActual: number; honorariosActual: number; cajaActual: number }
+interface DashboardData { datos6Meses: { label: string; ingresos: number; gastos: number }[]; datosPersonal: { label: string; honorarios: number; sueldos: number }[]; gastosActual: number; honorariosActual: number; cajaActual: number }
 
 interface ContabilidadViewProps {
     facturasEmitidas: FinancialRecord[]
@@ -59,6 +59,7 @@ export default function ContabilidadView({
     ignorarMovimiento, onReload, onFiles, dateRange
 }: ContabilidadViewProps) {
     const dashboardDataRef = useRef<DashboardData | null>(null)
+    const pendingPDFRef = useRef<File | null>(null)
     const [showModal, setShowModal] = useState(false)
     const [modalType, setModalType] = useState<ModalType>(null)
     const [editing, setEditing] = useState<FinancialRecord | null>(null)
@@ -82,6 +83,7 @@ export default function ContabilidadView({
         const timeout = setTimeout(() => {
             const canvasIG = document.getElementById('chartIngGastos') as ChartCanvas | null
             const canvasD = document.getElementById('chartDonut') as ChartCanvas | null
+            const canvasP = document.getElementById('chartPersonal') as ChartCanvas | null
 
             if (canvasIG && dashboardDataRef.current) {
                 if (canvasIG.chart) { canvasIG.chart.destroy(); canvasIG.chart = null }
@@ -136,14 +138,45 @@ export default function ContabilidadView({
                     }
                 })
             }
+            if (canvasP && dashboardDataRef.current) {
+                if (canvasP.chart) { canvasP.chart.destroy(); canvasP.chart = null }
+                const dp = dashboardDataRef.current.datosPersonal || []
+                const tienePersonal = dp.some(d => d.honorarios > 0 || d.sueldos > 0)
+                if (tienePersonal) {
+                    canvasP.chart = new Chart(canvasP, {
+                        type: 'bar',
+                        data: {
+                            labels: dp.map(d => d.label),
+                            datasets: [
+                                { label: 'Honorarios', data: dp.map(d => d.honorarios), backgroundColor: 'rgba(59,130,246,0.7)', borderColor: 'rgb(59,130,246)', borderWidth: 1, borderRadius: 4 },
+                                { label: 'Sueldos', data: dp.map(d => d.sueldos), backgroundColor: 'rgba(20,184,166,0.7)', borderColor: 'rgb(20,184,166)', borderWidth: 1, borderRadius: 4 },
+                            ]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: true, position: 'bottom', labels: { font: { size: 11 }, padding: 12, usePointStyle: true } },
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                tooltip: { callbacks: { label: (c: any) => (c.dataset?.label ?? '') + ': ' + c.parsed.y + ' UF' } }
+                            },
+                            scales: {
+                                x: { stacked: true, ticks: { font: { size: 10 } }, grid: { display: false } },
+                                y: { stacked: true, beginAtZero: true, ticks: { callback: (v: unknown) => v + ' UF', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } }
+                            }
+                        }
+                    })
+                }
+            }
         }, 100)
 
         return () => {
             clearTimeout(timeout)
             const canvasIG = document.getElementById('chartIngGastos') as ChartCanvas | null
             const canvasD = document.getElementById('chartDonut') as ChartCanvas | null
+            const canvasP = document.getElementById('chartPersonal') as ChartCanvas | null
             if (canvasIG?.chart) { canvasIG.chart.destroy(); canvasIG.chart = null }
             if (canvasD?.chart) { canvasD.chart.destroy(); canvasD.chart = null }
+            if (canvasP?.chart) { canvasP.chart.destroy(); canvasP.chart = null }
         }
     }, [contaTab, periodo, fechaDesdeCustom, fechaHastaCustom, dateRange, facturasEmitidas, facturasRecibidas, boletasHonorarios, cajaChica, sueldosSocios])
 
@@ -213,9 +246,21 @@ export default function ContabilidadView({
             if (editing) {
                 result = await supabase.from(table).update(cleanedData).eq('id', editing.id)
             } else {
-                result = await supabase.from(table).insert([cleanedData])
+                result = await supabase.from(table).insert([cleanedData]).select('id').single()
             }
             if (result.error) throw new Error(result.error.message)
+
+            // Adjuntar PDF si viene de importación
+            const pdf = pendingPDFRef.current
+            const newId = !editing ? result.data?.id : editing.id
+            if (pdf && newId && table === 'liquidaciones') {
+                try {
+                    const filePath = `${table}/${newId}/${Date.now()}_${pdf.name}`
+                    await supabase.storage.from('crm-archivos').upload(filePath, pdf)
+                } catch (_) { /* no bloquear el flujo si falla el adjunto */ }
+                pendingPDFRef.current = null
+            }
+
             showToast('✅ Guardado exitosamente', 'success')
             setShowModal(false); setEditing(null); onReload()
         } catch (err) {
@@ -244,6 +289,7 @@ export default function ContabilidadView({
             try {
                 showToast('⏳ Leyendo PDF…', 'info')
                 const parsed = await parseLiquidacionPDF(file)
+                pendingPDFRef.current = file
                 setEditing(parsed as unknown as FinancialRecord)
                 setModalType('liquidacion')
                 setShowModal(true)
@@ -406,7 +452,24 @@ export default function ContabilidadView({
                         const gastosActualTotal = gastosActual + honorariosActual + liquidacionesActual + cajaActual
                         const cambioGastos = gastosAnterior > 0 ? ((gastosActualTotal - gastosAnterior) / gastosAnterior * 100) : (gastosActualTotal > 0 ? null : 0)
 
-                        dashboardDataRef.current = { datos6Meses, gastosActual, honorariosActual: honorariosActual + liquidacionesActual, cajaActual }
+                        // Datos para gráfico de personal (últimos 6 meses)
+                        const datosPersonal = (() => {
+                            const result: { label: string; honorarios: number; sueldos: number }[] = []
+                            const desde = rango.desde
+                            const hasta = rango.hasta
+                            let y = desde.getFullYear(); let m = desde.getMonth()
+                            while (new Date(y, m, 1) <= hasta) {
+                                const label = new Date(y, m, 1).toLocaleDateString('es-CL', { month: 'short' })
+                                const mesDesde = new Date(y, m, 1); const mesHasta = new Date(y, m + 1, 0)
+                                const enMes = (f: string) => { const d = new Date(f); const v = new Date(d.getFullYear(), d.getMonth(), d.getDate()); return v >= mesDesde && v <= mesHasta }
+                                const hon = boletasHonorarios.filter(b => enMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
+                                const sue = liquidaciones.filter(l => enMes(l.periodo)).reduce((s, l) => s + (parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0), 0)
+                                result.push({ label, honorarios: Math.round(hon * 10) / 10, sueldos: Math.round(sue * 10) / 10 })
+                                m++; if (m > 11) { m = 0; y++ }
+                            }
+                            return result
+                        })()
+                        dashboardDataRef.current = { datos6Meses, datosPersonal, gastosActual, honorariosActual: honorariosActual + liquidacionesActual, cajaActual }
 
                         return (
                             <div className="space-y-6">
@@ -504,6 +567,13 @@ export default function ContabilidadView({
                                         </div>
                                     </div>
                                 </div>
+
+                                {(honorariosActual > 0 || liquidacionesActual > 0) && (
+                                    <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
+                                        <h4 className="font-bold text-sm mb-3">👥 Costos de Personal</h4>
+                                        <div style={{ height: '200px', position: 'relative' }}><canvas id="chartPersonal"></canvas></div>
+                                    </div>
+                                )}
 
                                 <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
                                     <h4 className="font-bold text-sm mb-3">⚡ Acciones Rápidas</h4>
@@ -1275,6 +1345,33 @@ export default function ContabilidadView({
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Gastos Operacionales (+ IVA):</span><span className="font-bold text-naranja">{fmtVal(totGastos)}</span></div>
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Honorarios (bruto):</span><span className="font-bold text-azul">{fmtVal(totHonorarios)}</span></div>
                                             {totLiquidaciones > 0 && <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Sueldos (costo empresa):</span><span className="font-bold text-teal-600">{fmtVal(totLiquidaciones)}</span></div>}
+                                            {/* Desglose por persona — visible si hay datos de remuneraciones */}
+                                            {(totHonorarios > 0 || totLiquidaciones > 0) && (() => {
+                                                const montoUFLiq = (l: FinancialRecord) => parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0
+                                                const montoUFBol = (b: FinancialRecord) => parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0
+                                                const porPersona: Record<string, { tipo: string; total_uf: number; meses: number }> = {}
+                                                boletasHonorarios.filter(b => new Date(b.fecha).getFullYear() === añoSeleccionado).forEach(b => {
+                                                    const n = String(b.prestador || b.nombre_emisor || 'Sin nombre')
+                                                    if (!porPersona[n]) porPersona[n] = { tipo: 'Honorarios', total_uf: 0, meses: 0 }
+                                                    porPersona[n].total_uf += montoUFBol(b); porPersona[n].meses++
+                                                })
+                                                liquidaciones.filter(l => new Date(l.periodo).getFullYear() === añoSeleccionado).forEach(l => {
+                                                    const n = String(l.trabajador || 'Sin nombre')
+                                                    if (!porPersona[n]) porPersona[n] = { tipo: 'Sueldo', total_uf: 0, meses: 0 }
+                                                    porPersona[n].total_uf += montoUFLiq(l); porPersona[n].meses++
+                                                })
+                                                if (Object.keys(porPersona).length === 0) return null
+                                                return (
+                                                    <div className="ml-4 border-l-2 border-gray-200 dark:border-gray-600 pl-3 space-y-1">
+                                                        {Object.entries(porPersona).sort((a, b) => b[1].total_uf - a[1].total_uf).map(([nombre, datos]) => (
+                                                            <div key={nombre} className="flex justify-between py-1.5 px-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                <span>{nombre} <span className="text-xs text-gray-400">({datos.tipo} · {datos.meses} {datos.meses === 1 ? 'mes' : 'meses'})</span></span>
+                                                                <span className="font-medium">{Math.round(datos.total_uf * 10) / 10} UF</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )
+                                            })()}
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Gastos Menores:</span><span className="font-bold text-fucsia">{fmtVal(totCaja)}</span></div>
                                             <div className="flex justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded font-bold"><span>TOTAL GASTOS:</span><span className="text-naranja">{fmtVal(totGastosConsolidado)}</span></div>
                                         </div>
@@ -1346,7 +1443,7 @@ export default function ContabilidadView({
             </div>
 
             {showModal && modalType && (
-                <ContaModal type={modalType} item={editing} ufActual={ufActual} tickets={tickets} keyAccounts={keyAccounts} onSave={handleSave} onClose={() => { setShowModal(false); setEditing(null) }} />
+                <ContaModal type={modalType} item={editing} ufActual={ufActual} tickets={tickets} keyAccounts={keyAccounts} onSave={handleSave} onClose={() => { setShowModal(false); setEditing(null); pendingPDFRef.current = null }} />
             )}
         </div>
     )

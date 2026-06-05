@@ -169,7 +169,7 @@ function CRMApp() {
         movimientosBancarios, liquidaciones, ufActual,
         loadProspectos, loadCerrados, loadTickets, loadKeyAccounts, loadContactos, loadNotas,
         loadActividad, loadFacturasEmitidas, loadFacturasRecibidas,
-        loadCajaChica, loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios,
+        loadCajaChica, loadBoletasHonorarios, loadSueldosSocios, loadMovimientosBancarios, loadLiquidaciones,
         setFacturasEmitidas, setFacturasRecibidas, setCajaChica, setBoletasHonorarios,
         setSueldosSocios, setMovimientosBancarios,
         coreLoading, financeLoading, ensureFinanceData } = data;
@@ -221,10 +221,10 @@ function CRMApp() {
     // ===== FINANZAS HOOK =====
     const finanzas = useFinanzas({
         user, movimientosBancarios, setMovimientosBancarios,
-        facturasEmitidas, facturasRecibidas, boletasHonorarios, sueldosSocios, cajaChica,
+        facturasEmitidas, facturasRecibidas, boletasHonorarios, liquidaciones, sueldosSocios, cajaChica,
         ufActual,
         loadMovimientosBancarios, loadCajaChica,
-        loadFacturasEmitidas, loadFacturasRecibidas, loadBoletasHonorarios, loadSueldosSocios
+        loadFacturasEmitidas, loadFacturasRecibidas, loadBoletasHonorarios, loadSueldosSocios, loadLiquidaciones
     });
 
     // ===== UI STATE =====

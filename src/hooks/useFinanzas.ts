@@ -3,7 +3,7 @@ import { supabase } from '../utils/supabase'
 import { showToast } from '../utils/toast'
 import type {
     FacturaEmitida, FacturaRecibida, BoletaHonorario,
-    SueldoSocio, CajaChica, MovimientoBancario
+    SueldoSocio, CajaChica, MovimientoBancario, Liquidacion
 } from '../types'
 
 type User = { email?: string } | null
@@ -256,6 +256,7 @@ interface UseFinanzasParams {
     facturasEmitidas: FacturaEmitida[]
     facturasRecibidas: FacturaRecibida[]
     boletasHonorarios: BoletaHonorario[]
+    liquidaciones: Liquidacion[]
     sueldosSocios: SueldoSocio[]
     cajaChica: CajaChica[]
     ufActual: number
@@ -265,6 +266,7 @@ interface UseFinanzasParams {
     loadFacturasRecibidas: () => Promise<void>
     loadBoletasHonorarios: () => Promise<void>
     loadSueldosSocios: () => Promise<void>
+    loadLiquidaciones: () => Promise<void>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -273,9 +275,9 @@ interface UseFinanzasParams {
 
 export default function useFinanzas({
     movimientosBancarios, facturasEmitidas, facturasRecibidas,
-    boletasHonorarios, sueldosSocios, cajaChica, ufActual,
+    boletasHonorarios, liquidaciones, sueldosSocios, cajaChica, ufActual,
     loadMovimientosBancarios, loadCajaChica,
-    loadFacturasEmitidas, loadFacturasRecibidas, loadBoletasHonorarios, loadSueldosSocios
+    loadFacturasEmitidas, loadFacturasRecibidas, loadBoletasHonorarios, loadSueldosSocios, loadLiquidaciones
 }: UseFinanzasParams) {
     const uf = Number(ufActual) > 0 ? Number(ufActual) : 38000
 
@@ -506,6 +508,33 @@ export default function useFinanzas({
                 }
             })
 
+            // ── Salidas → Liquidaciones de Sueldo ───────────────────────
+            liquidaciones.forEach(l => {
+                const lAny = l as unknown as Record<string, unknown>
+                // Matchear por líquido a pagar (lo que sale del banco)
+                const montoLiquido = parseFloat(String(lAny.liquido_pagar ?? 0))
+                const fechaDoc     = String(lAny.periodo || '')
+                const descDoc      = [lAny.trabajador, 'sueldo', 'remuneracion', 'liquidacion'].filter(Boolean).join(' ')
+
+                const sAmt  = scoreAmount(montoCLP, montoLiquido, 0.10)
+                const sDate = scoreDate(fechaMov, fechaDoc, 35) // ventana amplia: el pago puede ser días después
+                const sText = tokenSimilarity(descMov, descDoc)
+                const score = compositeScore(sAmt, sDate, sText)
+
+                if (score >= 0.35) {
+                    matches.push({
+                        tipo: 'liquidacion',
+                        id: String(l.id),
+                        descripcion: `Liquidación ${lAny.trabajador ?? ''} — ${lAny.periodo ?? ''}`,
+                        monto_clp: montoLiquido,
+                        monto_uf: parseFloat(String(lAny.monto_uf ?? 0)),
+                        fecha: fechaDoc || null,
+                        score,
+                        detalle: 'Match por líquido a pagar',
+                    })
+                }
+            })
+
             // ── Salidas → Caja Chica ya registrada ───────────────────────
             cajaChica.forEach(c => {
                 const cAny = c as unknown as Record<string, unknown>
@@ -578,6 +607,7 @@ export default function useFinanzas({
                 factura_emitida:  { tabla: 'facturas_emitidas',  estado: 'Cobrada' },
                 factura_recibida: { tabla: 'facturas_recibidas', estado: 'Pagada'  },
                 boleta_honorario: { tabla: 'boletas_honorarios', estado: 'Pagada'  },
+                liquidacion:      { tabla: 'liquidaciones',      estado: 'Pagada'  },
                 sueldo_socio:     { tabla: 'sueldos_socios',     estado: 'Pagado'  },
             }
 
@@ -604,6 +634,7 @@ export default function useFinanzas({
                 loadFacturasRecibidas(),
                 loadBoletasHonorarios(),
                 loadSueldosSocios(),
+                loadLiquidaciones(),
             ])
         } catch (error) {
             showToast(`❌ Error: ${(error as Error).message}`, 'error')

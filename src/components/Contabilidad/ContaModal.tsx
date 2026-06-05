@@ -344,6 +344,12 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                                     <InputField label="AFC Empleador" type="number" value={form.afc_empleador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, afc_empleador: e.target.value })} />
                                     <InputField label="Seguro Accidentes" type="number" value={form.seguro_accidentes} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, seguro_accidentes: e.target.value })} />
                                 </div>
+                                {clp('afp_empleador') === 0 && clp('afc_empleador') === 0 && clp('seguro_accidentes') === 0 && (
+                                    <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded p-2 text-xs text-yellow-800">
+                                        <span>⚠️</span>
+                                        <span>Las cotizaciones del empleador no están ingresadas. El costo total estará subestimado. Puedes pedírselas a tu contadora o calcularlas: ~1,53% SIS + 2,4% AFC + ~0,93% mutualidad sobre el sueldo imponible.</span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="bg-gray-50 border rounded-lg p-4 space-y-2 text-sm">
