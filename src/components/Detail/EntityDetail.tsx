@@ -260,6 +260,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     const [facturasLinked, setFacturasLinked] = useState<Set<string>>(new Set())
     const [facturasLoading, setFacturasLoading] = useState(false)
     const [facturasLoaded, setFacturasLoaded] = useState(false)
+    const [facturasError, setFacturasError] = useState<string | null>(null)
     const [facturasBusqueda, setFacturasBusqueda] = useState('')
 
     useEffect(() => {
@@ -270,22 +271,31 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
 
     const loadFacturacion = async () => {
         setFacturasLoading(true)
+        setFacturasError(null)
         try {
-            const [{ data: fData }, { data: links }] = await Promise.all([
-                supabase.from('facturas_emitidas')
-                    .select('id, folio, descripcion, monto_total, moneda_principal, monto_uf, fecha_emision, fecha_pago, estado, organizacion')
-                    .order('fecha_emision', { ascending: false })
-                    .limit(200),
-                supabase.from('crm_entity_links')
-                    .select('to_id')
-                    .eq('from_type', type)
-                    .eq('from_id', item.id)
-                    .eq('to_type', 'factura_emitida')
-            ])
+            const { data: fData, error: fErr } = await supabase
+                .from('facturas_emitidas')
+                .select('id, folio, descripcion, monto_total, moneda_principal, monto_uf, fecha_emision, fecha_pago, estado, organizacion')
+                .order('fecha_emision', { ascending: false })
+                .limit(200)
+            if (fErr) throw fErr
+
+            const { data: links, error: lErr } = await supabase
+                .from('crm_entity_links')
+                .select('to_id')
+                .eq('from_type', type)
+                .eq('from_id', item.id)
+                .eq('to_type', 'factura_emitida')
+            if (lErr) console.warn('Error cargando links:', lErr.message)
+
             setFacturas((fData || []) as FacturaRow[])
             setFacturasLinked(new Set((links || []).map((l: { to_id: string }) => String(l.to_id))))
             setFacturasLoaded(true)
-        } catch (err) { console.error('Error cargando facturas:', err) }
+        } catch (err) {
+            const msg = (err as Error).message || 'Error desconocido'
+            console.error('Error cargando facturas:', msg)
+            setFacturasError(msg)
+        }
         finally { setFacturasLoading(false) }
     }
 
@@ -627,7 +637,15 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                         <div className="space-y-4">
                             {facturasLoading && <p className="text-xs text-gray-400 text-center py-4 animate-pulse">Cargando facturas…</p>}
 
-                            {!facturasLoading && (() => {
+                            {facturasError && (
+                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/40 rounded-xl p-4 text-center">
+                                    <p className="text-sm text-red-600 dark:text-red-400 mb-2">Error al cargar facturas</p>
+                                    <p className="text-xs text-red-500 dark:text-red-400 font-mono mb-3">{facturasError}</p>
+                                    <button onClick={() => { setFacturasLoaded(false); setFacturasError(null); void loadFacturacion() }} className="text-xs px-3 py-1.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 transition">Reintentar</button>
+                                </div>
+                            )}
+
+                            {!facturasLoading && !facturasError && (() => {
                                 const q = facturasBusqueda.toLowerCase().trim()
                                 const visible = q
                                     ? facturas.filter(f =>
