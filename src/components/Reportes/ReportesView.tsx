@@ -143,6 +143,45 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
         return salud
     }, [keyAccounts])
 
+    // Forecast: valor × probabilidad agrupado por fecha_limite (próximos 6 meses)
+    const datosForecast = useMemo(() => {
+        const hoy = new Date()
+        const meses: { label: string; valor: number; count: number; prospectos: Prospecto[] }[] = []
+        for (let i = 0; i < 6; i++) {
+            const mesStart = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1)
+            const mesEnd = new Date(hoy.getFullYear(), hoy.getMonth() + i + 1, 0)
+            const label = mesStart.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' })
+            const enMes = prospectosActivos.filter(p => {
+                if (!p.fecha_limite) return i === 0
+                const f = new Date(p.fecha_limite)
+                return f >= mesStart && f <= mesEnd
+            })
+            const valor = Math.round(enMes.reduce((s, p) => {
+                return s + (parseFloat(String(p.valor)) || 0) * ((parseFloat(String(p.probabilidad)) || 10) / 100)
+            }, 0))
+            meses.push({ label, valor, count: enMes.length, prospectos: enMes })
+        }
+        return meses
+    }, [prospectosActivos])
+
+    // Funnel: distribución actual por etapa con tasas
+    const datosFunnel = useMemo(() => {
+        const etapas = [
+            { key: 'Nuevo Lead',  label: 'Lead nuevo',  color: 'bg-gray-400' },
+            { key: 'Contactado',  label: 'Contactado',  color: 'bg-blue-400' },
+            { key: 'Reunión',     label: 'Reunión',     color: 'bg-yellow-400' },
+            { key: 'Propuesta',   label: 'Propuesta',   color: 'bg-orange-400' },
+            { key: 'Negociación', label: 'Negociación', color: 'bg-green-400' },
+        ]
+        const normalize = (e: string) => (e || '').toLowerCase().replace(/\s+/g, ' ').trim()
+        const total = prospectosActivos.length || 1
+        return etapas.map(et => {
+            const count = prospectosActivos.filter(p => normalize(p.estado).includes(normalize(et.key))).length
+            const uf = Math.round(prospectosActivos.filter(p => normalize(p.estado).includes(normalize(et.key))).reduce((s, p) => s + (parseFloat(String(p.valor)) || 0), 0))
+            return { ...et, count, uf, pct: Math.round((count / total) * 100) }
+        }).filter(e => e.count > 0)
+    }, [prospectosActivos])
+
     useEffect(() => {
         const timeout = setTimeout(() => {
             const kill = (id: string) => { const c = document.getElementById(id) as ChartCanvas | null; if (c?.chart) { c.chart.destroy(); c.chart = null } }
@@ -174,15 +213,28 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                 type: 'doughnut', data: { labels: datosAging.labels, datasets: [{ data: datosAging.data, backgroundColor: ['#10B981', '#60A5FA', '#FBBF24', '#F97316', '#EF4444'] }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
             })
+            make('chartForecast', {
+                type: 'bar',
+                data: {
+                    labels: datosForecast.map(m => m.label),
+                    datasets: [{
+                        label: 'Forecast (UF ponderado)',
+                        data: datosForecast.map(m => m.valor),
+                        backgroundColor: '#F97316',
+                        borderRadius: 4,
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: { parsed: { y: number }, dataIndex: number }) => ` ${c.parsed.y} UF · ${datosForecast[c.dataIndex]?.count} prospecto${datosForecast[c.dataIndex]?.count !== 1 ? 's' : ''}` } } }, scales: { y: { beginAtZero: true, ticks: { callback: (v: unknown) => v + ' UF' } } } }
+            })
         }, 50)
         return () => {
             clearTimeout(timeout)
-            ;['chartIngresos', 'chartPipeline', 'chartConversion', 'chartWinLoss', 'chartAging'].forEach(id => {
+            ;['chartIngresos', 'chartPipeline', 'chartConversion', 'chartWinLoss', 'chartAging', 'chartForecast'].forEach(id => {
                 const c = document.getElementById(id) as ChartCanvas | null
                 if (c?.chart) { c.chart.destroy(); c.chart = null }
             })
         }
-    }, [datosIngresos, datosPipeline, datosConversion, datosWinLoss, datosAging])
+    }, [datosIngresos, datosPipeline, datosConversion, datosWinLoss, datosAging, datosForecast])
 
     const totalPipeline = Math.round(prospectosActivos.reduce((s, p) => s + (parseFloat(String(p.valor)) || 0), 0))
     const mrrActual = Math.round(keyAccounts.reduce((s, ka) => s + (parseFloat(String(ka.uf_mes)) || 0), 0))
@@ -194,6 +246,12 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
     }, [cerrados])
     const totalGanados = cerrados.filter(c => c.estado_final === 'Ganado').length
     const totalPerdidos = cerrados.filter(c => c.estado_final === 'Perdido').length
+
+    const pipelinePonderado = Math.round(prospectosActivos.reduce((s, p) => {
+        const valor = parseFloat(String(p.valor)) || 0
+        const prob = parseFloat(String(p.probabilidad)) || 10
+        return s + (valor * prob / 100)
+    }, 0))
 
     return (
         <div className="space-y-6">
@@ -215,6 +273,11 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow">
                     <div className="text-2xl font-bold text-fucsia">{prospectosActivos.length}</div>
                     <div className="text-xs text-gray-600 dark:text-gray-400">Prospectos Activos</div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow col-span-2 md:col-span-1">
+                    <div className="text-2xl font-bold text-purple-500">{pipelinePonderado} UF</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">Pipeline Ponderado</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">valor × probabilidad</div>
                 </div>
             </div>
 
@@ -252,24 +315,28 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">🎫 Avance Tickets</h3>
-                    <div className="space-y-3">
-                        {datosTickets.length === 0 && <p className="text-sm text-gray-400 text-center py-8">Sin tickets activos</p>}
-                        {datosTickets.map((t, i) => (
-                            <div key={`${t.org}-${t.nombre}-${i}`}>
-                                <div className="flex justify-between text-xs mb-1">
-                                    <div className="flex-1 min-w-0 mr-2">
-                                        <span className="text-gray-700 dark:text-gray-300 font-medium truncate block" title={`${t.org} — ${t.nombre}`}>{t.org}</span>
-                                        <span className="text-gray-400 text-[10px] truncate block">{t.nombre}</span>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">🔻 Funnel del Pipeline</h3>
+                    {datosFunnel.length === 0
+                        ? <p className="text-sm text-gray-400 text-center py-8">Sin prospectos activos</p>
+                        : <div className="space-y-2">
+                            {datosFunnel.map((e, i) => (
+                                <div key={e.key}>
+                                    <div className="flex justify-between text-xs mb-1">
+                                        <span className="text-gray-600 dark:text-gray-400 font-medium">{e.label}</span>
+                                        <span className="text-gray-500 dark:text-gray-400">{e.count} · {e.uf} UF</span>
                                     </div>
-                                    <span className="text-gray-500 flex-shrink-0 font-bold">{t.avance}%</span>
+                                    <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5">
+                                        <div className={`h-2.5 rounded-full transition-all ${e.color}`} style={{ width: `${Math.max(6, e.pct)}%` }} />
+                                    </div>
+                                    {i < datosFunnel.length - 1 && datosFunnel[i + 1] && (
+                                        <div className="text-[10px] text-gray-400 text-right mt-0.5">
+                                            → {Math.round((datosFunnel[i + 1].count / Math.max(1, e.count)) * 100)}% pasan a {datosFunnel[i + 1].label}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
-                                    <div className={`h-2 rounded-full transition-all ${t.avance >= 75 ? 'bg-verde' : t.avance >= 50 ? 'bg-azul' : t.avance >= 25 ? 'bg-naranja' : 'bg-gray-300'}`} style={{ width: `${Math.max(4, t.avance)}%` }}></div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    }
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -298,6 +365,37 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                                 ))}
                             </div>
                         </div>
+                    )}
+                </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-1">🔮 Forecast de Cierre</h3>
+                    <p className="text-xs text-gray-400 mb-4">Valor ponderado por probabilidad · próximos 6 meses</p>
+                    <div style={{ height: '220px', position: 'relative' }}><canvas id="chartForecast"></canvas></div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-1">📅 Detalle Forecast</h3>
+                    <p className="text-xs text-gray-400 mb-4">Prospectos activos por mes de cierre esperado</p>
+                    <div className="space-y-2">
+                        {datosForecast.every(m => m.count === 0)
+                            ? <p className="text-sm text-gray-400 text-center py-8">Sin prospectos con fecha límite definida</p>
+                            : datosForecast.filter(m => m.count > 0).map(m => (
+                                <div key={m.label} className="flex items-center gap-3">
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 w-24 shrink-0">{m.label}</span>
+                                    <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-2">
+                                        <div className="bg-naranja h-2 rounded-full" style={{ width: `${Math.min(100, Math.round(m.valor / Math.max(...datosForecast.map(x => x.valor), 1) * 100))}%` }} />
+                                    </div>
+                                    <span className="text-xs font-semibold text-naranja w-16 text-right shrink-0">{m.valor} UF</span>
+                                    <span className="text-[10px] text-gray-400 w-8 shrink-0">{m.count}p</span>
+                                </div>
+                            ))
+                        }
+                    </div>
+                    {prospectosActivos.filter(p => !p.fecha_limite).length > 0 && (
+                        <p className="text-[10px] text-gray-400 mt-3">
+                            ⚠️ {prospectosActivos.filter(p => !p.fecha_limite).length} prospecto{prospectosActivos.filter(p => !p.fecha_limite).length > 1 ? 's' : ''} sin fecha límite (incluido{prospectosActivos.filter(p => !p.fecha_limite).length > 1 ? 's' : ''} en mes actual)
+                        </p>
                     )}
                 </div>
             </div>
