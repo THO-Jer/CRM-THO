@@ -3,6 +3,7 @@ import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
 import { confirmModal } from '../../utils/confirmModal'
 import useEscapeKey from '../../hooks/useEscapeKey'
+import ProposalGenerator from '../Proposals/ProposalGenerator'
 import type { Prospecto, Cerrado, Ticket, KeyAccount } from '../../types'
 
 const tipoIcons: Record<string, string> = { nota: '📝', llamada: '📞', reunion: '🤝', email: '📧', tarea: '✅' }
@@ -80,6 +81,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     const [activeSection, setActiveSection] = useState('ficha')
     const [formData, setFormData] = useState<FormData>({ ...item })
     const [dirty, setDirty] = useState(false)
+    const [showProposalModal, setShowProposalModal] = useState(false)
     const [saving, setSaving] = useState(false)
     const [newNota, setNewNota] = useState({ tipo: 'nota', contenido: '' })
     const [newContacto, setNewContacto] = useState({ nombre: '', cargo: '', email: '', telefono: '' })
@@ -371,6 +373,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     ) : []
 
     return (
+        <>
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-start justify-center z-50 overflow-y-auto py-6 animate-fadeIn" onClick={onClose}>
             <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl mx-4 shadow-2xl animate-slideUp" onClick={e => e.stopPropagation()}>
                 {/* Header */}
@@ -388,25 +391,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                         </div>
                         <div className="flex items-center gap-2 ml-4">
                             {(type === 'prospecto' || type === 'keyaccount') && (
-                                <button onClick={async () => {
-                                    const valor = type === 'keyaccount' ? formData.uf_mes : formData.valor
-                                    try {
-                                        const { generateProposal } = await import('../../utils/proposalPDF')
-                                        generateProposal({
-                                            organizacion: formData.organizacion,
-                                            contacto: formData.contacto,
-                                            tipo: formData.tipo || formData.servicio || type,
-                                            valor: valor,
-                                            moneda: 'UF',
-                                            ufActual,
-                                            notas: formData.notas || formData.proximo_paso || ''
-                                        })
-                                        showToast('PDF generado ✓', 'success')
-                                    } catch (err) {
-                                        console.error(err)
-                                        showToast('No se pudo generar el PDF: ' + ((err as Error).message || ''), 'error')
-                                    }
-                                }} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Generar propuesta PDF">
+                                <button onClick={() => setShowProposalModal(true)} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Generar propuesta PDF">
                                     📄 Propuesta
                                 </button>
                             )}
@@ -839,5 +824,17 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                 </div>
             </div>
         </div>
+        {showProposalModal && (
+            <ProposalGenerator
+                prospecto={{
+                    ...formData,
+                    valor: type === 'keyaccount' ? formData.uf_mes : formData.valor,
+                    tipo: formData.tipo || formData.servicio || '',
+                } as Prospecto}
+                onClose={() => setShowProposalModal(false)}
+                ufActual={ufActual}
+            />
+        )}
+        </>
     )
 }
