@@ -110,7 +110,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
 
     // Campos que existen en el tipo TS pero no en la tabla de Supabase (schema drift)
     const excludeByType: Record<EntityType, string[]> = {
-        prospecto: [], ticket: ['tipo', 'contacto'], keyaccount: ['tipo', 'contacto'], cerrado: []
+        prospecto: [], ticket: ['tipo', 'contacto'], keyaccount: ['tipo', 'contacto', 'salud', 'notas', 'user_id'], cerrado: ['user_id']
     }
 
     const handleSave = async () => {
@@ -253,10 +253,10 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
 
     // ── Facturación (solo ticket) ──────────────────────────────────────────
     interface FacturaRow {
-        id: string | number; folio: string | null; descripcion: string | null
-        monto_neto: number | null; moneda_principal: string | null; monto_uf: number | null
+        id: number; folio: string | null; numero_factura: string | null; descripcion: string | null
+        total_monto_clp: number | null; monto_uf: number | null
         fecha_emision: string | null; fecha_pago: string | null; estado: string
-        organizacion: string | null
+        cliente: string | null
     }
     const [facturas, setFacturas] = useState<FacturaRow[]>([])
     const [facturasLinked, setFacturasLinked] = useState<Set<string>>(new Set())
@@ -271,27 +271,25 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeSection])
 
+    // La tabla facturas_emitidas tiene ticket_id y key_account_id como FK nativas (integer)
+    // pero los ids del CRM son uuid — no son compatibles para join directo.
+    // Usamos crm_entity_links con to_id almacenado como texto del integer de la factura.
+    // Para mostrar facturas: cargamos todas y filtramos por cliente (org) + búsqueda libre.
     const loadFacturacion = async () => {
         setFacturasLoading(true)
         setFacturasError(null)
         try {
+            const org = (item as { organizacion?: string }).organizacion || ''
             const { data: fData, error: fErr } = await supabase
                 .from('facturas_emitidas')
-                .select('id, folio, descripcion, monto_neto, moneda_principal, monto_uf, fecha_emision, fecha_pago, estado, organizacion')
+                .select('id, folio, numero_factura, descripcion, total_monto_clp, monto_uf, fecha_emision, fecha_pago, estado, cliente')
+                .ilike('cliente', `%${org}%`)
                 .order('fecha_emision', { ascending: false })
                 .limit(200)
             if (fErr) throw fErr
 
-            const { data: links, error: lErr } = await supabase
-                .from('crm_entity_links')
-                .select('to_id')
-                .eq('from_type', type)
-                .eq('from_id', item.id)
-                .eq('to_type', 'factura_emitida')
-            if (lErr) console.warn('Error cargando links:', lErr.message)
-
             setFacturas((fData || []) as FacturaRow[])
-            setFacturasLinked(new Set((links || []).map((l: { to_id: string }) => String(l.to_id))))
+            setFacturasLinked(new Set()) // sin vínculos por ahora — FK nativa no es compatible con uuid
             setFacturasLoaded(true)
         } catch (err) {
             const msg = (err as Error).message || 'Error desconocido'
@@ -301,22 +299,8 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
         finally { setFacturasLoading(false) }
     }
 
-    const toggleFacturaLink = async (facturaId: string | number) => {
-        const fid = String(facturaId)
-        const isLinked = facturasLinked.has(fid)
-        try {
-            if (isLinked) {
-                await supabase.from('crm_entity_links')
-                    .delete()
-                    .eq('from_type', type).eq('from_id', item.id)
-                    .eq('to_type', 'factura_emitida').eq('to_id', fid)
-                setFacturasLinked(prev => { const s = new Set(prev); s.delete(fid); return s })
-            } else {
-                await supabase.from('crm_entity_links')
-                    .insert([{ from_type: type, from_id: item.id, to_type: 'factura_emitida', to_id: fid, link_type: 'facturacion' }])
-                setFacturasLinked(prev => new Set([...prev, fid]))
-            }
-        } catch (err) { showToast('Error al vincular: ' + (err as Error).message, 'error') }
+    const toggleFacturaLink = async (_facturaId: string | number) => {
+        showToast('Vinculación directa no disponible — usa el campo cliente para asociar facturas', 'info')
     }
 
     const allTimelineItems = useMemo(() => {
@@ -635,23 +619,17 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                 const visible = q
                                     ? facturas.filter(f =>
                                         (f.folio || '').toLowerCase().includes(q) ||
+                                        (f.numero_factura || '').toLowerCase().includes(q) ||
                                         (f.descripcion || '').toLowerCase().includes(q) ||
-                                        (f.organizacion || '').toLowerCase().includes(q)
+                                        (f.cliente || '').toLowerCase().includes(q)
                                     )
                                     : facturas
-                                const linked = visible.filter(f => facturasLinked.has(String(f.id)))
-                                const unlinked = visible.filter(f => !facturasLinked.has(String(f.id)))
-                                const ticketValor = type === 'keyaccount'
-                                    ? ((formData.uf_mes as number | null) || 0)
-                                    : ((formData.valor_monto as number | null) || 0)
-                                const ticketMoneda = type === 'keyaccount' ? 'UF' : ((formData.valor_moneda as string | null) || 'UF')
-                                const refLabel = type === 'keyaccount' ? 'UF/mes contrato' : 'Valor ticket'
-                                const totalLinkedCLP = linked.reduce((s, f) => s + (f.monto_neto || 0), 0)
-                                const totalLinkedUF = linked.reduce((s, f) => s + (f.monto_uf || 0), 0)
-                                const pct = ticketValor > 0 ? Math.min(100, Math.round((ticketMoneda === 'UF' ? totalLinkedUF : totalLinkedCLP) / ticketValor * 100)) : null
 
+                                const totalCLP = visible.reduce((s, f) => s + (f.total_monto_clp || 0), 0)
+                                const totalUF = visible.reduce((s, f) => s + (f.monto_uf || 0), 0)
+                                const pagadas = visible.filter(f => f.estado === 'Pagada')
                                 const estadoBadge = (e: string) => e === 'Pagada' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : e === 'Pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : e === 'Vencida' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                const fmtMonto = (f: FacturaRow) => f.moneda_principal === 'UF' && f.monto_uf ? `${f.monto_uf} UF` : f.monto_neto ? `$${Math.round(f.monto_neto).toLocaleString('es-CL')}` : '—'
+                                const fmtMonto = (f: FacturaRow) => f.monto_uf ? `${f.monto_uf} UF` : f.total_monto_clp ? `$${Math.round(f.total_monto_clp).toLocaleString('es-CL')}` : '—'
 
                                 return (
                                     <>
@@ -659,77 +637,57 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                         <input
                                             value={facturasBusqueda}
                                             onChange={e => setFacturasBusqueda(e.target.value)}
-                                            placeholder="Buscar por folio, descripción u organización…"
+                                            placeholder="Buscar por folio, descripción o cliente…"
                                             className="w-full px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-100"
                                         />
 
-                                        {/* Resumen cobro */}
-                                        {ticketValor > 0 && (
-                                            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Facturado vs {refLabel}</span>
-                                                    <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
-                                                        {ticketMoneda === 'UF' ? `${totalLinkedUF.toFixed(1)} / ${ticketValor} UF` : `$${Math.round(totalLinkedCLP).toLocaleString('es-CL')} / $${Math.round(ticketValor).toLocaleString('es-CL')}`}
-                                                    </span>
+                                        {/* Resumen */}
+                                        {visible.length > 0 && (
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                                                    <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">Facturas</p>
+                                                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{visible.length}</p>
                                                 </div>
-                                                <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                                                    <div className="bg-verde h-2 rounded-full transition-all" style={{ width: `${pct ?? 0}%` }} />
+                                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                                                    <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">Total UF</p>
+                                                    <p className="text-lg font-bold text-verde">{totalUF.toFixed(1)}</p>
                                                 </div>
-                                                <p className="text-right text-[10px] text-gray-400 mt-1">{pct !== null ? `${pct}% facturado` : 'Sin valor definido'}</p>
+                                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                                                    <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">Pagadas</p>
+                                                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{pagadas.length}</p>
+                                                </div>
                                             </div>
+                                        )}
+                                        {visible.length > 0 && totalCLP > 0 && (
+                                            <p className="text-xs text-gray-400 text-center -mt-1">Total CLP: ${Math.round(totalCLP).toLocaleString('es-CL')}</p>
                                         )}
 
-                                        {/* Facturas vinculadas */}
-                                        {linked.length > 0 && (
-                                            <div>
-                                                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase mb-2">Vinculadas a este ticket ({linked.length})</p>
-                                                <div className="space-y-2">
-                                                    {linked.map(f => (
-                                                        <div key={String(f.id)} className="flex items-center gap-3 bg-white dark:bg-gray-700 rounded-lg px-3 py-2.5 border border-verde/30 dark:border-verde/20">
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center gap-2">
-                                                                    {f.folio && <span className="text-xs font-mono text-gray-500 dark:text-gray-400">#{f.folio}</span>}
-                                                                    <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${estadoBadge(f.estado)}`}>{f.estado}</span>
-                                                                </div>
-                                                                {f.descripcion && <p className="text-xs text-gray-600 dark:text-gray-300 truncate mt-0.5">{f.descripcion}</p>}
-                                                                <p className="text-[10px] text-gray-400 mt-0.5">{f.fecha_emision ? fmtDate(f.fecha_emision) : '—'}{f.fecha_pago ? ` · Pagada ${fmtDate(f.fecha_pago)}` : ''}</p>
-                                                            </div>
-                                                            <span className="text-sm font-semibold text-verde whitespace-nowrap">{fmtMonto(f)}</span>
-                                                            <button onClick={() => toggleFacturaLink(f.id)} className="text-[10px] text-gray-400 hover:text-red-500 transition ml-1" title="Desvincular">✕</button>
+                                        {/* Lista */}
+                                        <div className="space-y-2">
+                                            {visible.map(f => (
+                                                <div key={f.id} className="flex items-center gap-3 bg-white dark:bg-gray-700/50 rounded-lg px-3 py-2.5 border dark:border-gray-700">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            {(f.folio || f.numero_factura) && (
+                                                                <span className="text-xs font-mono text-gray-500 dark:text-gray-400">#{f.folio || f.numero_factura}</span>
+                                                            )}
+                                                            <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${estadoBadge(f.estado)}`}>{f.estado}</span>
                                                         </div>
-                                                    ))}
+                                                        {f.descripcion && <p className="text-xs text-gray-600 dark:text-gray-300 truncate mt-0.5">{f.descripcion}</p>}
+                                                        {f.cliente && <p className="text-[10px] text-gray-400 truncate">{f.cliente}</p>}
+                                                        <p className="text-[10px] text-gray-400 mt-0.5">
+                                                            {f.fecha_emision ? fmtDate(f.fecha_emision) : '—'}
+                                                            {f.fecha_pago ? ` · Pagada ${fmtDate(f.fecha_pago)}` : ''}
+                                                        </p>
+                                                    </div>
+                                                    <span className="text-sm font-semibold text-verde whitespace-nowrap">{fmtMonto(f)}</span>
                                                 </div>
-                                            </div>
-                                        )}
-
-                                        {/* Facturas de la misma org no vinculadas */}
-                                        {unlinked.length > 0 && (
-                                            <div>
-                                                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase mb-2">
-                                                    {linked.length > 0 ? 'Otras facturas de la organización' : 'Facturas de la organización'} ({unlinked.length})
-                                                </p>
-                                                <div className="space-y-1.5">
-                                                    {unlinked.map(f => (
-                                                        <div key={String(f.id)} className="flex items-center gap-3 bg-white dark:bg-gray-700/50 rounded-lg px-3 py-2 border dark:border-gray-700">
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center gap-2">
-                                                                    {f.folio && <span className="text-xs font-mono text-gray-400">#{f.folio}</span>}
-                                                                    <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${estadoBadge(f.estado)}`}>{f.estado}</span>
-                                                                </div>
-                                                                {f.descripcion && <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{f.descripcion}</p>}
-                                                                <p className="text-[10px] text-gray-400 mt-0.5">{f.fecha_emision ? fmtDate(f.fecha_emision) : '—'}</p>
-                                                            </div>
-                                                            <span className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">{fmtMonto(f)}</span>
-                                                            <button onClick={() => toggleFacturaLink(f.id)} className="text-[10px] text-naranja hover:text-naranja/80 transition ml-1 font-medium whitespace-nowrap" title="Vincular a este ticket">+ Vincular</button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                            ))}
+                                        </div>
 
                                         {visible.length === 0 && (
                                             <p className="text-sm text-gray-400 text-center py-6">
-                                                {facturasBusqueda ? 'Sin resultados para esa búsqueda' : 'Sin facturas emitidas registradas'}
+                                                {facturasBusqueda ? 'Sin resultados para esa búsqueda' : 'Sin facturas emitidas para este cliente'}
                                             </p>
                                         )}
                                     </>
