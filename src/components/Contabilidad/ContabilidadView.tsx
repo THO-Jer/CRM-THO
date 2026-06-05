@@ -1135,9 +1135,10 @@ export default function ContabilidadView({
                                                         </div>
                                                     </div>
                                                     <div className="text-sm font-medium dark:text-gray-200">{mejorMatch.descripcion}</div>
-                                                    <div className="text-xs text-gray-500 mt-0.5">
-                                                        ${mejorMatch.monto_clp?.toLocaleString('es-CL')}
-                                                        {(mejorMatch as FinancialRecord).detalle && <span className="ml-2 italic">{String((mejorMatch as FinancialRecord).detalle)}</span>}
+                                                    <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-3">
+                                                        <span>${mejorMatch.monto_clp?.toLocaleString('es-CL')}</span>
+                                                        {mejorMatch.fecha && <span className="text-gray-400">📅 {mejorMatch.fecha}</span>}
+                                                        {(mejorMatch as FinancialRecord).detalle && <span className="italic">{String((mejorMatch as FinancialRecord).detalle)}</span>}
                                                     </div>
                                                     <div className="flex gap-2 mt-2 flex-wrap">
                                                         <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${mejorMatch.descripcion}?`)) { aplicarConciliacion(mov.id, mejorMatch.tipo, mejorMatch.id) } }} className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 font-medium">✓ Aplicar</button>
@@ -1148,7 +1149,7 @@ export default function ContabilidadView({
                                                                         <div key={idx} className="text-xs flex justify-between items-center p-2 bg-white dark:bg-gray-700 rounded gap-2">
                                                                             <div className="flex-1 min-w-0">
                                                                                 <span className="truncate block">{match.descripcion}</span>
-                                                                                <span className="text-gray-400">${match.monto_clp?.toLocaleString('es-CL')} · {Math.round(match.score * 100)}%</span>
+                                                                                <span className="text-gray-400">${match.monto_clp?.toLocaleString('es-CL')} · {Math.round(match.score * 100)}%{match.fecha ? ` · 📅 ${match.fecha}` : ''}</span>
                                                                             </div>
                                                                             <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${match.descripcion}?`)) { aplicarConciliacion(mov.id, match.tipo, match.id) } }} className="px-2 py-1 bg-blue-600 text-white rounded text-xs shrink-0">Aplicar</button>
                                                                         </div>
@@ -1168,7 +1169,7 @@ export default function ContabilidadView({
                                                             <div key={idx} className="text-xs flex justify-between items-center p-2 bg-white dark:bg-gray-700 rounded gap-2">
                                                                 <div className="flex-1 min-w-0">
                                                                     <span className="truncate block dark:text-gray-200">{match.descripcion}</span>
-                                                                    <span className="text-gray-400">${match.monto_clp?.toLocaleString('es-CL')} · {Math.round(match.score * 100)}% confianza</span>
+                                                                    <span className="text-gray-400">${match.monto_clp?.toLocaleString('es-CL')} · {Math.round(match.score * 100)}% confianza{match.fecha ? ` · 📅 ${match.fecha}` : ''}</span>
                                                                 </div>
                                                                 <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${match.descripcion}?`)) { aplicarConciliacion(mov.id, match.tipo, match.id) } }} className="px-2 py-1 bg-gray-600 text-white rounded text-xs shrink-0">Aplicar</button>
                                                             </div>

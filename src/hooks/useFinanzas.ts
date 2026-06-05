@@ -50,10 +50,12 @@ function tokenSimilarity(a: string, b: string): number {
 /**
  * Score de monto: 1.0 si es idéntico, 0 si la diferencia supera `tolerance`.
  * tolerance=0.15 por defecto (15%).
+ * Bonus: si la diferencia es < 0.5%, retorna 1.0 independiente de la tolerancia.
  */
 function scoreAmount(montoCLP: number, montoDoc: number, tolerance = 0.15): number {
     if (!montoCLP || !montoDoc || !isFinite(montoCLP) || !isFinite(montoDoc)) return 0
     const diff = Math.abs(montoCLP - montoDoc) / Math.max(montoCLP, montoDoc)
+    if (diff < 0.005) return 1.0  // monto prácticamente idéntico → score perfecto
     if (diff > tolerance) return 0
     return 1 - diff / tolerance
 }
@@ -75,9 +77,15 @@ function scoreDate(fechaMov: Date, fechaDoc: string | null | undefined, maxDays 
 /**
  * Score compuesto: monto 55%, fecha 30%, texto 15%.
  * Si monto es 0 → score total = 0 (monto es obligatorio).
+ * Si hay buen match de texto (≥0.3), se amplifica su peso a 25% para
+ * diferenciar mejor candidatos con montos similares.
  */
 function compositeScore(sAmt: number, sDate: number, sText: number): number {
     if (sAmt === 0) return 0
+    if (sText >= 0.30) {
+        // Texto significativo → pesos: monto 50%, fecha 25%, texto 25%
+        return sAmt * 0.50 + sDate * 0.25 + sText * 0.25
+    }
     return sAmt * 0.55 + sDate * 0.30 + sText * 0.15
 }
 
@@ -383,6 +391,16 @@ export default function useFinanzas({
         const montoCLP = parseFloat(String(movAny.monto_clp ?? movimiento.monto ?? 0))
         if (!montoCLP || !isFinite(montoCLP)) return { matches: [], sugerenciaCategoria: null }
 
+        // Pre-calcular IDs ya usados en conciliaciones existentes para no sugerir el mismo doc
+        // para múltiples movimientos al mismo tiempo.
+        const yaUsados = new Set<string>()
+        movimientosBancarios.forEach(m => {
+            const mAny = m as unknown as Record<string, unknown>
+            if (mAny.estado_conciliacion === 'conciliado' && mAny.conciliado_con_tipo && mAny.conciliado_con_id) {
+                yaUsados.add(`${mAny.conciliado_con_tipo}:${mAny.conciliado_con_id}`)
+            }
+        })
+
         const tipoStr = String(movAny.tipo || movimiento.tipo || '').toLowerCase()
         const esEntrada = tipoStr === 'entrada' || tipoStr === 'abono'
         const esSalida  = tipoStr === 'salida'  || tipoStr === 'cargo'
@@ -395,7 +413,8 @@ export default function useFinanzas({
         if (esEntrada) {
             facturasEmitidas.forEach(f => {
                 const fAny = f as unknown as Record<string, unknown>
-                if (String(fAny.estado || f.estado) === 'Reclamada') return
+                if (['Reclamada', 'Cobrada'].includes(String(fAny.estado || f.estado))) return
+                if (yaUsados.has(`factura_emitida:${f.id}`)) return
 
                 const montoFac = parseFloat(String(fAny.monto_clp ?? fAny.monto_total ?? 0))
                 const fechaDoc = String(fAny.fecha_pago || f.fecha_emision || fAny.fecha_emision || '')
@@ -407,10 +426,11 @@ export default function useFinanzas({
                 const score = compositeScore(sAmt, sDate, sText)
 
                 if (score >= 0.35) {
+                    const numFacEmi = fAny.numero_factura ?? fAny.folio
                     matches.push({
                         tipo: 'factura_emitida',
                         id: String(f.id),
-                        descripcion: `Factura #${fAny.numero_factura ?? fAny.folio} — ${fAny.cliente ?? fAny.razon_social_receptor ?? ''}`,
+                        descripcion: `Factura ${numFacEmi ? `#${numFacEmi}` : '(sin N°)'} — ${fAny.cliente ?? fAny.razon_social_receptor ?? '(sin cliente)'}`,
                         monto_clp: montoFac,
                         monto_uf: parseFloat(String(f.monto_uf || 0)),
                         fecha: fechaDoc || null,
@@ -425,21 +445,24 @@ export default function useFinanzas({
             facturasRecibidas.forEach(f => {
                 const fAny = f as unknown as Record<string, unknown>
                 if (['Pagada', 'Reclamada'].includes(String(fAny.estado || f.estado))) return
+                if (yaUsados.has(`factura_recibida:${f.id}`)) return
 
                 const montoFac = parseFloat(String(fAny.monto_clp ?? fAny.monto_total ?? 0))
                 const fechaDoc = String(fAny.fecha_pago || f.fecha_emision || fAny.fecha_emision || '')
                 const descDoc  = [fAny.proveedor, fAny.razon_social_proveedor, fAny.rut_proveedor, fAny.numero_factura, fAny.folio, fAny.categoria, f.descripcion].filter(Boolean).join(' ')
 
-                const sAmt  = scoreAmount(montoCLP, montoFac)
+                // IVA-aware: el banco puede haber pagado con o sin IVA incluido (19%)
+                const sAmt  = Math.max(scoreAmount(montoCLP, montoFac), scoreAmount(montoCLP, montoFac * 1.19))
                 const sDate = scoreDate(fechaMov, fechaDoc)
                 const sText = tokenSimilarity(descMov, descDoc)
                 const score = compositeScore(sAmt, sDate, sText)
 
                 if (score >= 0.35) {
+                    const numFacRec = fAny.numero_factura ?? fAny.folio
                     matches.push({
                         tipo: 'factura_recibida',
                         id: String(f.id),
-                        descripcion: `Factura #${fAny.numero_factura ?? fAny.folio} — ${fAny.proveedor ?? fAny.razon_social_proveedor ?? ''}`,
+                        descripcion: `Factura ${numFacRec ? `#${numFacRec}` : '(sin N°)'} — ${fAny.proveedor ?? fAny.razon_social_proveedor ?? '(sin proveedor)'}`,
                         monto_clp: montoFac,
                         monto_uf: parseFloat(String(f.monto_uf || 0)),
                         fecha: fechaDoc || null,
@@ -451,6 +474,7 @@ export default function useFinanzas({
             // ── Salidas → Retiros Socios ──────────────────────────────────
             sueldosSocios.forEach(s => {
                 const sAny = s as unknown as Record<string, unknown>
+                if (yaUsados.has(`sueldo_socio:${s.id}`)) return
                 const montoCLPSocio = parseFloat(String(sAny.monto_clp ?? sAny.monto_liquido ?? s.monto_liquido ?? 0))
                 const fechaDoc      = String(sAny.fecha || sAny.fecha_pago || s.fecha_pago || '')
                 const descDoc       = [s.socio, sAny.mes_servicio, sAny.mes, s.mes, sAny.concepto].filter(Boolean).join(' ')
@@ -478,6 +502,7 @@ export default function useFinanzas({
             // pero también intentamos con bruto por si el pago fue sin retención.
             boletasHonorarios.forEach(b => {
                 const bAny = b as unknown as Record<string, unknown>
+                if (yaUsados.has(`boleta_honorario:${b.id}`)) return
                 const montoBruto   = parseFloat(String(bAny.monto_bruto_clp ?? bAny.monto_bruto ?? b.monto_bruto ?? 0))
                 const montoLiquido = parseFloat(String(bAny.monto_liquido_clp ?? bAny.monto_liquido ?? b.monto_liquido ?? 0))
                 const fechaDoc     = String(bAny.fecha || b.fecha_emision || bAny.fecha_emision || '')
@@ -511,6 +536,7 @@ export default function useFinanzas({
             // ── Salidas → Liquidaciones de Sueldo ───────────────────────
             liquidaciones.forEach(l => {
                 const lAny = l as unknown as Record<string, unknown>
+                if (yaUsados.has(`liquidacion:${l.id}`)) return
                 // Matchear por líquido a pagar (lo que sale del banco)
                 const montoLiquido = parseFloat(String(lAny.liquido_pagar ?? 0))
                 const fechaDoc     = String(lAny.periodo || '')
@@ -538,6 +564,7 @@ export default function useFinanzas({
             // ── Salidas → Caja Chica ya registrada ───────────────────────
             cajaChica.forEach(c => {
                 const cAny = c as unknown as Record<string, unknown>
+                if (yaUsados.has(`caja_chica:${c.id}`)) return
                 const montoCajaChica = parseFloat(String(cAny.monto_clp ?? c.monto ?? 0))
                 const fechaDoc       = String(c.fecha || cAny.fecha || '')
                 const descDoc        = [cAny.concepto, c.descripcion, cAny.categoria, c.categoria].filter(Boolean).join(' ')
