@@ -24,9 +24,10 @@ interface TicketsViewProps {
     onClose?: (t: Ticket) => void
     onFiles?: (tabla: string, id: string, nombre: string) => void
     onDetail?: (t: Ticket) => void
+    onOrgDetail?: (org: string) => void
 }
 
-export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose, onFiles, onDetail }: TicketsViewProps) {
+export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose, onFiles, onDetail, onOrgDetail }: TicketsViewProps) {
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between gap-3">
@@ -53,7 +54,7 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                     <tbody className="divide-y dark:divide-gray-700">
                         {tickets.length === 0 ? <tr><td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos</td></tr> : tickets.map(t => (
                             <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition" onClick={() => onDetail && onDetail(t)}>
-                                <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-naranja transition">{t.organizacion}</td>
+                                <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100" onClick={e => { e.stopPropagation(); onOrgDetail && onOrgDetail(t.organizacion) }}><span className="hover:text-naranja transition cursor-pointer">{t.organizacion}</span></td>
                                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{t.ticket}</td>
                                 <td className="px-6 py-4 text-sm dark:text-gray-300">{t.valor_monto ? (t.valor_moneda === 'CLP' ? `$${Math.round(t.valor_monto).toLocaleString('es-CL')}` : `${t.valor_monto} UF`) : '-'}</td>
                                 <td className="px-6 py-4 text-sm dark:text-gray-300">{t.fase_actual}</td>
@@ -77,7 +78,7 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                 ) : tickets.map(t => (
                     <div key={t.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 cursor-pointer hover:shadow-md transition" onClick={() => onDetail && onDetail(t)}>
                         <div className="flex justify-between items-start mb-2">
-                            <div><h3 className="font-bold dark:text-gray-100">{t.organizacion}</h3><p className="text-sm text-gray-500 dark:text-gray-400">{t.ticket}</p></div>
+                            <div><h3 className="font-bold dark:text-gray-100 hover:text-naranja cursor-pointer" onClick={e => { e.stopPropagation(); onOrgDetail && onOrgDetail(t.organizacion) }}>{t.organizacion}</h3><p className="text-sm text-gray-500 dark:text-gray-400">{t.ticket}</p></div>
                             {t.valor_monto && <span className="text-sm font-medium text-verde">{t.valor_moneda === 'CLP' ? `$${Math.round(t.valor_monto).toLocaleString('es-CL')}` : `${t.valor_monto} UF`}</span>}
                         </div>
                         <div className="flex items-center gap-3 mb-2 text-sm">

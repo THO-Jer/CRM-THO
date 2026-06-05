@@ -25,6 +25,7 @@ interface KeyAccountsViewProps {
     onCancel?: (ka: KeyAccount) => void
     onFiles?: (tabla: string, id: string, nombre: string) => void
     onDetail?: (ka: KeyAccount) => void
+    onOrgDetail?: (org: string) => void
     ufActual?: number
 }
 
@@ -33,7 +34,7 @@ interface OrgGroup {
     services: KeyAccount[]
 }
 
-export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles, onDetail, ufActual = 38000 }: KeyAccountsViewProps) {
+export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles, onDetail, onOrgDetail, ufActual = 38000 }: KeyAccountsViewProps) {
     const totalMRR = keyAccounts.reduce((sum, ka) => sum + (parseFloat(String(ka.uf_mes)) || 0), 0)
     const saludBadge = (s: string) => {
         if (s === 'Excelente' || s === 'Buena') return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
@@ -120,7 +121,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos</div>
                 ) : grouped.map(group => (
                     <div key={group.org} className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                        <div className="px-6 py-4 border-b dark:border-gray-700 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition" onClick={() => onDetail && onDetail(group.services[0])}>
+                        <div className="px-6 py-4 border-b dark:border-gray-700 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition" onClick={() => onOrgDetail ? onOrgDetail(group.org) : onDetail && onDetail(group.services[0])}>
                             <div className="flex items-center gap-3">
                                 <h3 className="font-bold text-gray-900 dark:text-gray-100 hover:text-naranja transition">{group.org}</h3>
                                 {group.services.length > 1 && (
@@ -167,7 +168,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos</div>
                 ) : grouped.map(group => (
                     <div key={group.org} className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                        <div className="p-4 border-b dark:border-gray-700 cursor-pointer" onClick={() => onDetail && onDetail(group.services[0])}>
+                        <div className="p-4 border-b dark:border-gray-700 cursor-pointer" onClick={() => onOrgDetail ? onOrgDetail(group.org) : onDetail && onDetail(group.services[0])}>
                             <div className="flex justify-between items-start">
                                 <div>
                                     <h3 className="font-bold dark:text-gray-100">{group.org}</h3>

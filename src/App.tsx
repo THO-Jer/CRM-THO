@@ -24,6 +24,7 @@ const ReportesView = lazy(() => import('./components/Reportes/ReportesView'))
 const CerradosView = lazy(() => import('./components/Cerrados/CerradosView'))
 const TicketsView = lazy(() => import('./components/Tickets/TicketsView'))
 const KeyAccountsView = lazy(() => import('./components/KeyAccounts/KeyAccountsView'))
+const OrgDetail = lazy(() => import('./components/OrgDetail/OrgDetail'))
 
 import useData from './hooks/useData'
 import useCRMActions from './hooks/useCRMActions'
@@ -321,6 +322,9 @@ function CRMApp() {
         handleSaveOther, handleDeleteOther, handleCloseTicket,
         uploadFile, downloadFile, deleteFile, getFileIcon } = actions;
 
+    const [orgDetailOrg, setOrgDetailOrg] = useState<string | null>(null)
+    const openOrgDetail = (org: string) => setOrgDetailOrg(org)
+
     const { importarCartola, buscarMatches, aplicarConciliacion, crearGastoCajaChica, ignorarMovimiento } = finanzas;
 
     // ESC para los modales inline (Convertir / Renovar). Va DESPUÉS del destructuring
@@ -585,9 +589,9 @@ function CRMApp() {
                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 {activeTab === 'cerrados' && <CerradosView onDetail={(c) => openDetail('cerrado', c)} onConvertClosed={openConvertFromCerrado} onHistory={openHistory} onFiles={openFilesModal} cerrados={filteredCerrados} keyAccounts={activeKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('cerrado'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item as unknown as Record<string, unknown>); setModalType('cerrado'); setShowModal(true); }}} onDelete={(id: string) => handleDeleteOther('cerrado', id)} onExport={() => exportToCSV(cerrados, 'cerrados.csv')} />}
                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                {activeTab === 'tickets' && <TicketsView onDetail={(t) => openDetail('ticket', t)} onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={filteredTickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item as unknown as Record<string, unknown>); setModalType('ticket'); setShowModal(true); }}} onDelete={(id: string) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
+                {activeTab === 'tickets' && <TicketsView onOrgDetail={openOrgDetail} onDetail={(t) => openDetail('ticket', t)} onClose={handleCloseTicket} onHistory={openHistory} onFiles={openFilesModal} tickets={filteredTickets} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('ticket'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item as unknown as Record<string, unknown>); setModalType('ticket'); setShowModal(true); }}} onDelete={(id: string) => handleDeleteOther('ticket', id)} onExport={() => exportToCSV(tickets, 'tickets.csv')} />}
                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                {activeTab === 'keyaccounts' && <KeyAccountsView ufActual={ufActual} onDetail={(k) => openDetail('keyaccount', k)} onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={filteredKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item as unknown as Record<string, unknown>); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id: string) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(filteredKeyAccounts, 'key-accounts.csv')} />}
+                {activeTab === 'keyaccounts' && <KeyAccountsView ufActual={ufActual} onOrgDetail={openOrgDetail} onDetail={(k) => openDetail('keyaccount', k)} onHistory={openHistory} onRenew={openRenewal} onCancel={openCancelKA} onFiles={openFilesModal} keyAccounts={filteredKeyAccounts} onAdd={() => { if (requireAuth()) { setEditingItem(null); setModalType('keyaccount'); setShowModal(true); }}} onEdit={(item) => { if (requireAuth()) { setEditingItem(item as unknown as Record<string, unknown>); setModalType('keyaccount'); setShowModal(true); }}} onDelete={(id: string) => handleDeleteOther('keyaccount', id)} onExport={() => exportToCSV(filteredKeyAccounts, 'key-accounts.csv')} />}
                 </Suspense>
                 )}
             </main>
@@ -732,6 +736,20 @@ function CRMApp() {
             )}
 
             {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
+            {orgDetailOrg && (
+                <Suspense fallback={<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"><TabLoader /></div>}>
+                    <OrgDetail
+                        org={orgDetailOrg}
+                        keyAccounts={keyAccounts}
+                        tickets={tickets}
+                        cerrados={cerrados}
+                        prospectos={prospectos}
+                        ufActual={ufActual}
+                        onClose={() => setOrgDetailOrg(null)}
+                        onOpenDetail={(type, item) => { setOrgDetailOrg(null); openDetail(type, item as never) }}
+                    />
+                </Suspense>
+            )}
             {selectedEntity && (
                 <Suspense fallback={<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"><TabLoader /></div>}>
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
