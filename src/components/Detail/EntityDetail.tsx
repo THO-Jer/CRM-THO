@@ -108,7 +108,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
 
     // Campos que existen en el tipo TS pero no en la tabla de Supabase (schema drift)
     const excludeByType: Record<EntityType, string[]> = {
-        prospecto: [], ticket: [], keyaccount: ['tipo', 'contacto'], cerrado: []
+        prospecto: [], ticket: ['tipo', 'contacto'], keyaccount: ['tipo', 'contacto'], cerrado: []
     }
 
     const handleSave = async () => {
