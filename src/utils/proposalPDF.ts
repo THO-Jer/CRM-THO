@@ -126,7 +126,7 @@ export function generateProposal({
 
     setFill(COLORS.dark); doc.rect(0, H - 20, W, 20, 'F')
     doc.setFontSize(8); setColor(COLORS.lightGray)
-    doc.text('The Human Org SpA  ·  tho.cl  ·  contacto@tho.cl', W / 2, H - 8, { align: 'center' })
+    doc.text('The Human Org SpA  ·  tho.cl  ·  hola@tho.cl', W / 2, H - 8, { align: 'center' })
 
     // ========== PÁGINA 2: DESCRIPCIÓN + ENTREGABLES ==========
     doc.addPage(); y = 30
@@ -206,7 +206,7 @@ export function generateProposal({
     doc.text('6. Contacto', ML, y); y += 3; doc.line(ML, y, ML + 50, y); y += 12
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10); setColor(COLORS.dark)
     doc.text('The Human Org SpA', ML, y); y += 6; setColor(COLORS.gray)
-    doc.text('contacto@tho.cl  ·  tho.cl', ML, y); y += 6; doc.text('Concepción, Chile', ML, y)
+    doc.text('hola@tho.cl  ·  tho.cl', ML, y); y += 6; doc.text('Concepción, Chile', ML, y)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const totalPages = (doc.internal as any).getNumberOfPages()
