@@ -252,7 +252,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     // ── Facturación (solo ticket) ──────────────────────────────────────────
     interface FacturaRow {
         id: string | number; folio: string | null; descripcion: string | null
-        monto_total: number | null; moneda_principal: string | null; monto_uf: number | null
+        monto_neto: number | null; moneda_principal: string | null; monto_uf: number | null
         fecha_emision: string | null; fecha_pago: string | null; estado: string
         organizacion: string | null
     }
@@ -275,7 +275,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
         try {
             const { data: fData, error: fErr } = await supabase
                 .from('facturas_emitidas')
-                .select('id, folio, descripcion, monto_total, moneda_principal, monto_uf, fecha_emision, fecha_pago, estado, organizacion')
+                .select('id, folio, descripcion, monto_neto, moneda_principal, monto_uf, fecha_emision, fecha_pago, estado, organizacion')
                 .order('fecha_emision', { ascending: false })
                 .limit(200)
             if (fErr) throw fErr
@@ -661,12 +661,12 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                     : ((formData.valor_monto as number | null) || 0)
                                 const ticketMoneda = type === 'keyaccount' ? 'UF' : ((formData.valor_moneda as string | null) || 'UF')
                                 const refLabel = type === 'keyaccount' ? 'UF/mes contrato' : 'Valor ticket'
-                                const totalLinkedCLP = linked.reduce((s, f) => s + (f.monto_total || 0), 0)
+                                const totalLinkedCLP = linked.reduce((s, f) => s + (f.monto_neto || 0), 0)
                                 const totalLinkedUF = linked.reduce((s, f) => s + (f.monto_uf || 0), 0)
                                 const pct = ticketValor > 0 ? Math.min(100, Math.round((ticketMoneda === 'UF' ? totalLinkedUF : totalLinkedCLP) / ticketValor * 100)) : null
 
                                 const estadoBadge = (e: string) => e === 'Pagada' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : e === 'Pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : e === 'Vencida' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                const fmtMonto = (f: FacturaRow) => f.moneda_principal === 'UF' && f.monto_uf ? `${f.monto_uf} UF` : f.monto_total ? `$${Math.round(f.monto_total).toLocaleString('es-CL')}` : '—'
+                                const fmtMonto = (f: FacturaRow) => f.moneda_principal === 'UF' && f.monto_uf ? `${f.monto_uf} UF` : f.monto_neto ? `$${Math.round(f.monto_neto).toLocaleString('es-CL')}` : '—'
 
                                 return (
                                     <>
