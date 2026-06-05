@@ -445,7 +445,6 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                     </div>
                                 ))}
                                 {renderField('Fase', sel('fase_actual', ['Kick-off', 'Levantamiento', 'Análisis', 'Entrega', 'Cerrado']))}
-                                {renderField('Avance (%)', inp('porcentaje_avance', 'number', { min: 0, max: 100 }))}
                                 {renderField('Fecha Inicio', inp('fecha_inicio', 'date'))}
                                 {renderField('Fecha Entrega', inp('fecha_entrega', 'date'))}
                                 {renderField('Responsable', inp('responsable'))}

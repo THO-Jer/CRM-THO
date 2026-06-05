@@ -1,5 +1,19 @@
 import type { Ticket } from '../../types'
 
+// % de plazo consumido (fecha_inicio → hoy → fecha_entrega)
+function plazoPct(t: Ticket): { pct: number; label: string; color: string } | null {
+    if (!t.fecha_inicio || !t.fecha_entrega) return null
+    const inicio = new Date(t.fecha_inicio).getTime()
+    const fin = new Date(t.fecha_entrega).getTime()
+    const hoy = Date.now()
+    if (fin <= inicio) return null
+    const pct = Math.round(((hoy - inicio) / (fin - inicio)) * 100)
+    const capped = Math.min(pct, 100)
+    const label = pct > 100 ? `Vencido (${pct}%)` : `${pct}%`
+    const color = pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-naranja' : pct > 60 ? 'bg-yellow-400' : 'bg-verde'
+    return { pct: capped, label, color }
+}
+
 interface TicketsViewProps {
     tickets: Ticket[]
     onAdd: () => void
@@ -31,7 +45,7 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Ticket</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Valor</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fase</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Avance</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Plazo</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Entrega</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acciones</th>
                         </tr>
@@ -43,7 +57,7 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{t.ticket}</td>
                                 <td className="px-6 py-4 text-sm dark:text-gray-300">{t.valor_monto ? (t.valor_moneda === 'CLP' ? `$${Math.round(t.valor_monto).toLocaleString('es-CL')}` : `${t.valor_monto} UF`) : '-'}</td>
                                 <td className="px-6 py-4 text-sm dark:text-gray-300">{t.fase_actual}</td>
-                                <td className="px-6 py-4"><div className="flex items-center"><div className="w-16 bg-gray-200 dark:bg-gray-600 rounded-full h-2 mr-2"><div className="color-naranja h-2 rounded-full" style={{ width: `${t.porcentaje_avance || 0}%` }}></div></div><span className="text-xs dark:text-gray-400">{t.porcentaje_avance || 0}%</span></div></td>
+                                <td className="px-6 py-4">{(() => { const p = plazoPct(t); return p ? <div className="flex items-center gap-2"><div className="w-16 bg-gray-200 dark:bg-gray-600 rounded-full h-2"><div className={`${p.color} h-2 rounded-full`} style={{ width: `${p.pct}%` }} /></div><span className="text-xs dark:text-gray-400 whitespace-nowrap">{p.label}</span></div> : <span className="text-xs text-gray-400">Sin plazo</span> })()}</td>
                                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{t.fecha_entrega}</td>
                                 <td className="px-6 py-4 text-right text-sm space-x-2" onClick={e => e.stopPropagation()}>
                                     <button onClick={() => onFiles && onFiles('tickets', t.id, t.organizacion)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700">📎</button>
@@ -68,7 +82,7 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                         </div>
                         <div className="flex items-center gap-3 mb-2 text-sm">
                             <span className="text-gray-500 dark:text-gray-400">{t.fase_actual}</span>
-                            <div className="flex items-center flex-1"><div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5"><div className="color-naranja h-1.5 rounded-full" style={{ width: `${t.porcentaje_avance || 0}%` }}></div></div><span className="text-xs ml-2 dark:text-gray-400">{t.porcentaje_avance || 0}%</span></div>
+                            {(() => { const p = plazoPct(t); return p ? <div className="flex items-center flex-1"><div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5"><div className={`${p.color} h-1.5 rounded-full`} style={{ width: `${p.pct}%` }} /></div><span className="text-xs ml-2 dark:text-gray-400 whitespace-nowrap">{p.label}</span></div> : <span className="text-xs text-gray-400 flex-1">Sin plazo</span> })()}
                             <span className="text-xs text-gray-400">{t.fecha_entrega}</span>
                         </div>
                         <div className="flex gap-2 pt-2 border-t dark:border-gray-700" onClick={e => e.stopPropagation()}>
