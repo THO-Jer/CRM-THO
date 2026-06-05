@@ -110,7 +110,10 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
 
     // Campos que existen en el tipo TS pero no en la tabla de Supabase (schema drift)
     const excludeByType: Record<EntityType, string[]> = {
-        prospecto: [], ticket: ['tipo', 'contacto'], keyaccount: ['tipo', 'contacto', 'salud', 'notas', 'user_id'], cerrado: ['user_id']
+        prospecto: [],
+        ticket: ['tipo', 'contacto', 'uf_mes', 'inicio_contrato', 'fin_contrato', 'salud', 'notas', 'estado', 'created_by_email', 'user_id'],
+        keyaccount: ['tipo', 'contacto', 'salud', 'notas', 'user_id'],
+        cerrado: ['user_id']
     }
 
     const handleSave = async () => {
@@ -417,10 +420,26 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                 {renderField('Valor', (
                                     <div className="flex gap-2">
                                         <div className="flex-1">{inp('valor_monto', 'number', { step: '0.01' })}</div>
-                                        <select value={formData.valor_moneda ?? 'UF'} onChange={e => update('valor_moneda', e.target.value)} className={cls + ' !w-20 flex-shrink-0'}>
+                                        <select value={formData.valor_moneda ?? 'UF'} onChange={e => {
+                                            const moneda = e.target.value
+                                            update('valor_moneda', moneda)
+                                            // Auto-rellenar uf_dia al cambiar a CLP si no está definido
+                                            if (moneda === 'CLP' && !formData.uf_dia) update('uf_dia', ufActual)
+                                        }} className={cls + ' !w-20 flex-shrink-0'}>
                                             <option value="UF">UF</option>
                                             <option value="CLP">CLP</option>
                                         </select>
+                                    </div>
+                                ))}
+                                {formData.valor_moneda === 'CLP' && renderField('UF del día de registro', (
+                                    <div className="space-y-1">
+                                        {inp('uf_dia', 'number', { step: '0.01', placeholder: String(ufActual) })}
+                                        {formData.uf_dia && formData.valor_monto ? (
+                                            <p className="text-[10px] text-gray-400">
+                                                ≈ {(Number(formData.valor_monto) / Number(formData.uf_dia)).toFixed(2)} UF
+                                                {!formData.uf_dia && <span className="text-naranja ml-1">· auto-rellenado con UF de hoy</span>}
+                                            </p>
+                                        ) : null}
                                     </div>
                                 ))}
                                 {renderField('Fase', sel('fase_actual', ['Kick-off', 'Levantamiento', 'Análisis', 'Entrega', 'Cerrado']))}

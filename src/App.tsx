@@ -596,7 +596,7 @@ function CRMApp() {
                 )}
             </main>
 
-            {showModal && <UniversalModal type={modalType} item={editingItem} onSave={(d) => modalType === 'prospecto' ? handleSaveProspecto(d) : handleSaveOther(modalType, d)} onClose={() => setShowModal(false)} />}
+            {showModal && <UniversalModal type={modalType} item={editingItem} ufActual={ufActual} onSave={(d) => modalType === 'prospecto' ? handleSaveProspecto(d) : handleSaveOther(modalType, d)} onClose={() => setShowModal(false)} />}
 
             {historyOpen && <HistoryModal open={historyOpen} title={historyTitle} items={historyItems} loading={historyLoading} onClose={() => { setHistoryOpen(false); setHistoryItems([]); }} />}
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}

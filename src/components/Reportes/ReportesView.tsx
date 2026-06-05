@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { Chart } from '../../utils/chartSetup'
 import type { Prospecto, Cerrado, Ticket, KeyAccount } from '../../types'
+import { clpToUF } from '../../utils/formatters'
 
 type ChartCanvas = HTMLCanvasElement & { chart?: InstanceType<typeof Chart> | null }
 
@@ -68,7 +69,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                 if (isNaN(tEnd.getTime())) return sum
                 if (tStart > mesEnd || tEnd < mesStart) return sum
                 const monto = parseFloat(String(t.valor_monto)) || 0
-                const montoUF = t.valor_moneda === 'CLP' ? monto / uf : monto
+                const montoUF = t.valor_moneda === 'CLP' ? clpToUF(monto, (t as unknown as Record<string, unknown>).uf_dia, uf) : monto
                 const dur = tEnd.getTime() - tStart.getTime()
                 const totalMonths = Math.max(1, Math.ceil(dur / (30 * 86400000)))
                 if (!isFinite(totalMonths)) return sum
@@ -185,7 +186,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
 
     const totalPipeline = Math.round(prospectosActivos.reduce((s, p) => s + (parseFloat(String(p.valor)) || 0), 0))
     const mrrActual = Math.round(keyAccounts.reduce((s, ka) => s + (parseFloat(String(ka.uf_mes)) || 0), 0))
-    const ticketsValor = Math.round(tickets.reduce((s, t) => { const m = parseFloat(String(t.valor_monto)) || 0; return s + (t.valor_moneda === 'CLP' ? m / (ufActual || 38000) : m) }, 0))
+    const ticketsValor = Math.round(tickets.reduce((s, t) => { const m = parseFloat(String(t.valor_monto)) || 0; return s + (t.valor_moneda === 'CLP' ? clpToUF(m, (t as unknown as Record<string, unknown>).uf_dia, ufActual || 38000) : m) }, 0))
     const razonesPerdida = useMemo(() => {
         const r: Record<string, number> = {}
         cerrados.filter(c => c.estado_final === 'Perdido').forEach(c => { const k = c.razon_perdida || 'Sin especificar'; r[k] = (r[k] || 0) + 1 })

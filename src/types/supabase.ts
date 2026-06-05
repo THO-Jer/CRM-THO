@@ -97,6 +97,7 @@ export interface Ticket {
   responsable: string | null
   valor_monto: number | null         // valor monetario del ticket
   valor_moneda: string | null        // 'UF' | 'CLP' | 'USD'
+  uf_dia: number | null              // UF del día en que se registró el valor (para conversión estable)
   uf_mes: number | null
   inicio_contrato: DateString | null
   fin_contrato: DateString | null

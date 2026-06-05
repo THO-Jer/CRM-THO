@@ -1,5 +1,16 @@
 import type { Ticket } from '../../types'
 
+// Formatea el valor del ticket usando uf_dia almacenado para la conversión estable
+function fmtValorTicket(t: Ticket): { principal: string; referencia: string | null } {
+    if (!t.valor_monto) return { principal: '—', referencia: null }
+    if (t.valor_moneda === 'CLP') {
+        const clp = `$${Math.round(t.valor_monto).toLocaleString('es-CL')}`
+        const ref = t.uf_dia ? `~${(t.valor_monto / t.uf_dia).toFixed(1)} UF` : null
+        return { principal: clp, referencia: ref }
+    }
+    return { principal: `${t.valor_monto} UF`, referencia: null }
+}
+
 // % de plazo consumido (fecha_inicio → hoy → fecha_entrega)
 function plazoPct(t: Ticket): { pct: number; label: string; color: string } | null {
     if (!t.fecha_inicio || !t.fecha_entrega) return null
@@ -56,7 +67,7 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                             <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition" onClick={() => onDetail && onDetail(t)}>
                                 <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100" onClick={e => { e.stopPropagation(); onOrgDetail && onOrgDetail(t.organizacion) }}><span className="hover:text-naranja transition cursor-pointer">{t.organizacion}</span></td>
                                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{t.ticket}</td>
-                                <td className="px-6 py-4 text-sm dark:text-gray-300">{t.valor_monto ? (t.valor_moneda === 'CLP' ? `$${Math.round(t.valor_monto).toLocaleString('es-CL')}` : `${t.valor_monto} UF`) : '-'}</td>
+                                <td className="px-6 py-4 text-sm dark:text-gray-300">{(() => { const v = fmtValorTicket(t); return <span>{v.principal}{v.referencia && <span className="text-xs text-gray-400 ml-1">{v.referencia}</span>}</span> })()}</td>
                                 <td className="px-6 py-4 text-sm dark:text-gray-300">{t.fase_actual}</td>
                                 <td className="px-6 py-4">{(() => { const p = plazoPct(t); return p ? <div className="flex items-center gap-2"><div className="w-16 bg-gray-200 dark:bg-gray-600 rounded-full h-2"><div className={`${p.color} h-2 rounded-full`} style={{ width: `${p.pct}%` }} /></div><span className="text-xs dark:text-gray-400 whitespace-nowrap">{p.label}</span></div> : <span className="text-xs text-gray-400">Sin plazo</span> })()}</td>
                                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{t.fecha_entrega}</td>
@@ -79,7 +90,7 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                     <div key={t.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 cursor-pointer hover:shadow-md transition" onClick={() => onDetail && onDetail(t)}>
                         <div className="flex justify-between items-start mb-2">
                             <div><h3 className="font-bold dark:text-gray-100 hover:text-naranja cursor-pointer" onClick={e => { e.stopPropagation(); onOrgDetail && onOrgDetail(t.organizacion) }}>{t.organizacion}</h3><p className="text-sm text-gray-500 dark:text-gray-400">{t.ticket}</p></div>
-                            {t.valor_monto && <span className="text-sm font-medium text-verde">{t.valor_moneda === 'CLP' ? `$${Math.round(t.valor_monto).toLocaleString('es-CL')}` : `${t.valor_monto} UF`}</span>}
+                            {t.valor_monto && (() => { const v = fmtValorTicket(t); return <div className="text-right"><span className="text-sm font-medium text-verde">{v.principal}</span>{v.referencia && <p className="text-[10px] text-gray-400">{v.referencia}</p>}</div> })()}
                         </div>
                         <div className="flex items-center gap-3 mb-2 text-sm">
                             <span className="text-gray-500 dark:text-gray-400">{t.fase_actual}</span>

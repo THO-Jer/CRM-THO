@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { clpToUF } from '../../utils/formatters'
 import { parseLiquidacionPDF } from '../../utils/parseLiquidacionPDF'
 import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
@@ -304,8 +305,9 @@ export default function ContabilidadView({
     const totalEmitidas = facturasEmiAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0)
     const totalRecibidas = facturasRecAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0)
     const totalBoletas = boletasAct.reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
-    const totalCajaChica = cajaAct.reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0)
-    const margen = totalEmitidas - totalRecibidas - totalBoletas - (totalCajaChica / (ufActual || 38000))
+    const totalCajaChicaUF = cajaAct.reduce((sum, c) => sum + clpToUF(c.monto_clp, c.uf_dia, ufActual || 38000), 0)
+    const totalCajaChica = cajaAct.reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0) // CLP puro para display
+    const margen = totalEmitidas - totalRecibidas - totalBoletas - totalCajaChicaUF
 
     const exportarSueldosExcel = (sueldos: FinancialRecord[], _periodo: string) => {
         const datosExport = sueldos.map(s => ({
@@ -387,7 +389,7 @@ export default function ContabilidadView({
                         const honorariosActual = boletasAct.reduce((s, b) => s + montoUFBoleta(b), 0)
                         const liquidacionesActual = liquidacionesAct.reduce((s, l) => s + montoUFLiquidacion(l), 0)
                         const retenciones = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0)
-                        const cajaActual = cajaAct.reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
+                        const cajaActual = cajaAct.reduce((s, c) => s + clpToUF(c.monto_clp, c.uf_dia, ufActual || 38000), 0)
                         const flujoNeto = emitidaActual - gastosActual - honorariosActual - liquidacionesActual - cajaActual
 
                         const largo = rango.hasta.getTime() - rango.desde.getTime()
@@ -406,7 +408,7 @@ export default function ContabilidadView({
                         const gastosRecAnt = facturasRecibidas.filter(f => f.estado !== 'Reclamada' && estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                         const honorariosAnt = boletasHonorarios.filter(b => estEnPrev(b.fecha)).reduce((s, b) => s + montoUFBoleta(b), 0)
                         const liquidacionesAnt = liquidaciones.filter(l => estEnPrev(l.periodo)).reduce((s, l) => s + montoUFLiquidacion(l), 0)
-                        const cajaAnt = cajaChica.filter(c => estEnPrev(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
+                        const cajaAnt = cajaChica.filter(c => estEnPrev(c.fecha)).reduce((s, c) => s + clpToUF(c.monto_clp, c.uf_dia, ufActual || 38000), 0)
                         const gastosAnterior = gastosRecAnt + honorariosAnt + liquidacionesAnt + cajaAnt
 
                         // Fix: respetar rango de fechas para por cobrar/pagar
@@ -432,7 +434,7 @@ export default function ContabilidadView({
                                 const gas = facturasRecibidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
                                 const hon = boletasHonorarios.filter(b => estEnMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
                                 const liq = liquidaciones.filter(l => estEnMes(l.periodo)).reduce((s, l) => s + (parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0), 0)
-                                const caj = cajaChica.filter(c => estEnMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
+                                const caj = cajaChica.filter(c => estEnMes(c.fecha)).reduce((s, c) => s + clpToUF(c.monto_clp, c.uf_dia, ufActual || 38000), 0)
                                 result.push({ label, ingresos: Math.round(ing), gastos: Math.round(gas + hon + liq + caj) })
                                 m++
                                 if (m > 11) { m = 0; y++ }
@@ -1270,7 +1272,7 @@ export default function ContabilidadView({
                                 const sueldos = sueldosSocios.filter(s => inMes(s.fecha)).reduce((s, sv) => s + (parseFloat(sv.monto_uf) || 0), 0)
                                 const liquidacionesMes = liquidaciones.filter(l => inMes(l.periodo)).reduce((s, l) => s + (parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0), 0)
                                 const retenciones = boletasHonorarios.filter(b => inMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0)
-                                const cajaChicaUF = cajaChica.filter(c => inMes(c.fecha)).reduce((s, c) => s + (parseFloat(c.monto_clp) || 0), 0) / (ufActual || 38000)
+                                const cajaChicaUF = cajaChica.filter(c => inMes(c.fecha)).reduce((s, c) => s + clpToUF(c.monto_clp, c.uf_dia, ufActual || 38000), 0)
                                 const totalGastos = gastos + honorarios + sueldos + liquidacionesMes + cajaChicaUF
                                 const utilidadOperacional = emitidas - totalGastos
                                 meses.push({ mes: mesNombre, emitidas: Math.round(emitidas * 10) / 10, gastos: Math.round(gastos * 10) / 10, honorarios: Math.round(honorarios * 10) / 10, sueldos: Math.round(sueldos * 10) / 10, liquidaciones: Math.round(liquidacionesMes * 10) / 10, cajaChica: Math.round(cajaChicaUF * 10) / 10, retenciones: Math.round(retenciones * 10) / 10, utilidadOperacional: Math.round(utilidadOperacional * 10) / 10, utilidadNeta: Math.round(utilidadOperacional * 10) / 10 })

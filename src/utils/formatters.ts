@@ -18,6 +18,22 @@ export function formatUF(amount: number | string | null | undefined): string {
     return n.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' UF';
 }
 
+/**
+ * Convierte CLP a UF usando la tasa almacenada en el registro (uf_dia).
+ * Si el registro no tiene uf_dia (datos históricos sin tasa), usa ufFallback como aproximación.
+ * Regla: NUNCA usar la UF de hoy para convertir registros históricos.
+ */
+export function clpToUF(
+    monto_clp: unknown,
+    uf_dia: unknown,
+    ufFallback: number
+): number {
+    const monto = toFiniteNumber(monto_clp) ?? 0
+    const tasa = toFiniteNumber(uf_dia)
+    const divisor = (tasa && tasa > 0) ? tasa : ufFallback
+    return divisor > 0 ? monto / divisor : 0
+}
+
 export function formatDate(dateStr: string | null | undefined): string {
     if (!dateStr) return '-';
     const d = new Date(dateStr);

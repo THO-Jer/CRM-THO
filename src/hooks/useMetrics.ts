@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from 'react'
 import type { Prospecto, Cerrado, Ticket, KeyAccount } from '../types'
+import { clpToUF } from '../utils/formatters'
 
 // Constantes fuera del hook para evitar recrear arrays/objetos en cada render.
 const ESTADOS_KANBAN = [
@@ -46,7 +47,7 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
         const valorTickets = tickets.reduce((sum, t) => {
             const tAny = t as unknown as Record<string, unknown>
             const monto = parseFloat(String(tAny.valor_monto)) || 0
-            return sum + (tAny.valor_moneda === 'CLP' ? monto / ufSeguro : monto)
+            return sum + (tAny.valor_moneda === 'CLP' ? clpToUF(monto, tAny.uf_dia, ufSeguro) : monto)
         }, 0)
 
         const prospectosActivos = prospectos.filter(p => p.estado !== 'Convertido')

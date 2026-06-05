@@ -14,6 +14,7 @@ interface UniversalModalProps {
     item?: FormData | null
     onSave: (data: FormData) => Promise<void>
     onClose: () => void
+    ufActual?: number
 }
 
 const getDefault = (type: ModalType): FormData => {
@@ -24,7 +25,8 @@ const getDefault = (type: ModalType): FormData => {
     return { organizacion: '', servicio: 'RC Nivel 3', uf_mes: '', inicio_contrato: '', fin_contrato: '', renovacion: 'Por definir', salud: 'Buena' }
 }
 
-export default function UniversalModal({ type, item, onSave, onClose }: UniversalModalProps) {
+export default function UniversalModal({ type, item, onSave, onClose, ufActual = 38000 }: UniversalModalProps) {
+    const ufHoy = ufActual
     useEscapeKey(onClose)
     const [formData, setFormData] = useState<FormData>(item || getDefault(type))
     const [saving, setSaving] = useState(false)
@@ -108,11 +110,19 @@ export default function UniversalModal({ type, item, onSave, onClose }: Universa
                                 <InputField label="Fecha Inicio" type="date" required value={formData.fecha_inicio} onChange={(e) => set({ fecha_inicio: e.target.value })} />
                                 <InputField label="Fecha Entrega" type="date" required value={formData.fecha_entrega} onChange={(e) => set({ fecha_entrega: e.target.value })} />
                             </div>
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 gap-4">
                                 <InputField label="Valor" type="number" step="0.01" min="0" required value={formData.valor_monto || 0} onChange={(e) => set({ valor_monto: parseFloat(e.target.value) || 0 })} />
-                                <SelectField label="Moneda" required value={formData.valor_moneda || 'UF'} onChange={(e) => set({ valor_moneda: e.target.value })} options={['UF', 'CLP']} />
-                                <InputField label="% Avance" type="number" min="0" max="100" required value={formData.porcentaje_avance} onChange={(e) => set({ porcentaje_avance: parseInt(e.target.value) || 0 })} />
+                                <SelectField label="Moneda" required value={formData.valor_moneda || 'UF'} onChange={(e) => {
+                                    const moneda = e.target.value
+                                    set({ valor_moneda: moneda, ...(moneda === 'CLP' && !formData.uf_dia ? { uf_dia: ufHoy } : {}) })
+                                }} options={['UF', 'CLP']} />
                             </div>
+                            {formData.valor_moneda === 'CLP' && (
+                                <div className="grid grid-cols-1 gap-1">
+                                    <InputField label="UF del día de registro" type="number" step="0.01" min="0" value={formData.uf_dia || ufHoy} onChange={(e) => set({ uf_dia: parseFloat(e.target.value) || 0 })} />
+                                    {formData.uf_dia && formData.valor_monto ? <p className="text-xs text-gray-400">≈ {(formData.valor_monto / formData.uf_dia).toFixed(2)} UF</p> : null}
+                                </div>
+                            )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <SelectField label="Fase" required value={formData.fase_actual} onChange={(e) => set({ fase_actual: e.target.value })} options={['Kick-off', 'Levantamiento', 'Análisis', 'Entrega', 'Cerrado']} />
                                 <InputField label="Responsable" value={formData.responsable || ''} onChange={(e) => set({ responsable: e.target.value })} />
