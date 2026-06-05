@@ -106,12 +106,19 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
 
     const update = (field: string, value: unknown) => { setFormData((prev: FormData) => ({ ...prev, [field]: value })); setDirty(true) }
 
+    // Campos que existen en el tipo TS pero no en la tabla de Supabase (schema drift)
+    const excludeByType: Record<EntityType, string[]> = {
+        prospecto: [], ticket: [], keyaccount: ['tipo', 'contacto'], cerrado: []
+    }
+
     const handleSave = async () => {
         setSaving(true)
         const table = tableMap[type]
         const { id, created_at, updated_at, created_by_email, ...rest } = formData
         void created_at; void updated_at; void created_by_email
-        const { error } = await supabase.from(table).update(rest).eq('id', id)
+        const excluded = excludeByType[type] || []
+        const payload = Object.fromEntries(Object.entries(rest).filter(([k]) => !excluded.includes(k)))
+        const { error } = await supabase.from(table).update(payload).eq('id', id)
         if (error) { showToast('Error al guardar: ' + (error.message || 'desconocido'), 'error'); console.error(error) }
         else { showToast('Guardado ✓', 'success'); setDirty(false); onRefresh() }
         setSaving(false)
