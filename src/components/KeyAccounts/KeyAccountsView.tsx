@@ -147,6 +147,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                                     </div>
                                     <span className="text-sm dark:text-gray-300 font-medium whitespace-nowrap">{ka.uf_mes} UF</span>
                                     <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition">
+                                        <button onClick={() => onDetail && onDetail(ka)} className="p-1 text-gray-400 hover:text-naranja dark:hover:text-naranja rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm" title="Editar">✏️</button>
                                         <button onClick={() => onFiles && onFiles('key_accounts', ka.id, ka.organizacion)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm">📎</button>
                                         <button onClick={() => onRenew && onRenew(ka)} className="p-1 text-verde hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition text-xs">Renovar</button>
                                         <button onClick={() => onCancel && onCancel(ka)} className="p-1 text-naranja hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition text-xs">Cancelar</button>
@@ -185,6 +186,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                                     <span className="text-sm dark:text-gray-300">{ka.uf_mes} UF</span>
                                 </div>
                                 <div className="flex gap-2 mt-2">
+                                    <button onClick={() => onDetail && onDetail(ka)} className="flex-1 text-xs py-1 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition">✏️</button>
                                     <button onClick={() => onFiles && onFiles('key_accounts', ka.id, ka.organizacion)} className="flex-1 text-xs py-1 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition">📎</button>
                                     <button onClick={() => onRenew && onRenew(ka)} className="flex-1 text-xs py-1 text-verde hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition">Renovar</button>
                                     <button onClick={() => onCancel && onCancel(ka)} className="flex-1 text-xs py-1 text-naranja hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition">Cancelar</button>
