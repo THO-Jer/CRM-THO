@@ -219,6 +219,95 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     }
 
     // Merge notas + lifecycle events chronologically (ascending = oldest first)
+    // ── Historial de contratos (solo keyaccount) ──────────────────────────
+    interface RenewalRecord {
+        id: string; key_account_id: string; start_date: string | null; end_date: string | null
+        uf_mes: number | null; status: string; cancel_reason: string | null; notes: string | null; created_at: string | null
+    }
+    const [contracts, setContracts] = useState<RenewalRecord[]>([])
+    const [contractsLoading, setContractsLoading] = useState(false)
+    const [contractsLoaded, setContractsLoaded] = useState(false)
+
+    useEffect(() => {
+        if (activeSection !== 'contratos' || contractsLoaded || type !== 'keyaccount') return
+        void loadContracts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeSection])
+
+    const loadContracts = async () => {
+        setContractsLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from('crm_renewals')
+                .select('id, key_account_id, start_date, end_date, uf_mes, status, cancel_reason, notes, created_at')
+                .eq('key_account_id', item.id)
+                .order('start_date', { ascending: true })
+            if (error) throw error
+            setContracts((data || []) as RenewalRecord[])
+            setContractsLoaded(true)
+        } catch (err) { console.error('Error cargando contratos:', err) }
+        finally { setContractsLoading(false) }
+    }
+
+    // ── Facturación (solo ticket) ──────────────────────────────────────────
+    interface FacturaRow {
+        id: string | number; folio: string | null; descripcion: string | null
+        monto_total: number | null; moneda_principal: string | null; monto_uf: number | null
+        fecha_emision: string | null; fecha_pago: string | null; estado: string
+        organizacion: string | null
+    }
+    const [facturas, setFacturas] = useState<FacturaRow[]>([])
+    const [facturasLinked, setFacturasLinked] = useState<Set<string>>(new Set())
+    const [facturasLoading, setFacturasLoading] = useState(false)
+    const [facturasLoaded, setFacturasLoaded] = useState(false)
+
+    useEffect(() => {
+        if (activeSection !== 'facturacion' || facturasLoaded || type !== 'ticket') return
+        void loadFacturacion()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeSection])
+
+    const loadFacturacion = async () => {
+        setFacturasLoading(true)
+        try {
+            const org = (item as { organizacion?: string }).organizacion || ''
+            const [{ data: fData }, { data: links }] = await Promise.all([
+                supabase.from('facturas_emitidas')
+                    .select('id, folio, descripcion, monto_total, moneda_principal, monto_uf, fecha_emision, fecha_pago, estado, organizacion')
+                    .ilike('organizacion', `%${org}%`)
+                    .order('fecha_emision', { ascending: false })
+                    .limit(50),
+                supabase.from('crm_entity_links')
+                    .select('to_id')
+                    .eq('from_type', 'ticket')
+                    .eq('from_id', item.id)
+                    .eq('to_type', 'factura_emitida')
+            ])
+            setFacturas((fData || []) as FacturaRow[])
+            setFacturasLinked(new Set((links || []).map((l: { to_id: string }) => String(l.to_id))))
+            setFacturasLoaded(true)
+        } catch (err) { console.error('Error cargando facturas:', err) }
+        finally { setFacturasLoading(false) }
+    }
+
+    const toggleFacturaLink = async (facturaId: string | number) => {
+        const fid = String(facturaId)
+        const isLinked = facturasLinked.has(fid)
+        try {
+            if (isLinked) {
+                await supabase.from('crm_entity_links')
+                    .delete()
+                    .eq('from_type', 'ticket').eq('from_id', item.id)
+                    .eq('to_type', 'factura_emitida').eq('to_id', fid)
+                setFacturasLinked(prev => { const s = new Set(prev); s.delete(fid); return s })
+            } else {
+                await supabase.from('crm_entity_links')
+                    .insert([{ from_type: 'ticket', from_id: item.id, to_type: 'factura_emitida', to_id: fid, link_type: 'facturacion' }])
+                setFacturasLinked(prev => new Set([...prev, fid]))
+            }
+        } catch (err) { showToast('Error al vincular: ' + (err as Error).message, 'error') }
+    }
+
     const allTimelineItems = useMemo(() => {
         const notaItems = [...entityNotas].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
         const merged: Array<{ kind: 'nota'; data: Nota } | { kind: 'lc'; data: LifecycleItem }> = [
@@ -243,6 +332,8 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
         { id: 'ficha', label: '📄 Ficha' },
         { id: 'timeline', label: '📋 Timeline', count: entityNotas.length + lifecycleItems.length },
         { id: 'contactos', label: '👤 Contactos', count: entityContactos.length },
+        ...(type === 'keyaccount' ? [{ id: 'contratos', label: '📜 Contratos', count: contractsLoaded ? contracts.length : undefined }] : []),
+        ...(type === 'ticket' ? [{ id: 'facturacion', label: '💰 Facturación', count: facturasLoaded ? facturasLinked.size : undefined }] : []),
     ]
 
     // Render helpers (functions, NOT components — avoids remount/focus-loss)
@@ -530,6 +621,182 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                     ))}
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* FACTURACIÓN (solo ticket) */}
+                    {activeSection === 'facturacion' && type === 'ticket' && (
+                        <div className="space-y-4">
+                            {facturasLoading && <p className="text-xs text-gray-400 text-center py-4 animate-pulse">Cargando facturas…</p>}
+
+                            {!facturasLoading && (() => {
+                                const linked = facturas.filter(f => facturasLinked.has(String(f.id)))
+                                const unlinked = facturas.filter(f => !facturasLinked.has(String(f.id)))
+                                const ticketValor = (formData.valor_monto as number | null) || 0
+                                const ticketMoneda = (formData.valor_moneda as string | null) || 'UF'
+                                const totalLinkedCLP = linked.reduce((s, f) => s + (f.monto_total || 0), 0)
+                                const totalLinkedUF = linked.reduce((s, f) => s + (f.monto_uf || 0), 0)
+                                const pct = ticketValor > 0 ? Math.min(100, Math.round((ticketMoneda === 'UF' ? totalLinkedUF : totalLinkedCLP) / ticketValor * 100)) : null
+
+                                const estadoBadge = (e: string) => e === 'Pagada' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : e === 'Pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : e === 'Vencida' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                const fmtMonto = (f: FacturaRow) => f.moneda_principal === 'UF' && f.monto_uf ? `${f.monto_uf} UF` : f.monto_total ? `$${Math.round(f.monto_total).toLocaleString('es-CL')}` : '—'
+
+                                return (
+                                    <>
+                                        {/* Resumen cobro */}
+                                        {ticketValor > 0 && (
+                                            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Cobrado vs Valor ticket</span>
+                                                    <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                                                        {ticketMoneda === 'UF' ? `${totalLinkedUF.toFixed(1)} / ${ticketValor} UF` : `$${Math.round(totalLinkedCLP).toLocaleString('es-CL')} / $${Math.round(ticketValor).toLocaleString('es-CL')}`}
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                                    <div className="bg-verde h-2 rounded-full transition-all" style={{ width: `${pct ?? 0}%` }} />
+                                                </div>
+                                                <p className="text-right text-[10px] text-gray-400 mt-1">{pct !== null ? `${pct}% facturado` : 'Sin valor definido'}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Facturas vinculadas */}
+                                        {linked.length > 0 && (
+                                            <div>
+                                                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase mb-2">Vinculadas a este ticket ({linked.length})</p>
+                                                <div className="space-y-2">
+                                                    {linked.map(f => (
+                                                        <div key={String(f.id)} className="flex items-center gap-3 bg-white dark:bg-gray-700 rounded-lg px-3 py-2.5 border border-verde/30 dark:border-verde/20">
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2">
+                                                                    {f.folio && <span className="text-xs font-mono text-gray-500 dark:text-gray-400">#{f.folio}</span>}
+                                                                    <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${estadoBadge(f.estado)}`}>{f.estado}</span>
+                                                                </div>
+                                                                {f.descripcion && <p className="text-xs text-gray-600 dark:text-gray-300 truncate mt-0.5">{f.descripcion}</p>}
+                                                                <p className="text-[10px] text-gray-400 mt-0.5">{f.fecha_emision ? fmtDate(f.fecha_emision) : '—'}{f.fecha_pago ? ` · Pagada ${fmtDate(f.fecha_pago)}` : ''}</p>
+                                                            </div>
+                                                            <span className="text-sm font-semibold text-verde whitespace-nowrap">{fmtMonto(f)}</span>
+                                                            <button onClick={() => toggleFacturaLink(f.id)} className="text-[10px] text-gray-400 hover:text-red-500 transition ml-1" title="Desvincular">✕</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Facturas de la misma org no vinculadas */}
+                                        {unlinked.length > 0 && (
+                                            <div>
+                                                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase mb-2">
+                                                    {linked.length > 0 ? 'Otras facturas de la organización' : 'Facturas de la organización'} ({unlinked.length})
+                                                </p>
+                                                <div className="space-y-1.5">
+                                                    {unlinked.map(f => (
+                                                        <div key={String(f.id)} className="flex items-center gap-3 bg-white dark:bg-gray-700/50 rounded-lg px-3 py-2 border dark:border-gray-700">
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2">
+                                                                    {f.folio && <span className="text-xs font-mono text-gray-400">#{f.folio}</span>}
+                                                                    <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${estadoBadge(f.estado)}`}>{f.estado}</span>
+                                                                </div>
+                                                                {f.descripcion && <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{f.descripcion}</p>}
+                                                                <p className="text-[10px] text-gray-400 mt-0.5">{f.fecha_emision ? fmtDate(f.fecha_emision) : '—'}</p>
+                                                            </div>
+                                                            <span className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">{fmtMonto(f)}</span>
+                                                            <button onClick={() => toggleFacturaLink(f.id)} className="text-[10px] text-naranja hover:text-naranja/80 transition ml-1 font-medium whitespace-nowrap" title="Vincular a este ticket">+ Vincular</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {facturas.length === 0 && (
+                                            <p className="text-sm text-gray-400 text-center py-6">Sin facturas registradas para esta organización</p>
+                                        )}
+                                    </>
+                                )
+                            })()}
+                        </div>
+                    )}
+
+                    {/* CONTRATOS (solo keyaccount) */}
+                    {activeSection === 'contratos' && type === 'keyaccount' && (
+                        <div className="space-y-4">
+                            {contractsLoading && <p className="text-xs text-gray-400 text-center py-4 animate-pulse">Cargando historial…</p>}
+
+                            {!contractsLoading && contracts.length === 0 && (
+                                <p className="text-sm text-gray-400 text-center py-8">Sin contratos registrados</p>
+                            )}
+
+                            {contracts.length > 0 && (() => {
+                                // Métricas resumen
+                                const active = contracts.find(c => c.status === 'active')
+                                const allUF = contracts.map(c => c.uf_mes || 0)
+                                const minUF = Math.min(...allUF)
+                                const maxUF = Math.max(...allUF)
+                                const firstStart = contracts[0]?.start_date
+                                const totalMeses = contracts.reduce((acc, c) => {
+                                    if (!c.start_date || !c.end_date) return acc
+                                    const diff = (new Date(c.end_date).getTime() - new Date(c.start_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
+                                    return acc + Math.round(diff)
+                                }, 0)
+                                const statusBadge = (s: string) => s === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : s === 'renewed' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                const statusLabel = (s: string) => ({ active: 'Activo', renewed: 'Renovado', cancelled: 'Cancelado' }[s] || s)
+
+                                return (
+                                    <>
+                                        {/* Resumen */}
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                                                <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">Períodos</p>
+                                                <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{contracts.length}</p>
+                                            </div>
+                                            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                                                <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">Meses total</p>
+                                                <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{totalMeses}</p>
+                                            </div>
+                                            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                                                <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">UF rango</p>
+                                                <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{minUF === maxUF ? `${minUF}` : `${minUF}–${maxUF}`}</p>
+                                            </div>
+                                        </div>
+                                        {firstStart && (
+                                            <p className="text-xs text-gray-400 text-center -mt-1">
+                                                Cliente desde {fmtDate(firstStart)}
+                                                {active && <span className="text-verde ml-2">· Contrato activo</span>}
+                                            </p>
+                                        )}
+
+                                        {/* Lista de contratos */}
+                                        <div className="space-y-2">
+                                            {[...contracts].reverse().map((c, idx) => (
+                                                <div key={c.id} className={`rounded-xl border p-4 ${c.status === 'active' ? 'border-verde/40 bg-green-50/50 dark:bg-green-900/10 dark:border-verde/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/40'}`}>
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className={`px-2 py-0.5 text-[10px] rounded-full font-medium ${statusBadge(c.status)}`}>{statusLabel(c.status)}</span>
+                                                                {idx === contracts.length - 1 && contracts.length > 1 && (
+                                                                    <span className="text-[10px] text-gray-400">Contrato más reciente</span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                                {c.start_date ? fmtDate(c.start_date) : '—'} → {c.end_date ? fmtDate(c.end_date) : '—'}
+                                                            </p>
+                                                            {c.cancel_reason && (
+                                                                <p className="text-xs text-red-500 mt-1">Motivo: {c.cancel_reason}</p>
+                                                            )}
+                                                            {c.notes && (
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">{c.notes}</p>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-right flex-shrink-0">
+                                                            <p className="text-lg font-bold text-verde">{c.uf_mes}</p>
+                                                            <p className="text-[10px] text-gray-400">UF/mes</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )
+                            })()}
                         </div>
                     )}
                 </div>
