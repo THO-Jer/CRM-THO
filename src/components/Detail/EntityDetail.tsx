@@ -254,19 +254,24 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
         finally { setContractsLoading(false) }
     }
 
-    // ── Facturación (solo ticket) ──────────────────────────────────────────
+    // ── Facturación (ticket y keyaccount) ────────────────────────────────────
     interface FacturaRow {
         id: number; folio: string | null; numero_factura: string | null; descripcion: string | null
         total_monto_clp: number | null; monto_uf: number | null
         fecha_emision: string | null; fecha_pago: string | null; estado: string
-        cliente: string | null
+        cliente: string | null; crm_ticket_id: string | null; crm_ka_id: string | null
     }
-    const [facturas, setFacturas] = useState<FacturaRow[]>([])
-    const [facturasLinked, setFacturasLinked] = useState<Set<string>>(new Set())
+    const SELECT_FACTURA = 'id, folio, numero_factura, descripcion, total_monto_clp, monto_uf, fecha_emision, fecha_pago, estado, cliente, crm_ticket_id, crm_ka_id'
+    const fkCol = type === 'ticket' ? 'crm_ticket_id' : 'crm_ka_id'
+
+    const [facturasVinculadas, setFacturasVinculadas] = useState<FacturaRow[]>([])
+    const [facturasSugeridas, setFacturasSugeridas] = useState<FacturaRow[]>([])
+    const [facturasPool, setFacturasPool] = useState<FacturaRow[]>([])
     const [facturasLoading, setFacturasLoading] = useState(false)
     const [facturasLoaded, setFacturasLoaded] = useState(false)
     const [facturasError, setFacturasError] = useState<string | null>(null)
     const [facturasBusqueda, setFacturasBusqueda] = useState('')
+    const [facturasDismissed, setFacturasDismissed] = useState<Set<number>>(new Set())
 
     useEffect(() => {
         if (activeSection !== 'facturacion' || facturasLoaded || (type !== 'ticket' && type !== 'keyaccount')) return
@@ -274,25 +279,50 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeSection])
 
-    // La tabla facturas_emitidas tiene ticket_id y key_account_id como FK nativas (integer)
-    // pero los ids del CRM son uuid — no son compatibles para join directo.
-    // Usamos crm_entity_links con to_id almacenado como texto del integer de la factura.
-    // Para mostrar facturas: cargamos todas y filtramos por cliente (org) + búsqueda libre.
     const loadFacturacion = async () => {
         setFacturasLoading(true)
         setFacturasError(null)
         try {
-            const org = (item as { organizacion?: string }).organizacion || ''
-            const { data: fData, error: fErr } = await supabase
+            // 1. Facturas ya vinculadas a esta entidad
+            const { data: vinc, error: vErr } = await supabase
                 .from('facturas_emitidas')
-                .select('id, folio, numero_factura, descripcion, total_monto_clp, monto_uf, fecha_emision, fecha_pago, estado, cliente')
-                .ilike('cliente', `%${org}%`)
+                .select(SELECT_FACTURA)
+                .eq(fkCol, item.id)
+                .order('fecha_emision', { ascending: false })
+            if (vErr) throw vErr
+            const vinculadas = (vinc || []) as FacturaRow[]
+            setFacturasVinculadas(vinculadas)
+
+            // 2. Clientes conocidos = clientes de las facturas ya vinculadas
+            const clientesConocidos = [...new Set(vinculadas.map(f => f.cliente).filter(Boolean))] as string[]
+
+            // 3. Sugeridas = mismo cliente, sin vincular a nadie
+            let sugeridas: FacturaRow[] = []
+            if (clientesConocidos.length > 0) {
+                const { data: sug } = await supabase
+                    .from('facturas_emitidas')
+                    .select(SELECT_FACTURA)
+                    .in('cliente', clientesConocidos)
+                    .is('crm_ticket_id', null)
+                    .is('crm_ka_id', null)
+                    .order('fecha_emision', { ascending: false })
+                    .limit(50)
+                sugeridas = (sug || []) as FacturaRow[]
+            }
+            setFacturasSugeridas(sugeridas)
+
+            // 4. Pool = facturas sin vincular para búsqueda libre
+            const { data: pool } = await supabase
+                .from('facturas_emitidas')
+                .select(SELECT_FACTURA)
+                .is('crm_ticket_id', null)
+                .is('crm_ka_id', null)
                 .order('fecha_emision', { ascending: false })
                 .limit(200)
-            if (fErr) throw fErr
+            // Excluir las ya sugeridas del pool
+            const sugIds = new Set(sugeridas.map(f => f.id))
+            setFacturasPool(((pool || []) as FacturaRow[]).filter(f => !sugIds.has(f.id)))
 
-            setFacturas((fData || []) as FacturaRow[])
-            setFacturasLinked(new Set()) // sin vínculos por ahora — FK nativa no es compatible con uuid
             setFacturasLoaded(true)
         } catch (err) {
             const msg = (err as Error).message || 'Error desconocido'
@@ -302,9 +332,45 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
         finally { setFacturasLoading(false) }
     }
 
-    const toggleFacturaLink = async (_facturaId: string | number) => {
-        showToast('Vinculación directa no disponible — usa el campo cliente para asociar facturas', 'info')
+    const vincularFactura = async (f: FacturaRow) => {
+        try {
+            const { error } = await supabase.from('facturas_emitidas').update({ [fkCol]: item.id }).eq('id', f.id)
+            if (error) throw error
+            // Mover de sugeridas/pool a vinculadas
+            const linked = { ...f, [fkCol]: item.id }
+            setFacturasVinculadas(prev => [linked, ...prev])
+            setFacturasSugeridas(prev => prev.filter(x => x.id !== f.id))
+            setFacturasPool(prev => prev.filter(x => x.id !== f.id))
+            // Si el cliente es nuevo, buscar más sugeridas con ese cliente
+            if (f.cliente && !facturasSugeridas.some(s => s.cliente === f.cliente)) {
+                const { data: nuevas } = await supabase
+                    .from('facturas_emitidas')
+                    .select(SELECT_FACTURA)
+                    .eq('cliente', f.cliente)
+                    .is('crm_ticket_id', null)
+                    .is('crm_ka_id', null)
+                    .order('fecha_emision', { ascending: false })
+                    .limit(20)
+                const filtradas = ((nuevas || []) as FacturaRow[]).filter(n => n.id !== f.id)
+                if (filtradas.length > 0) {
+                    setFacturasSugeridas(prev => [...prev, ...filtradas.filter(n => !prev.some(p => p.id === n.id))])
+                    setFacturasPool(prev => prev.filter(p => !filtradas.some(n => n.id === p.id)))
+                }
+            }
+        } catch (err) { showToast('Error al vincular: ' + (err as Error).message, 'error') }
     }
+
+    const desvincularFactura = async (f: FacturaRow) => {
+        try {
+            const { error } = await supabase.from('facturas_emitidas').update({ [fkCol]: null }).eq('id', f.id)
+            if (error) throw error
+            setFacturasVinculadas(prev => prev.filter(x => x.id !== f.id))
+            // Devolver al pool
+            setFacturasPool(prev => [{ ...f, [fkCol]: null }, ...prev])
+        } catch (err) { showToast('Error al desvincular: ' + (err as Error).message, 'error') }
+    }
+
+    const rechazarSugerencia = (id: number) => setFacturasDismissed(prev => new Set([...prev, id]))
 
     const allTimelineItems = useMemo(() => {
         const notaItems = [...entityNotas].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
@@ -331,7 +397,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
         { id: 'timeline', label: '📋 Timeline', count: entityNotas.length + lifecycleItems.length },
         { id: 'contactos', label: '👤 Contactos', count: entityContactos.length },
         ...(type === 'keyaccount' ? [{ id: 'contratos', label: '📜 Contratos', count: contractsLoaded ? contracts.length : undefined }] : []),
-        ...((type === 'ticket' || type === 'keyaccount') ? [{ id: 'facturacion', label: '💰 Facturación', count: facturasLoaded ? facturasLinked.size : undefined }] : []),
+        ...((type === 'ticket' || type === 'keyaccount') ? [{ id: 'facturacion', label: '💰 Facturación', count: facturasLoaded ? facturasVinculadas.length : undefined }] : []),
     ]
 
     // Render helpers (functions, NOT components — avoids remount/focus-loss)
@@ -622,7 +688,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
 
                     {/* FACTURACIÓN (ticket y keyaccount) */}
                     {activeSection === 'facturacion' && (type === 'ticket' || type === 'keyaccount') && (
-                        <div className="space-y-4">
+                        <div className="space-y-5">
                             {facturasLoading && <p className="text-xs text-gray-400 text-center py-4 animate-pulse">Cargando facturas…</p>}
 
                             {facturasError && (
@@ -634,81 +700,105 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                             )}
 
                             {!facturasLoading && !facturasError && (() => {
+                                const estadoBadge = (e: string) => e === 'Pagada' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : e === 'Pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : e === 'Vencida' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                const fmtMonto = (f: FacturaRow) => f.monto_uf ? `${f.monto_uf} UF` : f.total_monto_clp ? `$${Math.round(f.total_monto_clp).toLocaleString('es-CL')}` : '—'
+
+                                const FacturaItem = ({ f, actions }: { f: FacturaRow; actions: React.ReactNode }) => (
+                                    <div className="flex items-center gap-3 bg-white dark:bg-gray-700/50 rounded-lg px-3 py-2.5 border dark:border-gray-700">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {(f.folio || f.numero_factura) && <span className="text-xs font-mono text-gray-500 dark:text-gray-400">#{f.folio || f.numero_factura}</span>}
+                                                <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${estadoBadge(f.estado)}`}>{f.estado}</span>
+                                            </div>
+                                            {f.descripcion && <p className="text-xs text-gray-600 dark:text-gray-300 truncate mt-0.5">{f.descripcion}</p>}
+                                            {f.cliente && <p className="text-[10px] text-gray-400 truncate">{f.cliente}</p>}
+                                            <p className="text-[10px] text-gray-400">{f.fecha_emision ? fmtDate(f.fecha_emision) : '—'}{f.fecha_pago ? ` · Pagada ${fmtDate(f.fecha_pago)}` : ''}</p>
+                                        </div>
+                                        <span className="text-sm font-semibold text-verde whitespace-nowrap mr-1">{fmtMonto(f)}</span>
+                                        {actions}
+                                    </div>
+                                )
+
+                                // Resumen de vinculadas
+                                const totalVincUF = facturasVinculadas.reduce((s, f) => s + (f.monto_uf || 0), 0)
+                                const totalVincCLP = facturasVinculadas.reduce((s, f) => s + (f.total_monto_clp || 0), 0)
+
+                                // Pool filtrado por búsqueda
                                 const q = facturasBusqueda.toLowerCase().trim()
-                                const visible = q
-                                    ? facturas.filter(f =>
+                                const poolFiltrado = q
+                                    ? facturasPool.filter(f =>
                                         (f.folio || '').toLowerCase().includes(q) ||
                                         (f.numero_factura || '').toLowerCase().includes(q) ||
                                         (f.descripcion || '').toLowerCase().includes(q) ||
                                         (f.cliente || '').toLowerCase().includes(q)
                                     )
-                                    : facturas
+                                    : facturasPool
 
-                                const totalCLP = visible.reduce((s, f) => s + (f.total_monto_clp || 0), 0)
-                                const totalUF = visible.reduce((s, f) => s + (f.monto_uf || 0), 0)
-                                const pagadas = visible.filter(f => f.estado === 'Pagada')
-                                const estadoBadge = (e: string) => e === 'Pagada' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : e === 'Pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : e === 'Vencida' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                const fmtMonto = (f: FacturaRow) => f.monto_uf ? `${f.monto_uf} UF` : f.total_monto_clp ? `$${Math.round(f.total_monto_clp).toLocaleString('es-CL')}` : '—'
+                                const sugeridasVisibles = facturasSugeridas.filter(f => !facturasDismissed.has(f.id))
 
                                 return (
                                     <>
-                                        {/* Buscador */}
-                                        <input
-                                            value={facturasBusqueda}
-                                            onChange={e => setFacturasBusqueda(e.target.value)}
-                                            placeholder="Buscar por folio, descripción o cliente…"
-                                            className="w-full px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-100"
-                                        />
+                                        {/* ── SECCIÓN 1: VINCULADAS ── */}
+                                        <div>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+                                                    ✅ Vinculadas ({facturasVinculadas.length})
+                                                </p>
+                                                {facturasVinculadas.length > 0 && (
+                                                    <p className="text-[10px] text-verde font-medium">
+                                                        {totalVincUF > 0 ? `${totalVincUF.toFixed(1)} UF` : `$${Math.round(totalVincCLP).toLocaleString('es-CL')}`}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            {facturasVinculadas.length === 0
+                                                ? <p className="text-xs text-gray-400 py-2 text-center">Sin facturas vinculadas aún</p>
+                                                : <div className="space-y-1.5">{facturasVinculadas.map(f => (
+                                                    <FacturaItem key={f.id} f={f} actions={
+                                                        <button onClick={() => desvincularFactura(f)} className="text-[10px] text-gray-400 hover:text-red-500 transition shrink-0" title="Desvincular">✕</button>
+                                                    } />
+                                                ))}</div>
+                                            }
+                                        </div>
 
-                                        {/* Resumen */}
-                                        {visible.length > 0 && (
-                                            <div className="grid grid-cols-3 gap-3">
-                                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
-                                                    <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">Facturas</p>
-                                                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{visible.length}</p>
-                                                </div>
-                                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
-                                                    <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">Total UF</p>
-                                                    <p className="text-lg font-bold text-verde">{totalUF.toFixed(1)}</p>
-                                                </div>
-                                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
-                                                    <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">Pagadas</p>
-                                                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{pagadas.length}</p>
+                                        {/* ── SECCIÓN 2: SUGERIDAS ── */}
+                                        {sugeridasVisibles.length > 0 && (
+                                            <div>
+                                                <p className="text-[10px] font-semibold text-naranja uppercase tracking-wide mb-2">
+                                                    🔍 Sugeridas — mismo cliente que facturas ya vinculadas ({sugeridasVisibles.length})
+                                                </p>
+                                                <div className="space-y-1.5">
+                                                    {sugeridasVisibles.map(f => (
+                                                        <FacturaItem key={f.id} f={f} actions={
+                                                            <div className="flex gap-1 shrink-0">
+                                                                <button onClick={() => vincularFactura(f)} className="text-[10px] px-2 py-1 bg-verde/10 text-verde hover:bg-verde/20 rounded transition font-medium">✓</button>
+                                                                <button onClick={() => rechazarSugerencia(f.id)} className="text-[10px] px-2 py-1 bg-gray-100 dark:bg-gray-600 text-gray-500 hover:bg-red-50 hover:text-red-500 rounded transition">✕</button>
+                                                            </div>
+                                                        } />
+                                                    ))}
                                                 </div>
                                             </div>
                                         )}
-                                        {visible.length > 0 && totalCLP > 0 && (
-                                            <p className="text-xs text-gray-400 text-center -mt-1">Total CLP: ${Math.round(totalCLP).toLocaleString('es-CL')}</p>
-                                        )}
 
-                                        {/* Lista */}
-                                        <div className="space-y-2">
-                                            {visible.map(f => (
-                                                <div key={f.id} className="flex items-center gap-3 bg-white dark:bg-gray-700/50 rounded-lg px-3 py-2.5 border dark:border-gray-700">
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            {(f.folio || f.numero_factura) && (
-                                                                <span className="text-xs font-mono text-gray-500 dark:text-gray-400">#{f.folio || f.numero_factura}</span>
-                                                            )}
-                                                            <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${estadoBadge(f.estado)}`}>{f.estado}</span>
-                                                        </div>
-                                                        {f.descripcion && <p className="text-xs text-gray-600 dark:text-gray-300 truncate mt-0.5">{f.descripcion}</p>}
-                                                        {f.cliente && <p className="text-[10px] text-gray-400 truncate">{f.cliente}</p>}
-                                                        <p className="text-[10px] text-gray-400 mt-0.5">
-                                                            {f.fecha_emision ? fmtDate(f.fecha_emision) : '—'}
-                                                            {f.fecha_pago ? ` · Pagada ${fmtDate(f.fecha_pago)}` : ''}
-                                                        </p>
-                                                    </div>
-                                                    <span className="text-sm font-semibold text-verde whitespace-nowrap">{fmtMonto(f)}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {visible.length === 0 && (
-                                            <p className="text-sm text-gray-400 text-center py-6">
-                                                {facturasBusqueda ? 'Sin resultados para esa búsqueda' : 'Sin facturas emitidas para este cliente'}
+                                        {/* ── SECCIÓN 3: BUSCAR ── */}
+                                        <div>
+                                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                                                🔎 Todas las facturas sin vincular
                                             </p>
-                                        )}
+                                            <input
+                                                value={facturasBusqueda}
+                                                onChange={e => setFacturasBusqueda(e.target.value)}
+                                                placeholder="Buscar por folio, descripción o cliente…"
+                                                className="w-full px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-100 mb-2"
+                                            />
+                                            {poolFiltrado.length === 0
+                                                ? <p className="text-xs text-gray-400 text-center py-4">{facturasBusqueda ? 'Sin resultados' : 'Sin facturas disponibles'}</p>
+                                                : <div className="space-y-1.5 max-h-64 overflow-y-auto">{poolFiltrado.map(f => (
+                                                    <FacturaItem key={f.id} f={f} actions={
+                                                        <button onClick={() => vincularFactura(f)} className="text-[10px] px-2 py-1 bg-naranja/10 text-naranja hover:bg-naranja/20 rounded transition font-medium shrink-0 whitespace-nowrap">Vincular</button>
+                                                    } />
+                                                ))}</div>
+                                            }
+                                        </div>
                                     </>
                                 )
                             })()}
