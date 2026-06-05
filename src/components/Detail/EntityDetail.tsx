@@ -260,9 +260,10 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     const [facturasLinked, setFacturasLinked] = useState<Set<string>>(new Set())
     const [facturasLoading, setFacturasLoading] = useState(false)
     const [facturasLoaded, setFacturasLoaded] = useState(false)
+    const [facturasBusqueda, setFacturasBusqueda] = useState('')
 
     useEffect(() => {
-        if (activeSection !== 'facturacion' || facturasLoaded || type !== 'ticket') return
+        if (activeSection !== 'facturacion' || facturasLoaded || (type !== 'ticket' && type !== 'keyaccount')) return
         void loadFacturacion()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeSection])
@@ -270,16 +271,14 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     const loadFacturacion = async () => {
         setFacturasLoading(true)
         try {
-            const org = (item as { organizacion?: string }).organizacion || ''
             const [{ data: fData }, { data: links }] = await Promise.all([
                 supabase.from('facturas_emitidas')
                     .select('id, folio, descripcion, monto_total, moneda_principal, monto_uf, fecha_emision, fecha_pago, estado, organizacion')
-                    .ilike('organizacion', `%${org}%`)
                     .order('fecha_emision', { ascending: false })
-                    .limit(50),
+                    .limit(200),
                 supabase.from('crm_entity_links')
                     .select('to_id')
-                    .eq('from_type', 'ticket')
+                    .eq('from_type', type)
                     .eq('from_id', item.id)
                     .eq('to_type', 'factura_emitida')
             ])
@@ -297,12 +296,12 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
             if (isLinked) {
                 await supabase.from('crm_entity_links')
                     .delete()
-                    .eq('from_type', 'ticket').eq('from_id', item.id)
+                    .eq('from_type', type).eq('from_id', item.id)
                     .eq('to_type', 'factura_emitida').eq('to_id', fid)
                 setFacturasLinked(prev => { const s = new Set(prev); s.delete(fid); return s })
             } else {
                 await supabase.from('crm_entity_links')
-                    .insert([{ from_type: 'ticket', from_id: item.id, to_type: 'factura_emitida', to_id: fid, link_type: 'facturacion' }])
+                    .insert([{ from_type: type, from_id: item.id, to_type: 'factura_emitida', to_id: fid, link_type: 'facturacion' }])
                 setFacturasLinked(prev => new Set([...prev, fid]))
             }
         } catch (err) { showToast('Error al vincular: ' + (err as Error).message, 'error') }
@@ -333,7 +332,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
         { id: 'timeline', label: '📋 Timeline', count: entityNotas.length + lifecycleItems.length },
         { id: 'contactos', label: '👤 Contactos', count: entityContactos.length },
         ...(type === 'keyaccount' ? [{ id: 'contratos', label: '📜 Contratos', count: contractsLoaded ? contracts.length : undefined }] : []),
-        ...(type === 'ticket' ? [{ id: 'facturacion', label: '💰 Facturación', count: facturasLoaded ? facturasLinked.size : undefined }] : []),
+        ...((type === 'ticket' || type === 'keyaccount') ? [{ id: 'facturacion', label: '💰 Facturación', count: facturasLoaded ? facturasLinked.size : undefined }] : []),
     ]
 
     // Render helpers (functions, NOT components — avoids remount/focus-loss)
@@ -624,16 +623,27 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                         </div>
                     )}
 
-                    {/* FACTURACIÓN (solo ticket) */}
-                    {activeSection === 'facturacion' && type === 'ticket' && (
+                    {/* FACTURACIÓN (ticket y keyaccount) */}
+                    {activeSection === 'facturacion' && (type === 'ticket' || type === 'keyaccount') && (
                         <div className="space-y-4">
                             {facturasLoading && <p className="text-xs text-gray-400 text-center py-4 animate-pulse">Cargando facturas…</p>}
 
                             {!facturasLoading && (() => {
-                                const linked = facturas.filter(f => facturasLinked.has(String(f.id)))
-                                const unlinked = facturas.filter(f => !facturasLinked.has(String(f.id)))
-                                const ticketValor = (formData.valor_monto as number | null) || 0
-                                const ticketMoneda = (formData.valor_moneda as string | null) || 'UF'
+                                const q = facturasBusqueda.toLowerCase().trim()
+                                const visible = q
+                                    ? facturas.filter(f =>
+                                        (f.folio || '').toLowerCase().includes(q) ||
+                                        (f.descripcion || '').toLowerCase().includes(q) ||
+                                        (f.organizacion || '').toLowerCase().includes(q)
+                                    )
+                                    : facturas
+                                const linked = visible.filter(f => facturasLinked.has(String(f.id)))
+                                const unlinked = visible.filter(f => !facturasLinked.has(String(f.id)))
+                                const ticketValor = type === 'keyaccount'
+                                    ? ((formData.uf_mes as number | null) || 0)
+                                    : ((formData.valor_monto as number | null) || 0)
+                                const ticketMoneda = type === 'keyaccount' ? 'UF' : ((formData.valor_moneda as string | null) || 'UF')
+                                const refLabel = type === 'keyaccount' ? 'UF/mes contrato' : 'Valor ticket'
                                 const totalLinkedCLP = linked.reduce((s, f) => s + (f.monto_total || 0), 0)
                                 const totalLinkedUF = linked.reduce((s, f) => s + (f.monto_uf || 0), 0)
                                 const pct = ticketValor > 0 ? Math.min(100, Math.round((ticketMoneda === 'UF' ? totalLinkedUF : totalLinkedCLP) / ticketValor * 100)) : null
@@ -643,11 +653,19 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
 
                                 return (
                                     <>
+                                        {/* Buscador */}
+                                        <input
+                                            value={facturasBusqueda}
+                                            onChange={e => setFacturasBusqueda(e.target.value)}
+                                            placeholder="Buscar por folio, descripción u organización…"
+                                            className="w-full px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-100"
+                                        />
+
                                         {/* Resumen cobro */}
                                         {ticketValor > 0 && (
                                             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Cobrado vs Valor ticket</span>
+                                                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Facturado vs {refLabel}</span>
                                                     <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
                                                         {ticketMoneda === 'UF' ? `${totalLinkedUF.toFixed(1)} / ${ticketValor} UF` : `$${Math.round(totalLinkedCLP).toLocaleString('es-CL')} / $${Math.round(ticketValor).toLocaleString('es-CL')}`}
                                                     </span>
@@ -707,8 +725,10 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                             </div>
                                         )}
 
-                                        {facturas.length === 0 && (
-                                            <p className="text-sm text-gray-400 text-center py-6">Sin facturas registradas para esta organización</p>
+                                        {visible.length === 0 && (
+                                            <p className="text-sm text-gray-400 text-center py-6">
+                                                {facturasBusqueda ? 'Sin resultados para esa búsqueda' : 'Sin facturas emitidas registradas'}
+                                            </p>
                                         )}
                                     </>
                                 )
