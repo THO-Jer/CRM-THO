@@ -41,29 +41,36 @@ export default function useData(user: User) {
     const [financeLoading, setFinanceLoading] = useState(false)
     const [financeLoaded, setFinanceLoaded] = useState(false)
 
+    // Filtro de soft-delete en el CLIENTE (no en la query): si la columna
+    // deleted_at aún no existe (migración sql/soft-delete-crm.sql sin correr),
+    // el filtro es un no-op y la app sigue funcionando igual.
+    const sinEliminados = <T,>(rows: T[]): T[] =>
+        rows.filter(r => !(r as { deleted_at?: string | null }).deleted_at)
+
     const loadProspectos = useCallback(async () => {
         const { data, error } = await supabase.from('prospectos').select('*').order('created_at', { ascending: false })
         reportLoadError('prospectos', error)
-        if (data) setProspectos(data as Prospecto[])
+        if (data) setProspectos(sinEliminados(data as Prospecto[]))
     }, [])
 
     const loadCerrados = useCallback(async () => {
         const { data, error } = await supabase.from('cerrados').select('*').order('fecha_cierre', { ascending: false })
         reportLoadError('cerrados', error)
-        if (data) setCerrados(data as Cerrado[])
+        if (data) setCerrados(sinEliminados(data as Cerrado[]))
     }, [])
 
     const loadTickets = useCallback(async () => {
         const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false })
         reportLoadError('tickets', error)
-        if (data) setTickets(data.map((t: Record<string, unknown>) => ({
+        if (data) setTickets(sinEliminados(data.map((t: Record<string, unknown>) => ({
             ...t, valor_monto: t.valor_monto || 0, valor_moneda: t.valor_moneda || 'UF'
-        })) as unknown as Ticket[])
+        })) as unknown as Ticket[]))
     }, [])
 
     const loadKeyAccounts = useCallback(async () => {
-        const { data, error } = await supabase.from('key_accounts').select('*').order('organizacion')
+        const { data: rawData, error } = await supabase.from('key_accounts').select('*').order('organizacion')
         reportLoadError('key accounts', error)
+        const data = rawData ? sinEliminados(rawData as KeyAccount[]) : null
         if (data) {
             // todayYMD() = fecha LOCAL. Con toISOString() (UTC), después de las ~20h
             // en Chile ya era "mañana" y marcaba Vencido en la DB contratos que

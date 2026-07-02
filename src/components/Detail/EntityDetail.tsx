@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { StickyNote, Phone, Handshake, Mail, CheckSquare, RefreshCw, KeyRound, Paperclip, CheckCircle2, Sparkles, MapPin, ClipboardList } from 'lucide-react'
 import { supabase } from '../../utils/supabase'
@@ -82,10 +82,25 @@ type FormData = Record<string, any>
 
 export default function EntityDetail({ entity, onClose, contactos, notas, user, keyAccounts = [], ufActual = 38000, onRefresh }: EntityDetailProps) {
     const { type, item } = entity
-    useEscapeKey(onClose)
     const [activeSection, setActiveSection] = useState('ficha')
     const [formData, setFormData] = useState<FormData>({ ...item })
     const [dirty, setDirty] = useState(false)
+
+    // Guard de cambios sin guardar: cerrar (✕, backdrop o ESC) con la ficha
+    // editada pide confirmación antes de descartar. closingRef evita apilar
+    // dos confirmaciones si llegan varios ESC/clicks seguidos.
+    const closingRef = useRef(false)
+    const requestClose = async () => {
+        if (closingRef.current) return
+        if (dirty) {
+            closingRef.current = true
+            const descartar = await confirmModal('Tienes cambios sin guardar en la ficha.\n\n¿Descartarlos y cerrar?', { title: 'Cambios sin guardar', confirmLabel: 'Descartar y cerrar', danger: true })
+            closingRef.current = false
+            if (!descartar) return
+        }
+        onClose()
+    }
+    useEscapeKey(requestClose)
     const [showProposalModal, setShowProposalModal] = useState(false)
     const [saving, setSaving] = useState(false)
     const [newNota, setNewNota] = useState({ tipo: 'nota', contenido: '' })
@@ -432,7 +447,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
 
     return (
         <>
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-start justify-center z-50 overflow-y-auto py-6 animate-fadeIn" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-start justify-center z-50 overflow-y-auto py-6 animate-fadeIn" onClick={requestClose}>
             <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl mx-4 shadow-2xl animate-slideUp" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="p-5 border-b dark:border-gray-700">
@@ -454,7 +469,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                 </button>
                             )}
                             {dirty && <button onClick={handleSave} disabled={saving} className="px-4 py-1.5 color-naranja text-white text-xs rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition">{saving ? '...' : 'Guardar'}</button>}
-                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg transition">✕</button>
+                            <button onClick={requestClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg transition" aria-label="Cerrar">✕</button>
                         </div>
                     </div>
                 </div>

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
-import { showToast } from '../utils/toast'
+import { showToast, showUndoToast } from '../utils/toast'
 import { confirmModal } from '../utils/confirmModal'
+import { todayYMD } from '../utils/formatters'
 import type { Prospecto, Cerrado, Ticket, KeyAccount } from '../types'
 
 type User = { email?: string; id?: string } | null
@@ -349,15 +350,31 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
         } catch (error) { showToast('Error al guardar: ' + (error as Error).message, 'error') }
     }
 
+    // Soft-delete: marca deleted_at en vez de borrar la fila (ver sql/soft-delete-crm.sql).
+    // El toast ofrece Deshacer por unos segundos; deshacer = limpiar deleted_at.
+    const softDelete = async (table: string, id: string, label: string, reload: () => Promise<void>) => {
+        const { error } = await supabase.from(table).update({ deleted_at: new Date().toISOString() }).eq('id', id)
+        if (error) {
+            // Columna deleted_at inexistente = migración sin correr → mensaje accionable
+            const hint = /deleted_at/.test(error.message) ? ' (falta correr sql/soft-delete-crm.sql en Supabase)' : ''
+            showToast('Error al eliminar: ' + error.message + hint, 'error')
+            return
+        }
+        await reload()
+        showUndoToast(`${label} eliminado`, async () => {
+            const { error: undoErr } = await supabase.from(table).update({ deleted_at: null }).eq('id', id)
+            if (undoErr) showToast('No se pudo deshacer: ' + undoErr.message, 'error')
+            else { await reload(); showToast('Restaurado', 'success') }
+        })
+    }
+
     const handleDeleteProspecto = async (id: string) => {
         if (!requireAuth()) return
         const prospecto = prospectos.find(p => p.id === id)
         const label = prospecto?.organizacion ? `el prospecto de "${prospecto.organizacion}"` : 'este prospecto'
-        const confirmed = await confirmModal(`¿Estás seguro que quieres eliminar ${label}?\n\nEsta acción no se puede deshacer.`, { title: 'Eliminar prospecto', confirmLabel: 'Eliminar', danger: true })
+        const confirmed = await confirmModal(`¿Eliminar ${label}?\n\nPodrás deshacerlo por unos segundos.`, { title: 'Eliminar prospecto', confirmLabel: 'Eliminar', danger: true })
         if (!confirmed) return
-        const { error } = await supabase.from('prospectos').delete().eq('id', id)
-        if (error) showToast('Error: ' + error.message, 'error')
-        else await loadProspectos()
+        await softDelete('prospectos', id, `Prospecto "${prospecto?.organizacion || ''}"`, loadProspectos)
     }
 
     const handleMoveProspecto = async (prospectoId: string, nuevoEstado: string) => {
@@ -377,11 +394,13 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
     const handleCerrarProspecto = async (prospecto: Prospecto, ganado: boolean) => {
         if (!requireAuth()) return
         try {
-            const cerrado = { organizacion: prospecto.organizacion, tipo: prospecto.tipo, estado_final: ganado ? 'Ganado' : 'Perdido', fecha_cierre: new Date().toISOString().split('T')[0], valor: prospecto.valor, razon_perdida: '', escalo: false, valor_total_final: prospecto.valor, fecha_contacto: prospecto.created_at }
+            // todayYMD() = fecha local (toISOString() registraba el día siguiente después de las ~20h en Chile)
+            const cerrado = { organizacion: prospecto.organizacion, tipo: prospecto.tipo, estado_final: ganado ? 'Ganado' : 'Perdido', fecha_cierre: todayYMD(), valor: prospecto.valor, razon_perdida: '', escalo: false, valor_total_final: prospecto.valor, fecha_contacto: prospecto.created_at }
             const { error: insertError } = await supabase.from('cerrados').insert([cerrado])
             if (insertError) throw insertError
             await logEvent('prospectos', prospecto.id, 'closed', `Cerrado como "${ganado ? 'Ganado' : 'Perdido'}"`, { estado_final: ganado ? 'Ganado' : 'Perdido', valor: prospecto.valor, closed_by: user?.email || 'unknown' })
-            const { error: deleteError } = await supabase.from('prospectos').delete().eq('id', prospecto.id)
+            // Soft-delete: el prospecto original queda recuperable (deleted_at) en vez de borrarse
+            const { error: deleteError } = await supabase.from('prospectos').update({ deleted_at: new Date().toISOString() }).eq('id', prospecto.id)
             if (deleteError) throw deleteError
             await loadProspectos(); await loadCerrados()
         } catch (error) { showToast('Error: ' + (error as Error).message, 'error') }
@@ -412,16 +431,12 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
         const typeLabel = ({ cerrado: 'el cerrado', ticket: 'el ticket', keyaccount: 'el key account' } as Record<string, string>)[type] || 'el registro'
         const orgLabel = item?.organizacion ? ` de "${item.organizacion}"` : ''
         const titleByType = ({ cerrado: 'Eliminar cerrado', ticket: 'Eliminar ticket', keyaccount: 'Eliminar key account' } as Record<string, string>)[type] || 'Eliminar'
-        const confirmed = await confirmModal(`¿Estás seguro que quieres eliminar ${typeLabel}${orgLabel}?\n\nEsta acción no se puede deshacer.`, { title: titleByType, confirmLabel: 'Eliminar', danger: true })
+        const confirmed = await confirmModal(`¿Eliminar ${typeLabel}${orgLabel}?\n\nPodrás deshacerlo por unos segundos.`, { title: titleByType, confirmLabel: 'Eliminar', danger: true })
         if (!confirmed) return
         const table = type === 'cerrado' ? 'cerrados' : type === 'ticket' ? 'tickets' : 'key_accounts'
-        const { error } = await supabase.from(table).delete().eq('id', id)
-        if (error) showToast('Error: ' + error.message, 'error')
-        else {
-            if (type === 'cerrado') await loadCerrados()
-            if (type === 'ticket') await loadTickets()
-            if (type === 'keyaccount') await loadKeyAccounts()
-        }
+        const reload = type === 'cerrado' ? loadCerrados : type === 'ticket' ? loadTickets : loadKeyAccounts
+        const labelUndo = ({ cerrado: 'Cerrado', ticket: 'Ticket', keyaccount: 'Key Account' } as Record<string, string>)[type] || 'Registro'
+        await softDelete(table, id, `${labelUndo}${orgLabel}`, reload)
     }
 
     const handleCloseTicket = (ticket: AnyRecord) => {

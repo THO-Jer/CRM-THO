@@ -33,5 +33,45 @@ export function showToast(message: string, type: ToastType = 'info'): void {
     }, 3000)
 }
 
+/**
+ * Toast con botón "Deshacer". Se muestra `ms` milisegundos (default 8s);
+ * si el usuario aprieta Deshacer, se ejecuta onUndo y el toast se cierra.
+ */
+export function showUndoToast(message: string, onUndo: () => void, ms = 8000): void {
+    let container = document.getElementById('toast-container')
+    if (!container) {
+        container = document.createElement('div')
+        container.id = 'toast-container'
+        container.className = 'toast-container'
+        document.body.appendChild(container)
+    }
+
+    const toast = document.createElement('div')
+    toast.className = 'toast info'
+
+    const text = document.createElement('span')
+    text.textContent = message
+    text.style.flex = '1'
+
+    const btn = document.createElement('button')
+    btn.textContent = 'Deshacer'
+    btn.style.cssText = 'background:var(--naranja);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;min-height:0'
+
+    let done = false
+    const dismiss = () => {
+        if (done) return
+        done = true
+        toast.style.opacity = '0'
+        toast.style.transition = 'all 0.3s ease'
+        setTimeout(() => toast.remove(), 300)
+    }
+    btn.addEventListener('click', () => { if (!done) { onUndo() } dismiss() })
+
+    toast.appendChild(text)
+    toast.appendChild(btn)
+    container.appendChild(toast)
+    setTimeout(dismiss, ms)
+}
+
 // confirmModal se movió a './confirmModal.tsx' como un modal estilizado.
 // Para usarlo: import { confirmModal } from './confirmModal'
