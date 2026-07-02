@@ -1,4 +1,5 @@
 import { Download, Plus, Paperclip, History, Trash2 } from 'lucide-react'
+import { parseLocalDate } from '../../utils/formatters'
 import type { Ticket } from '../../types'
 
 // Formatea el valor del ticket usando uf_dia almacenado para la conversión estable
@@ -14,9 +15,11 @@ function fmtValorTicket(t: Ticket): { principal: string; referencia: string | nu
 
 // % de plazo consumido (fecha_inicio → hoy → fecha_entrega)
 function plazoPct(t: Ticket): { pct: number; label: string; color: string } | null {
-    if (!t.fecha_inicio || !t.fecha_entrega) return null
-    const inicio = new Date(t.fecha_inicio).getTime()
-    const fin = new Date(t.fecha_entrega).getTime()
+    const inicioDate = parseLocalDate(t.fecha_inicio)
+    const finDate = parseLocalDate(t.fecha_entrega)
+    if (!inicioDate || !finDate) return null
+    const inicio = inicioDate.getTime()
+    const fin = finDate.getTime()
     const hoy = Date.now()
     if (fin <= inicio) return null
     const pct = Math.round(((hoy - inicio) / (fin - inicio)) * 100)

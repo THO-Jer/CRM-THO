@@ -3,6 +3,7 @@ import {
     CheckCircle2, AlertCircle, AlertTriangle, Minus, Lightbulb, Globe,
     Clock, RefreshCw, MoonStar, Target, PartyPopper, Activity, TrendingUp
 } from 'lucide-react'
+import { diasDesdeHoy } from '../../utils/formatters'
 import type { Prospecto, Cerrado, Ticket, KeyAccount } from '../../types'
 
 interface MetricProps {
@@ -112,11 +113,15 @@ export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyA
         else if (cerradosEsteMes >= 1) { score += 8; details.push({ text: `${cerradosEsteMes} cierre este mes`, type: 'warn' }) }
         else { score -= 5; details.push({ text: 'Sin cierres este mes', type: 'bad' }) }
 
-        // 3. Revenue trend (-10 to +15 pts)
+        // 3. Tendencia de VENTAS CERRADAS (-10 a +15 pts).
+        // Ojo: variacionIngresos compara cierres nuevos mes a mes, NO ingresos totales.
+        // Si no hubo cierres pero el MRR está vigente, se trata como neutro — antes
+        // mostraba "Ingresos cayendo -100%" con contratos perfectamente estables.
         const variacion = m.variacionIngresos || 0
-        if (variacion > 10) { score += 15; details.push({ text: `Ingresos creciendo +${Math.round(variacion)}%`, type: 'good' }) }
-        else if (variacion >= -5) { score += 5; details.push({ text: `Ingresos estables (${variacion > 0 ? '+' : ''}${Math.round(variacion)}%)`, type: 'neutral' }) }
-        else { score -= 10; details.push({ text: `Ingresos cayendo ${Math.round(variacion)}%`, type: 'bad' }) }
+        if (variacion > 10) { score += 15; details.push({ text: `Ventas cerradas creciendo +${Math.round(variacion)}% vs mes anterior`, type: 'good' }) }
+        else if (variacion >= -5) { score += 5; details.push({ text: `Ventas cerradas estables (${variacion > 0 ? '+' : ''}${Math.round(variacion)}%)`, type: 'neutral' }) }
+        else if (cerradosEsteMes === 0 && mrrActual > 0) { details.push({ text: `Sin cierres nuevos este mes — MRR vigente (${Math.round(mrrActual)} UF/mes)`, type: 'neutral' }) }
+        else { score -= 10; details.push({ text: `Ventas cerradas cayendo ${Math.round(variacion)}% vs mes anterior`, type: 'bad' }) }
 
         // 4. Key Accounts health (0-15 pts)
         const kaTotal = (keyAccounts || []).length
@@ -131,7 +136,7 @@ export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyA
         if (vencidos === 0 && sinActividad === 0) { score += 10; details.push({ text: 'Pipeline activo, sin prospectos abandonados', type: 'good' }) }
         else {
             if (vencidos > 0) { score -= vencidos * 3; details.push({ text: `${vencidos} prospecto${vencidos > 1 ? 's' : ''} con fecha límite vencida`, type: 'bad' }) }
-            if (sinActividad > 0) { score -= sinActividad * 2; details.push({ text: `${sinActividad} prospecto${sinActividad > 1 ? 's' : ''} sin actividad reciente`, type: 'warn' }) }
+            if (sinActividad > 0) { score -= sinActividad * 2; details.push({ text: `${sinActividad} prospecto${sinActividad > 1 ? 's' : ''} sin ediciones en 14+ días`, type: 'warn' }) }
         }
 
         // 6. Diversification bonus
@@ -152,7 +157,6 @@ export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyA
     // ===== ACTIONABLE ITEMS =====
     const actionItems = useMemo((): ActionItem[] => {
         const items: ActionItem[] = []
-        const now = new Date()
 
         if (m.prospectosVencidosDetalle?.length) {
             m.prospectosVencidosDetalle.forEach((p: Prospecto) => items.push({
@@ -162,12 +166,9 @@ export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyA
         }
 
         ;(tickets || []).forEach(t => {
-            if (t.fecha_entrega) {
-                const entrega = new Date(t.fecha_entrega)
-                const dias = Math.ceil((entrega.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-                if (dias >= 0 && dias <= 7) {
-                    items.push({ priority: 2, kind: 'entrega', text: `${t.organizacion} — ${t.ticket} entrega en ${dias} día${dias !== 1 ? 's' : ''}`, action: `${t.porcentaje_avance || 0}% avance`, type: 'ticket' })
-                }
+            const dias = diasDesdeHoy(t.fecha_entrega)
+            if (dias !== null && dias >= 0 && dias <= 7) {
+                items.push({ priority: 2, kind: 'entrega', text: `${t.organizacion} — ${t.ticket} ${dias === 0 ? 'entrega HOY' : `entrega en ${dias} día${dias !== 1 ? 's' : ''}`}`, action: `${t.porcentaje_avance || 0}% avance`, type: 'ticket' })
             }
         })
 
@@ -180,7 +181,7 @@ export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyA
 
         if (m.prospectosSinActividadDetalle?.length) {
             m.prospectosSinActividadDetalle.slice(0, 3).forEach((p: Prospecto) => items.push({
-                priority: 4, kind: 'dormido', text: `${p.organizacion} — sin actividad reciente`,
+                priority: 4, kind: 'dormido', text: `${p.organizacion} — sin ediciones en 14+ días`,
                 action: 'Hacer seguimiento', type: 'prospecto'
             }))
         }
@@ -248,7 +249,7 @@ export default function Dashboard({ metrics, prospectos, cerrados, tickets, keyA
                 <Metric title="MRR" value={`${Math.round(m.mrrActual || 0)} UF`} sub="Recurrente mensual" accent />
                 <Metric title="Ganado mes" value={`${Math.round(m.valorGanadoEsteMes || 0)} UF`} sub={`Anterior: ${Math.round(m.valorGanadoMesAnterior || 0)} UF`} />
                 <Metric title="Tickets activos" value={`${(tickets || []).length}`} sub={`${Math.round(m.valorTickets || 0)} UF total`} />
-                <Metric title="Conversión" value={`${m.tasaConversion || 0}%`} sub={`Anterior: ${m.tasaConversionMesAnterior || 0}%`} />
+                <Metric title="Conversión (mes)" value={`${m.tasaConversion || 0}%`} sub={`Mes ant: ${m.tasaConversionMesAnterior || 0}% · Global: ${m.tasaConversionGlobal || 0}%`} />
                 <Metric title="Forecast" value={`${Math.round(m.pipelinePonderado || 0)} UF`} sub="Pipeline ponderado" />
             </div>
 

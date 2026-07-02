@@ -1,6 +1,6 @@
 import { useMemo, useCallback } from 'react'
 import type { Prospecto, Cerrado, Ticket, KeyAccount } from '../types'
-import { clpToUF } from '../utils/formatters'
+import { clpToUF, todayYMD, diasDesdeHoy } from '../utils/formatters'
 
 // Constantes fuera del hook para evitar recrear arrays/objetos en cada render.
 const ESTADOS_KANBAN = [
@@ -30,20 +30,25 @@ interface UseMetricsParams {
 
 export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts, ufActual }: UseMetricsParams) {
     const { metrics, prospectosActivos } = useMemo(() => {
-        const hoy = new Date()
-        const mesActual = hoy.getMonth()
-        const añoActual = hoy.getFullYear()
-        const mesAnterior = mesActual === 0 ? 11 : mesActual - 1
-        const añoMesAnterior = mesActual === 0 ? añoActual - 1 : añoActual
+        // Meses comparados por string 'YYYY-MM' en hora LOCAL — new Date('YYYY-MM-DD')
+        // parsea a medianoche UTC y corría los cierres del día 1 al mes anterior.
+        const hoyStr = todayYMD()
+        const mesActualKey = hoyStr.slice(0, 7)
+        const [añoNum, mesNum] = [Number(hoyStr.slice(0, 4)), Number(hoyStr.slice(5, 7))]
+        const mesAnteriorKey = mesNum === 1
+            ? `${añoNum - 1}-12`
+            : `${añoNum}-${String(mesNum - 1).padStart(2, '0')}`
 
-        const cerradosEsteMes = cerrados.filter(c => { const f = new Date(c.fecha_cierre ?? ''); return f.getMonth() === mesActual && f.getFullYear() === añoActual })
-        const cerradosMesAnterior = cerrados.filter(c => { const f = new Date(c.fecha_cierre ?? ''); return f.getMonth() === mesAnterior && f.getFullYear() === añoMesAnterior })
+        const mesDe = (fecha: string | null | undefined) => String(fecha ?? '').slice(0, 7)
+        const cerradosEsteMes = cerrados.filter(c => mesDe(c.fecha_cierre) === mesActualKey)
+        const cerradosMesAnterior = cerrados.filter(c => mesDe(c.fecha_cierre) === mesAnteriorKey)
         const ganadosEsteMes = cerradosEsteMes.filter(c => (c as unknown as Record<string, unknown>).estado_final === 'Ganado')
         const ganadosMesAnterior = cerradosMesAnterior.filter(c => (c as unknown as Record<string, unknown>).estado_final === 'Ganado')
 
         const mrrActual = keyAccounts.filter(ka => (ka.salud || '').toLowerCase() !== 'cerrado').reduce((sum, ka) => sum + (parseFloat(String(ka.uf_mes)) || 0), 0)
 
-        const ufSeguro = Number(ufActual) > 0 ? Number(ufActual) : 38000
+        // ufActual ya viene con cache de localStorage (obtenerUFHoy); esto es último recurso
+        const ufSeguro = Number(ufActual) > 0 ? Number(ufActual) : 39000
         const valorTickets = tickets.reduce((sum, t) => {
             const tAny = t as unknown as Record<string, unknown>
             const monto = parseFloat(String(tAny.valor_monto)) || 0
@@ -62,24 +67,29 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
             ? Math.round(((valorGanadoEsteMes - valorGanadoMesAnterior) / valorGanadoMesAnterior) * 100)
             : valorGanadoEsteMes > 0 ? 100 : 0
 
-        const prospectosVencidos = prospectosActivos.filter(p => p.fecha_limite && new Date(p.fecha_limite) < hoy)
+        // Vencido = fecha límite ANTERIOR a hoy (comparación de strings YYYY-MM-DD, sin timezone)
+        const prospectosVencidos = prospectosActivos.filter(p => p.fecha_limite && String(p.fecha_limite).slice(0, 10) < hoyStr)
+        // "Sin actividad" = sin EDICIONES en 14 días (updated_at); cualquier edición lo resetea
         const prospectosSinActividad = prospectosActivos.filter(p => {
             if (!p.updated_at) return false
-            return Math.floor((hoy.getTime() - new Date(p.updated_at).getTime()) / (1000 * 60 * 60 * 24)) > 14
+            return Math.floor((Date.now() - new Date(p.updated_at).getTime()) / (1000 * 60 * 60 * 24)) > 14
         })
         const ticketsProximosEntrega = tickets.filter(t => {
             const tAny = t as unknown as Record<string, unknown>
-            if (!tAny.fecha_entrega) return false
-            const dias = Math.ceil((new Date(tAny.fecha_entrega as string).getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
-            return dias >= 0 && dias <= 7
+            const dias = diasDesdeHoy(tAny.fecha_entrega as string)
+            return dias !== null && dias >= 0 && dias <= 7
         })
         const keyAccountsPorRenovar = keyAccounts.filter(ka => {
-            if (!ka.fin_contrato) return false
-            const dias = Math.floor((new Date(ka.fin_contrato).getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
-            return dias > 0 && dias <= 30
+            const dias = diasDesdeHoy(ka.fin_contrato)
+            return dias !== null && dias > 0 && dias <= 30
         })
 
-        const tasaConversion = cerrados.length > 0
+        // Conversión del MES actual (comparable con la del mes anterior).
+        // La histórica global se expone aparte como tasaConversionGlobal.
+        const tasaConversion = cerradosEsteMes.length > 0
+            ? Math.round((ganadosEsteMes.length / cerradosEsteMes.length) * 100)
+            : 0
+        const tasaConversionGlobal = cerrados.length > 0
             ? Math.round((cerrados.filter(c => (c as unknown as Record<string, unknown>).estado_final === 'Ganado').length / cerrados.length) * 100)
             : 0
         const tasaConversionMesAnterior = cerradosMesAnterior.length > 0
@@ -92,7 +102,7 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
             proximosCierres: prospectosActivos.filter(p => (parseFloat(String(p.probabilidad)) || 0) > 60).length,
             ingresosEsteMes, valorTickets, variacionIngresos,
             valorGanadoEsteMes, valorGanadoMesAnterior, mrrActual,
-            tasaConversion, tasaConversionMesAnterior,
+            tasaConversion, tasaConversionGlobal, tasaConversionMesAnterior,
             cerradosEsteMes: cerradosEsteMes.length,
             ganadosEsteMes: ganadosEsteMes.length,
             prospectosVencidos: prospectosVencidos.length,

@@ -1,14 +1,14 @@
 import { useMemo } from 'react'
 import { Download, Plus, Paperclip, History, Trash2, Pencil, Bell } from 'lucide-react'
+import { diasDesdeHoy } from '../../utils/formatters'
 import MetricCard from '../shared/MetricCard'
 import type { KeyAccount } from '../../types'
 
 // Calcula salud automáticamente desde fin_contrato (para display, no sobreescribe BD)
 function autoSalud(ka: KeyAccount): string {
     if (!ka.fin_contrato) return ka.salud || 'Sin fecha'
-    const hoy = new Date()
-    const fin = new Date(ka.fin_contrato)
-    const dias = Math.floor((fin.getTime() - hoy.getTime()) / 86400000)
+    const dias = diasDesdeHoy(ka.fin_contrato)
+    if (dias === null) return ka.salud || 'Sin fecha'
     if (dias < 0) return 'Vencido'
     if (dias <= 30) return 'Crítico'
     if (dias <= 60) return 'Riesgo'
@@ -45,15 +45,12 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
 
     // Renovaciones próximas (contratos que vencen en ≤60 días)
     const renovacionesProximas = useMemo(() => {
-        const hoy = new Date()
         return keyAccounts
             .filter(ka => {
-                if (!ka.fin_contrato) return false
-                const fin = new Date(ka.fin_contrato)
-                const dias = Math.floor((fin.getTime() - hoy.getTime()) / 86400000)
-                return dias >= -30 && dias <= 60 // incluye hasta 30 días vencidos
+                const dias = diasDesdeHoy(ka.fin_contrato)
+                return dias !== null && dias >= -30 && dias <= 60 // incluye hasta 30 días vencidos
             })
-            .sort((a, b) => new Date(a.fin_contrato!).getTime() - new Date(b.fin_contrato!).getTime())
+            .sort((a, b) => String(a.fin_contrato).localeCompare(String(b.fin_contrato)))
     }, [keyAccounts])
 
     const grouped = useMemo((): OrgGroup[] => {
@@ -93,8 +90,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                     </h3>
                     <div className="space-y-2">
                         {renovacionesProximas.map(ka => {
-                            const fin = new Date(ka.fin_contrato!)
-                            const dias = Math.floor((fin.getTime() - new Date().getTime()) / 86400000)
+                            const dias = diasDesdeHoy(ka.fin_contrato) ?? 0
                             const s = autoSalud(ka)
                             return (
                                 <div key={ka.id} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg px-3 py-2 border dark:border-gray-700">

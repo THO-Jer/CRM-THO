@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import { supabase } from './utils/supabase'
-import { formatFileSize } from './utils/formatters'
+import { formatFileSize, normalizeSearch } from './utils/formatters'
 import {
     LayoutDashboard, Target, Ticket as TicketIcon, KeyRound, History, TrendingUp,
     ClipboardList, BarChart3, Landmark, Search, Sun, Moon, Plus, Download,
@@ -87,7 +87,12 @@ function exportToCSV(data: any[], filename = 'export.csv'): void {
         ...data.map(row => headers.map(h => {
             const val = row[h];
             if (val === null || val === undefined) return '';
-            const str = String(val);
+            let str = String(val);
+            // Anti CSV-injection: celdas que empiezan con =, @, tab o +/- no numérico
+            // se prefijan con ' para que Excel no las ejecute como fórmula.
+            if (/^[=@\t\r]/.test(str) || (/^[+-]/.test(str) && !/^[+-]?\d*\.?\d+$/.test(str))) {
+                str = "'" + str;
+            }
             return str.includes(',') || str.includes('"') || str.includes('\n')
                 ? `"${str.replace(/"/g, '""')}"`
                 : str;
@@ -173,6 +178,9 @@ function CRMApp() {
     const [showLoginModal, setShowLoginModal] = useState(false);
 
     useEffect(() => {
+        // Única fuente de verdad de sesión: Supabase OAuth. Se eliminó el fallback
+        // a localStorage ('crm_tho_email') — mostraba al usuario como conectado
+        // sin sesión real, y cada escritura fallaba silenciosamente por RLS.
         const initAuth = async () => {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
@@ -181,15 +189,10 @@ function CRMApp() {
                     const namePart = email.includes('@') ? email.split('@')[0] : email;
                     const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || namePart;
                     setUser({ email, name });
-                    safeStorage.set('crm_tho_email', email);
-                    setLoading(false);
-                    return;
                 }
             } catch (e) {
                 console.warn('OAuth session check failed:', e);
             }
-            const savedEmail = safeStorage.get('crm_tho_email');
-            if (savedEmail) setUser({ email: savedEmail, name: savedEmail.split('@')[0] });
             setLoading(false);
         };
         initAuth();
@@ -200,11 +203,12 @@ function CRMApp() {
                 const namePart = email.includes('@') ? email.split('@')[0] : email;
                 const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || namePart;
                 setUser({ email, name });
-                safeStorage.set('crm_tho_email', email);
                 setShowLoginModal(false);
             }
-            if (event === 'SIGNED_OUT') { setUser(null); safeStorage.remove('crm_tho_email'); }
+            if (event === 'SIGNED_OUT') setUser(null);
         });
+        // Limpieza del email legacy que dejaba el fallback antiguo
+        safeStorage.remove('crm_tho_email');
         return () => subscription.unsubscribe();
     }, []);
 
@@ -366,15 +370,15 @@ function CRMApp() {
 
     // Pipeline: aplicamos searchTerm y filterTipo a los prospectos antes de pasarlos al kanban.
     const filteredProspectos = useMemo(() => {
-        const q = (searchTerm || '').trim().toLowerCase();
+        const q = normalizeSearch((searchTerm || '').trim());
         return prospectos.filter(p => {
             if (filterTipo !== 'todos' && !(p.tipo || '').startsWith(filterTipo)) return false;
             if (!q) return true;
             return (
-                (p.organizacion || '').toLowerCase().includes(q) ||
-                (p.contacto || '').toLowerCase().includes(q) ||
-                (p.notas || '').toLowerCase().includes(q) ||
-                (p.proximo_paso || '').toLowerCase().includes(q)
+                normalizeSearch(p.organizacion).includes(q) ||
+                normalizeSearch(p.contacto).includes(q) ||
+                normalizeSearch(p.notas).includes(q) ||
+                normalizeSearch(p.proximo_paso).includes(q)
             );
         });
     }, [prospectos, searchTerm, filterTipo]);
@@ -384,12 +388,13 @@ function CRMApp() {
     // Resultados de búsqueda global (para el command palette)
     const paletteResults = useMemo((): GlobalSearchResult[] => {
         if (globalSearch.length < 2) return [];
-        const q = globalSearch.toLowerCase();
+        const q = normalizeSearch(globalSearch);
+        const has = (s: string | null | undefined) => normalizeSearch(s).includes(q);
         return [
-            ...prospectos.filter(p => (p.organizacion||'').toLowerCase().includes(q) || (p.contacto||'').toLowerCase().includes(q) || (p.notas||'').toLowerCase().includes(q)).map(p => ({ type: 'prospecto' as const, label: p.organizacion as string, sub: `${p.estado} · ${p.valor || 0} UF`, tab: 'pipeline', item: p as unknown as Record<string, unknown> })),
-            ...tickets.filter(t => (t.ticket||'').toLowerCase().includes(q) || (t.organizacion||'').toLowerCase().includes(q)).map(t => ({ type: 'ticket' as const, label: t.ticket as string, sub: `${t.organizacion} · ${t.porcentaje_avance || 0}%`, tab: 'tickets', item: t as unknown as Record<string, unknown> })),
-            ...keyAccounts.filter(k => (k.organizacion||'').toLowerCase().includes(q) || (k.servicio||'').toLowerCase().includes(q)).map(k => ({ type: 'keyaccount' as const, label: `${k.organizacion} · ${k.servicio}`, sub: `${k.uf_mes || 0} UF/mes`, tab: 'keyaccounts', item: k as unknown as Record<string, unknown> })),
-            ...cerrados.filter(c => (c.organizacion||'').toLowerCase().includes(q) || (c.contacto||'').toLowerCase().includes(q)).map(c => ({ type: 'cerrado' as const, label: c.organizacion as string, sub: `${c.estado_final} · ${c.valor_total_final || 0} UF`, tab: 'cerrados', item: c as unknown as Record<string, unknown> })),
+            ...prospectos.filter(p => has(p.organizacion) || has(p.contacto) || has(p.notas)).map(p => ({ type: 'prospecto' as const, label: p.organizacion as string, sub: `${p.estado} · ${p.valor || 0} UF`, tab: 'pipeline', item: p as unknown as Record<string, unknown> })),
+            ...tickets.filter(t => has(t.ticket) || has(t.organizacion)).map(t => ({ type: 'ticket' as const, label: t.ticket as string, sub: `${t.organizacion} · ${t.porcentaje_avance || 0}%`, tab: 'tickets', item: t as unknown as Record<string, unknown> })),
+            ...keyAccounts.filter(k => has(k.organizacion) || has(k.servicio)).map(k => ({ type: 'keyaccount' as const, label: `${k.organizacion} · ${k.servicio}`, sub: `${k.uf_mes || 0} UF/mes`, tab: 'keyaccounts', item: k as unknown as Record<string, unknown> })),
+            ...cerrados.filter(c => has(c.organizacion) || has(c.contacto)).map(c => ({ type: 'cerrado' as const, label: c.organizacion as string, sub: `${c.estado_final} · ${c.valor_total_final || 0} UF`, tab: 'cerrados', item: c as unknown as Record<string, unknown> })),
         ].slice(0, 8);
     }, [globalSearch, prospectos, tickets, keyAccounts, cerrados]);
 
@@ -564,7 +569,7 @@ function CRMApp() {
                                 {user ? (
                                     <div className="flex items-center gap-2">
                                         <span className="hidden md:inline text-xs text-gray-500 dark:text-gray-400">{user.email.split('@')[0]}</span>
-                                        <button onClick={async () => { await supabase.auth.signOut(); safeStorage.remove('crm_tho_email'); setUser(null); }} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="Salir" aria-label="Salir">
+                                        <button onClick={async () => { await supabase.auth.signOut(); setUser(null); }} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="Salir" aria-label="Salir">
                                             <LogOut size={15} />
                                         </button>
                                     </div>

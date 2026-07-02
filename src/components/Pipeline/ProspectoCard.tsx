@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { MoreHorizontal, Calendar, History, Pencil, Trash2, XCircle, CheckCircle2, ArrowRightCircle } from 'lucide-react'
+import { todayYMD } from '../../utils/formatters'
 import type { Prospecto } from '../../types'
 
 interface KanbanEstado {
@@ -23,7 +24,9 @@ interface ProspectoCardProps {
 
 export default function ProspectoCard({ prospecto, estados, onMove, onEdit, onDetail, onDelete, onCerrar, onConvert, onHistory }: ProspectoCardProps) {
     const [menuOpen, setMenuOpen] = useState(false)
-    const isOverdue = prospecto.fecha_limite && new Date(prospecto.fecha_limite) < new Date()
+    // Vencido = fecha límite ANTERIOR a hoy. Comparación de strings YYYY-MM-DD:
+    // con new Date() el card aparecía vencido durante todo el día de la fecha límite (bug UTC).
+    const isOverdue = prospecto.fecha_limite && String(prospecto.fecha_limite).slice(0, 10) < todayYMD()
 
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: prospecto.id })
 

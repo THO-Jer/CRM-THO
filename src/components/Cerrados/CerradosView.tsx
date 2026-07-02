@@ -18,8 +18,10 @@ interface CerradosViewProps {
 
 export default function CerradosView({ cerrados, onAdd, onEdit, onDelete, onExport, onHistory, onConvertClosed, onFiles, onDetail, keyAccounts = [] }: CerradosViewProps) {
     const [filtroAño, setFiltroAño] = useState('todos')
-    const años = [...new Set(cerrados.map(c => new Date(c.fecha_cierre).getFullYear()))].sort((a, b) => b - a)
-    const cerradosFiltrados = filtroAño === 'todos' ? cerrados : cerrados.filter(c => new Date(c.fecha_cierre).getFullYear() === parseInt(filtroAño))
+    // Año por slice del string YYYY-MM-DD — new Date() corría los cierres del 1 de enero al año anterior (bug UTC)
+    const añoDe = (fecha: string | null | undefined) => String(fecha ?? '').slice(0, 4)
+    const años = [...new Set(cerrados.map(c => añoDe(c.fecha_cierre)).filter(Boolean))].sort((a, b) => b.localeCompare(a))
+    const cerradosFiltrados = filtroAño === 'todos' ? cerrados : cerrados.filter(c => añoDe(c.fecha_cierre) === filtroAño)
 
     const activeServicesFor = (org: string) => {
         const name = (org || '').trim().toLowerCase()
@@ -36,7 +38,7 @@ export default function CerradosView({ cerrados, onAdd, onEdit, onDelete, onExpo
                 <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
                     <select value={filtroAño} onChange={(e) => setFiltroAño(e.target.value)} className="px-3 py-2 border dark:border-gray-600 rounded-lg text-sm flex-1 sm:flex-none bg-white dark:bg-gray-700 dark:text-gray-200">
                         <option value="todos">Todos los años ({cerrados.length})</option>
-                        {años.map(año => <option key={año} value={año}>{año} ({cerrados.filter(c => new Date(c.fecha_cierre).getFullYear() === año).length})</option>)}
+                        {años.map(año => <option key={año} value={año}>{año} ({cerrados.filter(c => añoDe(c.fecha_cierre) === año).length})</option>)}
                     </select>
                     <button onClick={onExport} className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-sm"><Download size={14} /> CSV</button>
                     <button onClick={onAdd} className="flex items-center gap-1.5 px-4 py-2 color-naranja text-white rounded-lg text-sm whitespace-nowrap"><Plus size={14} strokeWidth={2.4} /> Agregar</button>
