@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../utils/supabase'
-import { obtenerUFHoy } from '../utils/formatters'
+import { obtenerUFHoy, todayYMD } from '../utils/formatters'
 import { showToast } from '../utils/toast'
 import type {
     Prospecto, Cerrado, Ticket, KeyAccount, Contacto, Nota,
@@ -65,7 +65,10 @@ export default function useData(user: User) {
         const { data, error } = await supabase.from('key_accounts').select('*').order('organizacion')
         reportLoadError('key accounts', error)
         if (data) {
-            const hoy = new Date().toISOString().split('T')[0]
+            // todayYMD() = fecha LOCAL. Con toISOString() (UTC), después de las ~20h
+            // en Chile ya era "mañana" y marcaba Vencido en la DB contratos que
+            // todavía estaban vigentes ese día.
+            const hoy = todayYMD()
             const expiredIds = (data as KeyAccount[])
                 .filter(ka => ka.fin_contrato && ka.fin_contrato < hoy &&
                     (ka.salud || '').toLowerCase() !== 'cerrado' &&
@@ -224,6 +227,34 @@ export default function useData(user: User) {
         document.addEventListener('visibilitychange', handleVisibility)
         return () => document.removeEventListener('visibilitychange', handleVisibility)
     }, [user, loadCoreData])
+
+    // ===== REALTIME: prospectos =====
+    // Suscripción a cambios en `prospectos` vía Supabase Realtime. Cubre dos casos:
+    // 1. Leads que entran desde tho.cl (INSERT con service-role) → toast + kanban al día.
+    // 2. Ediciones de otro socio → el kanban se actualiza sin recargar la página.
+    // Requiere que la tabla esté en la publicación supabase_realtime
+    // (ver sql/enable-realtime-prospectos.sql). Si no lo está, la suscripción
+    // simplemente no recibe eventos — no rompe nada.
+    useEffect(() => {
+        if (!user) return
+        const channel = supabase
+            .channel('realtime-prospectos')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'prospectos' }, (payload) => {
+                // Refresca la lista completa: barato (una tabla) y evita divergencias
+                // entre el estado local optimista y lo que hay en la DB.
+                loadProspectos()
+                if (payload.eventType === 'INSERT') {
+                    const nuevo = payload.new as Record<string, unknown>
+                    const creador = String(nuevo.created_by_email || '')
+                    // No avisar de inserts propios (ya tienen su propio feedback)
+                    if (creador !== (user.email || '')) {
+                        showToast(`Nuevo prospecto: ${nuevo.organizacion || 'sin nombre'}`, 'success')
+                    }
+                }
+            })
+            .subscribe()
+        return () => { supabase.removeChannel(channel) }
+    }, [user?.email, loadProspectos])
 
     return {
         prospectos, setProspectos, cerrados, setCerrados, tickets, setTickets,
