@@ -85,6 +85,17 @@ export async function readWorkbook(file: File): Promise<XLSX.WorkBook> {
 // Tipos de retorno
 // =============================================================================
 
+/** Fila descartada durante el parseo, con número de fila Excel (1-based) y motivo. */
+export interface FilaOmitida {
+    fila: number
+    motivo: string
+}
+
+/** Una fila cuenta como "con contenido" si tiene al menos una celda no vacía. */
+function tieneContenido(r: unknown[]): boolean {
+    return r.some((c) => String(c ?? '').trim() !== '')
+}
+
 export interface BoletaRow {
     fecha: string | null
     fecha_emision: string | null
@@ -176,7 +187,7 @@ export interface FacturaRecibidaRow {
 
 export function parseBoletasHonorarios(
     workbook: XLSX.WorkBook,
-    { ufActual, fileName = '' }: { ufActual?: number; fileName?: string } = {}
+    { ufActual, fileName = '', omitidas }: { ufActual?: number; fileName?: string; omitidas?: FilaOmitida[] } = {}
 ): BoletaRow[] {
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false }) as unknown[][]
@@ -218,9 +229,16 @@ export function parseBoletasHonorarios(
         if (!r || r.length === 0) continue
         const nombre = toText(r[idx.nombre])
         const fechaStr = toText(r[idx.fecha])
-        if (!nombre || !fechaStr) continue
+        if (!nombre || !fechaStr) {
+            // Solo reportar filas que traían algo (las vacías/totales sin datos no son error)
+            if (tieneContenido(r)) omitidas?.push({ fila: i + 1, motivo: !nombre ? 'sin nombre de prestador' : 'sin fecha' })
+            continue
+        }
         const fecha = parseDate(fechaStr)
-        if (!fecha) continue
+        if (!fecha) {
+            omitidas?.push({ fila: i + 1, motivo: `fecha no reconocida: "${fechaStr}"` })
+            continue
+        }
 
         const montoBrutoCLP = parseNumber(r[idx.brutos]) || 0
         const montoRetenidoCLP = parseNumber(r[idx.retenido]) || 0
@@ -251,21 +269,21 @@ export function parseBoletasHonorarios(
 
 export function parseFacturasEmitidas(
     workbook: XLSX.WorkBook,
-    { fileName = '', ufActual }: { fileName?: string; ufActual?: number } = {}
+    { fileName = '', ufActual, omitidas }: { fileName?: string; ufActual?: number; omitidas?: FilaOmitida[] } = {}
 ): FacturaEmitidaRow[] {
-    return parseFacturasGenerico(workbook, { fileName, ufActual, mode: 'emitidas' }) as FacturaEmitidaRow[]
+    return parseFacturasGenerico(workbook, { fileName, ufActual, mode: 'emitidas', omitidas }) as FacturaEmitidaRow[]
 }
 
 export function parseFacturasRecibidas(
     workbook: XLSX.WorkBook,
-    { fileName = '', ufActual }: { fileName?: string; ufActual?: number } = {}
+    { fileName = '', ufActual, omitidas }: { fileName?: string; ufActual?: number; omitidas?: FilaOmitida[] } = {}
 ): FacturaRecibidaRow[] {
-    return parseFacturasGenerico(workbook, { fileName, ufActual, mode: 'recibidas' }) as FacturaRecibidaRow[]
+    return parseFacturasGenerico(workbook, { fileName, ufActual, mode: 'recibidas', omitidas }) as FacturaRecibidaRow[]
 }
 
 function parseFacturasGenerico(
     workbook: XLSX.WorkBook,
-    { fileName, mode, ufActual }: { fileName?: string; mode: 'emitidas' | 'recibidas'; ufActual?: number }
+    { fileName, mode, ufActual, omitidas }: { fileName?: string; mode: 'emitidas' | 'recibidas'; ufActual?: number; omitidas?: FilaOmitida[] }
 ): (FacturaEmitidaRow | FacturaRecibidaRow)[] {
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false }) as unknown[][]
@@ -325,7 +343,10 @@ function parseFacturasGenerico(
         }
 
         const tipoDTE = parseInt(c0, 10)
-        if (Number.isNaN(tipoDTE)) continue
+        if (Number.isNaN(tipoDTE)) {
+            omitidas?.push({ fila: i + 1, motivo: `primera columna no es un TipoDTE numérico: "${c0.slice(0, 30)}"` })
+            continue
+        }
 
         if (current) {
             delete (current as unknown as Record<string, unknown>).__hasItem
@@ -334,7 +355,10 @@ function parseFacturasGenerico(
 
         const folio = toText(r[idx.folio])
         const fechaEmision = parseDate(r[idx.fechaEmision])
-        if (!folio || !fechaEmision) { current = null; continue }
+        if (!folio || !fechaEmision) {
+            omitidas?.push({ fila: i + 1, motivo: !folio ? 'sin folio' : `fecha de emisión no reconocida: "${toText(r[idx.fechaEmision]) || '(vacía)'}"` })
+            current = null; continue
+        }
 
         const totalMonto = parseNumber(r[idx.totalMonto])
         const montoUF = ufActual && totalMonto != null ? totalMonto / ufActual : null

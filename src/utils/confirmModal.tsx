@@ -22,6 +22,7 @@ interface ConfirmDialogProps {
     confirmLabel: string
     cancelLabel: string
     danger: boolean
+    hideCancel?: boolean
     onYes: () => void
     onNo: () => void
 }
@@ -33,7 +34,7 @@ interface ConfirmOptions {
     danger?: boolean
 }
 
-function ConfirmDialog({ message, title, confirmLabel, cancelLabel, danger, onYes, onNo }: ConfirmDialogProps) {
+function ConfirmDialog({ message, title, confirmLabel, cancelLabel, danger, hideCancel, onYes, onNo }: ConfirmDialogProps) {
     const confirmClass = danger
         ? 'bg-red-600 text-white hover:bg-red-700'
         : 'bg-naranja text-white hover:opacity-90'
@@ -57,14 +58,14 @@ function ConfirmDialog({ message, title, confirmLabel, cancelLabel, danger, onYe
                     {message}
                 </p>
                 <div className="flex justify-end gap-2">
-                    <button
+                    {!hideCancel && <button
                         type="button"
                         onClick={onNo}
                         autoFocus={danger}
                         className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition"
                     >
                         {cancelLabel}
-                    </button>
+                    </button>}
                     <button
                         type="button"
                         onClick={onYes}
@@ -121,6 +122,43 @@ export function confirmModal(message: string, options: ConfirmOptions = {}): Pro
                 danger={danger}
                 onYes={handleYes}
                 onNo={handleNo}
+            />
+        )
+    })
+}
+
+/**
+ * Modal informativo (un solo botón). Mismo estilo que confirmModal.
+ * Uso: await infoModal('Se omitieron 3 filas:\n• Fila 12: ...', { title: 'Reporte' })
+ */
+export function infoModal(message: string, options: { title?: string; okLabel?: string } = {}): Promise<void> {
+    const { title = 'Información', okLabel = 'Entendido' } = options
+
+    return new Promise((resolve) => {
+        const container = document.createElement('div')
+        document.body.appendChild(container)
+        const root = createRoot(container)
+
+        const cleanup = () => {
+            document.removeEventListener('keydown', handleKey)
+            setTimeout(() => { root.unmount(); container.remove() }, 0)
+        }
+        const handleOk = () => { cleanup(); resolve() }
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' || e.key === 'Enter') handleOk()
+        }
+        document.addEventListener('keydown', handleKey)
+
+        root.render(
+            <ConfirmDialog
+                message={message}
+                title={title}
+                confirmLabel={okLabel}
+                cancelLabel=""
+                danger={false}
+                hideCancel
+                onYes={handleOk}
+                onNo={handleOk}
             />
         )
     })

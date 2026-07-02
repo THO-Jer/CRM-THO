@@ -402,6 +402,8 @@ function CRMApp() {
         setActiveTab(r.tab);
         setGlobalSearch('');
         setShowGlobalSearch(false);
+        // Abre la ficha del ítem directamente (no solo la pestaña)
+        actions.openDetail(r.type, r.item as never);
     };
 
     // Destructure actions for render convenience
