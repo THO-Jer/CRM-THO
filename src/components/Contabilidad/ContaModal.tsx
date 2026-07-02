@@ -120,7 +120,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             <SelectField label="Estado" value={form.estado} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, estado: e.target.value })} options={['Pendiente', 'Pagada', 'Vencida']} />
                         </div>
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                            <label className="block text-xs font-medium text-gray-700 mb-2">💱 Moneda de ingreso</label>
+                            <label className="block text-xs font-medium text-gray-700 mb-2">Moneda de ingreso</label>
                             <div className="flex gap-2">
                                 <button type="button" onClick={() => setMonedaPrincipal('UF')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'UF' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>UF</button>
                                 <button type="button" onClick={() => setMonedaPrincipal('CLP')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'CLP' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>$ CLP</button>
@@ -153,7 +153,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             <SelectField label="Estado" value={form.estado} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, estado: e.target.value })} options={['Pendiente', 'Pagada']} />
                         </div>
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                            <label className="block text-xs font-medium text-gray-700 mb-2">💱 Moneda de ingreso</label>
+                            <label className="block text-xs font-medium text-gray-700 mb-2">Moneda de ingreso</label>
                             <div className="flex gap-2">
                                 <button type="button" onClick={() => setMonedaPrincipal('UF')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'UF' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>UF</button>
                                 <button type="button" onClick={() => setMonedaPrincipal('CLP')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'CLP' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>$ CLP</button>
@@ -236,9 +236,9 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             <InputField label="RUT (opcional)" value={form.rut || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, rut: e.target.value })} placeholder="12.345.678-9" />
                         </div>
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-                            <h4 className="font-bold text-sm text-blue-900">💰 Cálculo de Honorarios</h4>
+                            <h4 className="font-bold text-sm text-blue-900">Cálculo de Honorarios</h4>
                             <div className="bg-white dark:bg-gray-700 rounded-lg p-3">
-                                <label className="block text-xs font-medium text-blue-800 mb-2">💱 Moneda de ingreso</label>
+                                <label className="block text-xs font-medium text-blue-800 mb-2">Moneda de ingreso</label>
                                 <div className="flex gap-2">
                                     <button type="button" onClick={() => setMonedaPrincipal('UF')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'UF' ? 'bg-blue-600 text-white' : 'bg-white border border-blue-300 text-blue-700 hover:bg-blue-50'}`}>UF</button>
                                     <button type="button" onClick={() => setMonedaPrincipal('CLP')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'CLP' ? 'bg-blue-600 text-white' : 'bg-white border border-blue-300 text-blue-700 hover:bg-blue-50'}`}>$ CLP</button>
@@ -285,7 +285,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                                 </div>
                             </div>
                             <div className="text-xs text-blue-700">
-                                ℹ️ La retención de {form.monto_retencion_uf} UF debe ser pagada al SII como parte de tus impuestos
+                                La retención de {form.monto_retencion_uf} UF debe ser pagada al SII como parte de tus impuestos
                             </div>
                         </div>
                         <TextAreaField label="Descripción del servicio" value={form.descripcion || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm({ ...form, descripcion: e.target.value })} />
@@ -309,7 +309,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             </div>
 
                             <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
-                                <h4 className="font-bold text-sm text-green-900">💰 Haberes (CLP)</h4>
+                                <h4 className="font-bold text-sm text-green-900">Haberes (CLP)</h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                     <InputField label="Sueldo Base" type="number" required value={form.sueldo_base} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, sueldo_base: e.target.value })} />
                                     <InputField label="Gratificación" type="number" value={form.gratificacion} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, gratificacion: e.target.value })} />
@@ -326,7 +326,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             </div>
 
                             <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
-                                <h4 className="font-bold text-sm text-red-900">➖ Descuentos Trabajador (CLP)</h4>
+                                <h4 className="font-bold text-sm text-red-900">Descuentos Trabajador (CLP)</h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                     <InputField label="AFP Trabajador" type="number" value={form.afp_trabajador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, afp_trabajador: e.target.value })} />
                                     <InputField label="Salud (7%)" type="number" value={form.salud_trabajador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, salud_trabajador: e.target.value })} />
@@ -338,7 +338,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             </div>
 
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-                                <h4 className="font-bold text-sm text-blue-900">🏢 Cotizaciones Empleador (CLP)</h4>
+                                <h4 className="font-bold text-sm text-blue-900">Cotizaciones Empleador (CLP)</h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                     <InputField label="AFP Empleador (SIS)" type="number" value={form.afp_empleador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, afp_empleador: e.target.value })} />
                                     <InputField label="AFC Empleador" type="number" value={form.afc_empleador} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, afc_empleador: e.target.value })} />
@@ -346,7 +346,6 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                                 </div>
                                 {clp('afp_empleador') === 0 && clp('afc_empleador') === 0 && clp('seguro_accidentes') === 0 && (
                                     <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded p-2 text-xs text-yellow-800">
-                                        <span>⚠️</span>
                                         <span>Las cotizaciones del empleador no están ingresadas. El costo total estará subestimado. Puedes pedírselas a tu contadora o calcularlas: ~1,53% SIS + 2,4% AFC + ~0,93% mutualidad sobre el sueldo imponible.</span>
                                     </div>
                                 )}
@@ -362,7 +361,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                                     <span className="text-verde">${liquidoPagar.toLocaleString('es-CL')}</span>
                                 </div>
                                 <div className="flex justify-between text-gray-600">
-                                    <span>🏢 Costo Total Empleador:</span>
+                                    <span>Costo Total Empleador:</span>
                                     <span className="font-medium">${costoTotal.toLocaleString('es-CL')}</span>
                                 </div>
                             </div>

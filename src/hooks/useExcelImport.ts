@@ -102,7 +102,7 @@ export default function useExcelImport({
             const r = await insertWithDedup('boletas_honorarios', rows, dedupKey)
             if (r.errorMsg) { showToast(`Error: ${r.errorMsg}`, 'error'); return }
             await loadBoletasHonorarios()
-            showToast(`📄 Boletas: ${r.insertadas} importadas, ${r.duplicadas} duplicadas`, 'success')
+            showToast(`Boletas: ${r.insertadas} importadas, ${r.duplicadas} duplicadas`, 'success')
         } catch (err) {
             console.error('[importarBoletasExcel]', err)
             showToast(`Error al importar boletas: ${(err as Error).message}`, 'error')
@@ -122,7 +122,7 @@ export default function useExcelImport({
             const r = await insertWithDedup('facturas_emitidas', rows, dedupKey)
             if (r.errorMsg) { showToast(`Error: ${r.errorMsg}`, 'error'); return }
             await loadFacturasEmitidas()
-            showToast(`📄 Facturas emitidas: ${r.insertadas} importadas, ${r.duplicadas} duplicadas`, 'success')
+            showToast(`Facturas emitidas: ${r.insertadas} importadas, ${r.duplicadas} duplicadas`, 'success')
         } catch (err) {
             console.error('[importarFacturasEmitidasExcel]', err)
             showToast(`Error al importar facturas emitidas: ${(err as Error).message}`, 'error')
@@ -142,7 +142,7 @@ export default function useExcelImport({
             const r = await insertWithDedup('facturas_recibidas', rows, dedupKey)
             if (r.errorMsg) { showToast(`Error: ${r.errorMsg}`, 'error'); return }
             await loadFacturasRecibidas()
-            showToast(`📄 Facturas recibidas: ${r.insertadas} importadas, ${r.duplicadas} duplicadas`, 'success')
+            showToast(`Facturas recibidas: ${r.insertadas} importadas, ${r.duplicadas} duplicadas`, 'success')
         } catch (err) {
             console.error('[importarFacturasRecibidasExcel]', err)
             showToast(`Error al importar facturas recibidas: ${(err as Error).message}`, 'error')

@@ -453,7 +453,7 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
             }
         }
         await loadTickets()
-        showToast('✅ Ticket finalizado', 'success')
+        showToast('Ticket finalizado', 'success')
         closeCloseTicketModal()
     }
 

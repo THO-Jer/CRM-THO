@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
+import { MoreHorizontal, Calendar, History, Pencil, Trash2, XCircle, CheckCircle2, ArrowRightCircle } from 'lucide-react'
 import type { Prospecto } from '../../types'
 
 interface KanbanEstado {
@@ -21,8 +22,7 @@ interface ProspectoCardProps {
 }
 
 export default function ProspectoCard({ prospecto, estados, onMove, onEdit, onDetail, onDelete, onCerrar, onConvert, onHistory }: ProspectoCardProps) {
-    const [showActions, setShowActions] = useState(false)
-    const [moveTarget, setMoveTarget] = useState('')
+    const [menuOpen, setMenuOpen] = useState(false)
     const isOverdue = prospecto.fecha_limite && new Date(prospecto.fecha_limite) < new Date()
 
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: prospecto.id })
@@ -40,110 +40,87 @@ export default function ProspectoCard({ prospecto, estados, onMove, onEdit, onDe
         if (target && target !== prospecto.estado) {
             onMove(prospecto.id, target)
         }
-        setMoveTarget('')
+        setMenuOpen(false)
     }
+
+    const menuItem = 'w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition'
 
     return (
         <div
             ref={setNodeRef}
             style={style}
-            className={`bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm hover:shadow-md border-l-4 transition-shadow ${isOverdue ? 'border-red-500' : 'border-azul'}`}
+            className={`relative bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm hover:shadow-md border transition-shadow ${isOverdue ? 'border-red-300 dark:border-red-900' : 'border-gray-100 dark:border-gray-700'}`}
         >
-            {/* Drag handle: cabecera con el nombre de la organización */}
-            <div
-                {...attributes}
-                {...listeners}
-                className="flex items-start gap-2 mb-2 cursor-grab active:cursor-grabbing touch-none select-none"
-                title="Arrastra para mover de estado"
-            >
-                <span aria-hidden className="text-gray-300 dark:text-gray-600 text-lg leading-none mt-0.5">⋮⋮</span>
-                <h4 className="flex-1 min-w-0 font-semibold text-gray-900 dark:text-gray-100 truncate">
-                    {prospecto.organizacion}
-                </h4>
+            {/* Cabecera: drag handle + menú de acciones */}
+            <div className="flex items-start gap-2 mb-1.5">
+                <div
+                    {...attributes}
+                    {...listeners}
+                    className="flex-1 min-w-0 cursor-grab active:cursor-grabbing touch-none select-none"
+                    title="Arrastra para mover de estado"
+                >
+                    <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
+                        {prospecto.organizacion}
+                    </h4>
+                </div>
+                <button
+                    onClick={(e) => { stop(e); setMenuOpen(!menuOpen) }}
+                    onPointerDown={stop}
+                    className="p-1 -m-1 rounded text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 transition flex-shrink-0"
+                    title="Acciones"
+                    aria-label="Acciones"
+                >
+                    <MoreHorizontal size={16} />
+                </button>
             </div>
 
             {/* Body: click abre el detail */}
             <div onClick={() => onDetail()} className="cursor-pointer">
                 {prospecto.contacto && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 truncate">{prospecto.contacto}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 truncate">{prospecto.contacto}</p>
                 )}
-                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-2 gap-2">
-                    <span className="truncate">{prospecto.tipo}</span>
-                    <span className="font-semibold text-naranja whitespace-nowrap">{prospecto.valor} UF</span>
-                </div>
-                <div className="flex justify-between text-xs mb-2">
-                    <span className={isOverdue ? 'text-red-600 font-medium' : 'text-gray-500 dark:text-gray-400'}>
-                        📅 {prospecto.fecha_limite || '—'}
+                <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                    <span className="text-[11px] font-medium tnum px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-900/20 text-naranja">{prospecto.valor} UF</span>
+                    <span className="text-[11px] font-medium tnum px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-900/20 text-verde">{prospecto.probabilidad}%</span>
+                    <span className={`text-[11px] flex items-center gap-1 ml-auto ${isOverdue ? 'text-red-600 font-medium' : 'text-gray-400 dark:text-gray-500'}`}>
+                        <Calendar size={11} /> {prospecto.fecha_limite || '—'}
                     </span>
-                    <span className="text-verde">{prospecto.probabilidad}%</span>
                 </div>
                 {prospecto.proximo_paso && (
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{prospecto.proximo_paso}</p>
                 )}
             </div>
 
-            {/* Selector "Mover a..." — alternativa para touch o navegación rápida */}
-            <select
-                value={moveTarget}
-                onChange={handleMove}
-                onClick={stop}
-                onPointerDown={stop}
-                className="mt-3 w-full text-xs px-2 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200"
-            >
-                <option value="">Mover a...</option>
-                {estados
-                    .filter(es => es.nombre !== prospecto.estado)
-                    .map(es => (
-                        <option key={es.id} value={es.nombre}>{es.emoji} {es.nombre}</option>
-                    ))}
-            </select>
-
-            {/* Acciones */}
-            <div className="flex space-x-1 pt-3 border-t border-gray-100 dark:border-gray-700 mt-3">
-                <button
-                    onClick={(e) => { stop(e); onHistory?.() }}
-                    onPointerDown={stop}
-                    title="Historial"
-                    className="flex-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                >🕘</button>
-                <button
-                    onClick={(e) => { stop(e); setShowActions(!showActions) }}
-                    onPointerDown={stop}
-                    title="Cerrar / convertir"
-                    className="flex-1 text-xs text-verde py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                >🔄</button>
-                <button
-                    onClick={(e) => { stop(e); onEdit() }}
-                    onPointerDown={stop}
-                    title="Editar"
-                    className="flex-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                >✏️</button>
-                <button
-                    onClick={(e) => { stop(e); onDelete() }}
-                    onPointerDown={stop}
-                    title="Eliminar"
-                    className="flex-1 text-xs text-red-400 hover:text-red-600 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                >🗑️</button>
-            </div>
-
-            {showActions && (
-                <div className="space-y-2 mt-2 pt-2 border-t dark:border-gray-700">
-                    <button
-                        onClick={(e) => { stop(e); onCerrar(prospecto, false); setShowActions(false) }}
-                        onPointerDown={stop}
-                        className="w-full text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 py-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition"
-                    >❌ Perdido → Historial</button>
-                    <button
-                        onClick={(e) => { stop(e); onConvert?.(prospecto, 'ticket'); setShowActions(false) }}
-                        onPointerDown={stop}
-                        className="w-full text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 py-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition"
-                    >✅ Ganado → Ticket</button>
-                    <button
-                        onClick={(e) => { stop(e); onConvert?.(prospecto, 'keyaccount'); setShowActions(false) }}
-                        onPointerDown={stop}
-                        className="w-full text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 py-2 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/40 transition"
-                    >✅ Ganado → Key Account</button>
-                </div>
+            {/* Menú contextual */}
+            {menuOpen && (
+                <>
+                    <div className="fixed inset-0 z-10" onClick={(e) => { stop(e); setMenuOpen(false) }}></div>
+                    <div className="absolute right-2 top-8 z-20 w-52 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 py-1 animate-fadeIn" onPointerDown={stop}>
+                        <div className="px-3 py-1.5">
+                            <select
+                                value=""
+                                onChange={handleMove}
+                                onClick={stop}
+                                className="w-full text-xs px-2 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200"
+                            >
+                                <option value="">Mover a...</option>
+                                {estados
+                                    .filter(es => es.nombre !== prospecto.estado)
+                                    .map(es => (
+                                        <option key={es.id} value={es.nombre}>{es.nombre}</option>
+                                    ))}
+                            </select>
+                        </div>
+                        <button onClick={(e) => { stop(e); onHistory?.(); setMenuOpen(false) }} className={menuItem}><History size={13} /> Historial</button>
+                        <button onClick={(e) => { stop(e); onEdit(); setMenuOpen(false) }} className={menuItem}><Pencil size={13} /> Editar</button>
+                        <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+                        <button onClick={(e) => { stop(e); onConvert?.(prospecto, 'ticket'); setMenuOpen(false) }} className={menuItem}><ArrowRightCircle size={13} className="text-azul" /> Ganado → Ticket</button>
+                        <button onClick={(e) => { stop(e); onConvert?.(prospecto, 'keyaccount'); setMenuOpen(false) }} className={menuItem}><CheckCircle2 size={13} className="text-verde" /> Ganado → Key Account</button>
+                        <button onClick={(e) => { stop(e); onCerrar(prospecto, false); setMenuOpen(false) }} className={menuItem}><XCircle size={13} className="text-red-400" /> Perdido → Historial</button>
+                        <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+                        <button onClick={(e) => { stop(e); onDelete(); setMenuOpen(false) }} className={`${menuItem} text-red-500 dark:text-red-400`}><Trash2 size={13} /> Eliminar</button>
+                    </div>
+                </>
             )}
         </div>
     )

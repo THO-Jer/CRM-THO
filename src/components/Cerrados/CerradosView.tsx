@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Download, Plus, Paperclip, History, Trash2 } from 'lucide-react'
 import MetricCard from '../shared/MetricCard'
 import type { Cerrado, KeyAccount } from '../../types'
 
@@ -37,8 +38,8 @@ export default function CerradosView({ cerrados, onAdd, onEdit, onDelete, onExpo
                         <option value="todos">Todos los años ({cerrados.length})</option>
                         {años.map(año => <option key={año} value={año}>{año} ({cerrados.filter(c => new Date(c.fecha_cierre).getFullYear() === año).length})</option>)}
                     </select>
-                    <button onClick={onExport} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-sm">📥 CSV</button>
-                    <button onClick={onAdd} className="px-4 py-2 color-naranja text-white rounded-lg text-sm whitespace-nowrap">+ Agregar</button>
+                    <button onClick={onExport} className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-sm"><Download size={14} /> CSV</button>
+                    <button onClick={onAdd} className="flex items-center gap-1.5 px-4 py-2 color-naranja text-white rounded-lg text-sm whitespace-nowrap"><Plus size={14} strokeWidth={2.4} /> Agregar</button>
                 </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -76,11 +77,13 @@ export default function CerradosView({ cerrados, onAdd, onEdit, onDelete, onExpo
                                         <td className="px-6 py-4 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${c.estado_final === 'Ganado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'}`}>{c.estado_final}</span></td>
                                         <td className="px-6 py-4 text-sm dark:text-gray-300">{c.valor} UF</td>
                                         <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{c.fecha_cierre}</td>
-                                        <td className="px-6 py-4 text-right text-sm space-x-2" onClick={e => e.stopPropagation()}>
-                                            <button onClick={() => onFiles && onFiles('cerrados', c.id, c.organizacion)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700">📎</button>
-                                            <button onClick={() => onHistory('cerrados', c.id, c.organizacion)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700">🕘</button>
-                                            {onConvertClosed && <button onClick={() => onConvertClosed(c)} className="text-azul text-xs">Reactivar</button>}
-                                            <button onClick={() => onDelete(c.id)} className="text-red-400 hover:text-red-600">🗑️</button>
+                                        <td className="px-6 py-4 text-right text-sm" onClick={e => e.stopPropagation()}>
+                                            <div className="inline-flex items-center gap-1">
+                                                <button onClick={() => onFiles && onFiles('cerrados', c.id, c.organizacion)} className="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Archivos" aria-label="Archivos"><Paperclip size={14} /></button>
+                                                <button onClick={() => onHistory('cerrados', c.id, c.organizacion)} className="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Historial" aria-label="Historial"><History size={14} /></button>
+                                                {onConvertClosed && <button onClick={() => onConvertClosed(c)} className="text-azul text-xs px-1.5">Reactivar</button>}
+                                                <button onClick={() => onDelete(c.id)} className="p-1.5 rounded text-red-400 hover:text-red-600" title="Eliminar" aria-label="Eliminar"><Trash2 size={14} /></button>
+                                            </div>
                                         </td>
                                     </tr>
                                 )
@@ -112,10 +115,10 @@ export default function CerradosView({ cerrados, onAdd, onEdit, onDelete, onExpo
                                 <span className="font-medium dark:text-gray-200">{c.valor} UF</span>
                             </div>
                             <div className="flex gap-2 pt-2 border-t dark:border-gray-700" onClick={e => e.stopPropagation()}>
-                                <button onClick={() => onFiles && onFiles('cerrados', c.id, c.organizacion)} className="flex-1 text-xs py-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition">📎</button>
-                                <button onClick={() => onHistory('cerrados', c.id, c.organizacion)} className="flex-1 text-xs py-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition">🕘</button>
+                                <button onClick={() => onFiles && onFiles('cerrados', c.id, c.organizacion)} className="flex-1 flex items-center justify-center text-xs py-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition" aria-label="Archivos"><Paperclip size={14} /></button>
+                                <button onClick={() => onHistory('cerrados', c.id, c.organizacion)} className="flex-1 flex items-center justify-center text-xs py-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition" aria-label="Historial"><History size={14} /></button>
                                 {onConvertClosed && <button onClick={() => onConvertClosed(c)} className="flex-1 text-xs py-1.5 text-azul hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition">Reactivar</button>}
-                                <button onClick={() => onDelete(c.id)} className="flex-1 text-xs py-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition">🗑️</button>
+                                <button onClick={() => onDelete(c.id)} className="flex-1 flex items-center justify-center text-xs py-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition" aria-label="Eliminar"><Trash2 size={14} /></button>
                             </div>
                         </div>
                     )

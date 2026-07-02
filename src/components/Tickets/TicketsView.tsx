@@ -1,3 +1,4 @@
+import { Download, Plus, Paperclip, History, Trash2 } from 'lucide-react'
 import type { Ticket } from '../../types'
 
 // Formatea el valor del ticket usando uf_dia almacenado para la conversión estable
@@ -44,8 +45,8 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
             <div className="flex flex-col sm:flex-row justify-between gap-3">
                 <h2 className="text-2xl font-bold dark:text-gray-100">Tickets</h2>
                 <div className="flex space-x-3">
-                    <button onClick={onExport} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-sm">📥 CSV</button>
-                    <button onClick={onAdd} className="px-4 py-2 color-naranja text-white rounded-lg text-sm whitespace-nowrap">+ Nuevo</button>
+                    <button onClick={onExport} className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-sm"><Download size={14} /> CSV</button>
+                    <button onClick={onAdd} className="flex items-center gap-1.5 px-4 py-2 color-naranja text-white rounded-lg text-sm whitespace-nowrap"><Plus size={14} strokeWidth={2.4} /> Nuevo</button>
                 </div>
             </div>
 
@@ -71,11 +72,13 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                                 <td className="px-6 py-4 text-sm dark:text-gray-300">{t.fase_actual}</td>
                                 <td className="px-6 py-4">{(() => { const p = plazoPct(t); return p ? <div className="flex items-center gap-2"><div className="w-16 bg-gray-200 dark:bg-gray-600 rounded-full h-2"><div className={`${p.color} h-2 rounded-full`} style={{ width: `${p.pct}%` }} /></div><span className="text-xs dark:text-gray-400 whitespace-nowrap">{p.label}</span></div> : <span className="text-xs text-gray-400">Sin plazo</span> })()}</td>
                                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{t.fecha_entrega}</td>
-                                <td className="px-6 py-4 text-right text-sm space-x-2" onClick={e => e.stopPropagation()}>
-                                    <button onClick={() => onFiles && onFiles('tickets', t.id, t.organizacion)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700">📎</button>
-                                    <button onClick={() => onHistory('tickets', t.id, t.organizacion)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700">🕘</button>
-                                    <button onClick={() => onClose && onClose(t)} className="text-verde text-xs">Finalizar</button>
-                                    <button onClick={() => onDelete(t.id)} className="text-red-400 hover:text-red-600">🗑️</button>
+                                <td className="px-6 py-4 text-right text-sm" onClick={e => e.stopPropagation()}>
+                                    <div className="inline-flex items-center gap-1">
+                                        <button onClick={() => onFiles && onFiles('tickets', t.id, t.organizacion)} className="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Archivos" aria-label="Archivos"><Paperclip size={14} /></button>
+                                        <button onClick={() => onHistory('tickets', t.id, t.organizacion)} className="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Historial" aria-label="Historial"><History size={14} /></button>
+                                        <button onClick={() => onClose && onClose(t)} className="text-verde text-xs px-1.5">Finalizar</button>
+                                        <button onClick={() => onDelete(t.id)} className="p-1.5 rounded text-red-400 hover:text-red-600" title="Eliminar" aria-label="Eliminar"><Trash2 size={14} /></button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -98,10 +101,10 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                             <span className="text-xs text-gray-400">{t.fecha_entrega}</span>
                         </div>
                         <div className="flex gap-2 pt-2 border-t dark:border-gray-700" onClick={e => e.stopPropagation()}>
-                            <button onClick={() => onFiles && onFiles('tickets', t.id, t.organizacion)} className="flex-1 text-xs py-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition">📎</button>
-                            <button onClick={() => onHistory('tickets', t.id, t.organizacion)} className="flex-1 text-xs py-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition">🕘</button>
+                            <button onClick={() => onFiles && onFiles('tickets', t.id, t.organizacion)} className="flex-1 flex items-center justify-center text-xs py-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition" aria-label="Archivos"><Paperclip size={14} /></button>
+                            <button onClick={() => onHistory('tickets', t.id, t.organizacion)} className="flex-1 flex items-center justify-center text-xs py-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition" aria-label="Historial"><History size={14} /></button>
                             <button onClick={() => onClose && onClose(t)} className="flex-1 text-xs py-1.5 text-verde hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition">Finalizar</button>
-                            <button onClick={() => onDelete(t.id)} className="flex-1 text-xs py-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition">🗑️</button>
+                            <button onClick={() => onDelete(t.id)} className="flex-1 flex items-center justify-center text-xs py-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition" aria-label="Eliminar"><Trash2 size={14} /></button>
                         </div>
                     </div>
                 ))}

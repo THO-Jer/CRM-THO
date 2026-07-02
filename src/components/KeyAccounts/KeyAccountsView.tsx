@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { Download, Plus, Paperclip, History, Trash2, Pencil, Bell } from 'lucide-react'
 import MetricCard from '../shared/MetricCard'
 import type { KeyAccount } from '../../types'
 
@@ -72,8 +73,8 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
             <div className="flex flex-col sm:flex-row justify-between gap-3">
                 <h2 className="text-2xl font-bold dark:text-gray-100">Key Accounts</h2>
                 <div className="flex space-x-3">
-                    <button onClick={onExport} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-sm">📥 CSV</button>
-                    <button onClick={onAdd} className="px-4 py-2 color-naranja text-white rounded-lg text-sm whitespace-nowrap">+ Nuevo</button>
+                    <button onClick={onExport} className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-sm"><Download size={14} /> CSV</button>
+                    <button onClick={onAdd} className="flex items-center gap-1.5 px-4 py-2 color-naranja text-white rounded-lg text-sm whitespace-nowrap"><Plus size={14} strokeWidth={2.4} /> Nuevo</button>
                 </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -88,7 +89,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
             {renovacionesProximas.length > 0 && (
                 <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-700/40 rounded-xl p-4">
                     <h3 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-3 flex items-center gap-2">
-                        🔔 Renovaciones próximas
+                        <Bell size={14} /> Renovaciones próximas
                     </h3>
                     <div className="space-y-2">
                         {renovacionesProximas.map(ka => {
@@ -148,12 +149,12 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                                     </div>
                                     <span className="text-sm dark:text-gray-300 font-medium whitespace-nowrap">{ka.uf_mes} UF</span>
                                     <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition">
-                                        <button onClick={() => onDetail && onDetail(ka)} className="p-1 text-gray-400 hover:text-naranja dark:hover:text-naranja rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm" title="Editar">✏️</button>
-                                        <button onClick={() => onFiles && onFiles('key_accounts', ka.id, ka.organizacion)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm">📎</button>
+                                        <button onClick={() => onDetail && onDetail(ka)} className="p-1.5 text-gray-400 hover:text-naranja rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="Editar" aria-label="Editar"><Pencil size={13} /></button>
+                                        <button onClick={() => onFiles && onFiles('key_accounts', ka.id, ka.organizacion)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="Archivos" aria-label="Archivos"><Paperclip size={13} /></button>
                                         <button onClick={() => onRenew && onRenew(ka)} className="p-1 text-verde hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition text-xs">Renovar</button>
                                         <button onClick={() => onCancel && onCancel(ka)} className="p-1 text-naranja hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition text-xs">Cancelar</button>
-                                        <button onClick={() => onHistory('key_accounts', ka.id, `${ka.organizacion} - ${ka.servicio}`)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm">🕘</button>
-                                        <button onClick={() => onDelete(ka.id)} className="p-1 text-red-400 hover:text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition text-sm">🗑️</button>
+                                        <button onClick={() => onHistory('key_accounts', ka.id, `${ka.organizacion} - ${ka.servicio}`)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="Historial" aria-label="Historial"><History size={13} /></button>
+                                        <button onClick={() => onDelete(ka.id)} className="p-1.5 text-red-400 hover:text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition" title="Eliminar" aria-label="Eliminar"><Trash2 size={13} /></button>
                                     </div>
                                 </div>
                             ))}
@@ -187,11 +188,11 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                                     <span className="text-sm dark:text-gray-300">{ka.uf_mes} UF</span>
                                 </div>
                                 <div className="flex gap-2 mt-2">
-                                    <button onClick={() => onDetail && onDetail(ka)} className="flex-1 text-xs py-1 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition">✏️</button>
-                                    <button onClick={() => onFiles && onFiles('key_accounts', ka.id, ka.organizacion)} className="flex-1 text-xs py-1 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition">📎</button>
+                                    <button onClick={() => onDetail && onDetail(ka)} className="flex-1 flex items-center justify-center text-xs py-1 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition" aria-label="Editar"><Pencil size={13} /></button>
+                                    <button onClick={() => onFiles && onFiles('key_accounts', ka.id, ka.organizacion)} className="flex-1 flex items-center justify-center text-xs py-1 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition" aria-label="Archivos"><Paperclip size={13} /></button>
                                     <button onClick={() => onRenew && onRenew(ka)} className="flex-1 text-xs py-1 text-verde hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition">Renovar</button>
                                     <button onClick={() => onCancel && onCancel(ka)} className="flex-1 text-xs py-1 text-naranja hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition">Cancelar</button>
-                                    <button onClick={() => onDelete(ka.id)} className="flex-1 text-xs py-1 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition">🗑️</button>
+                                    <button onClick={() => onDelete(ka.id)} className="flex-1 flex items-center justify-center text-xs py-1 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition" aria-label="Eliminar"><Trash2 size={13} /></button>
                                 </div>
                             </div>
                         ))}

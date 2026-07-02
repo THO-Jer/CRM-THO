@@ -317,7 +317,7 @@ export default function useFinanzas({
                     .limit(1)
 
                 if (existentesPorArchivo && existentesPorArchivo.length > 0) {
-                    showToast(`⚠️ Este archivo ya fue importado anteriormente (${file.name}). Si quieres reimportar, primero usa "Limpiar Todo".`, 'warning')
+                    showToast(`Este archivo ya fue importado anteriormente (${file.name}). Si quieres reimportar, primero usa "Limpiar Todo".`, 'warning')
                     return
                 }
 
@@ -338,7 +338,7 @@ export default function useFinanzas({
                 )
 
                 if (movimientosNuevos.length === 0) {
-                    showToast('⚠️ Todos los movimientos ya existen en el sistema', 'info')
+                    showToast('Todos los movimientos ya existen en el sistema', 'info')
                     return
                 }
 
@@ -364,7 +364,7 @@ export default function useFinanzas({
 
                 const duplicados = movimientos.length - movimientosNuevos.length
                 showToast(
-                    `✅ ${movimientosNuevos.length} movimientos importados` +
+                    `${movimientosNuevos.length} movimientos importados` +
                     (duplicados > 0 ? ` (${duplicados} duplicados omitidos)` : ''),
                     'success'
                 )
@@ -372,11 +372,11 @@ export default function useFinanzas({
             } catch (error) {
                 const msg = (error as Error).message || 'Error desconocido'
                 if (msg.includes('null value in column')) {
-                    showToast('❌ Error: La cartola tiene filas sin fecha válida. Verifica el formato.', 'error')
+                    showToast('Error: La cartola tiene filas sin fecha válida. Verifica el formato.', 'error')
                 } else if (msg.includes('already exists') || msg.includes('duplicate')) {
-                    showToast('⚠️ Algunos movimientos ya existían en el sistema', 'info')
+                    showToast('Algunos movimientos ya existían en el sistema', 'info')
                 } else {
-                    showToast(`❌ Error al importar: ${msg}`, 'error')
+                    showToast(`Error al importar: ${msg}`, 'error')
                 }
             }
         }
@@ -626,7 +626,7 @@ export default function useFinanzas({
 
             if (errorMov) throw errorMov
             if (!updMov || updMov.length === 0) {
-                showToast('⚠️ Este movimiento ya estaba conciliado', 'info')
+                showToast('Este movimiento ya estaba conciliado', 'info')
                 return
             }
 
@@ -646,13 +646,13 @@ export default function useFinanzas({
                     .eq('id', conId)
                 if (errorReg) {
                     console.warn(`No se pudo actualizar ${entry.tabla}:`, errorReg.message)
-                    showToast(`⚠️ Movimiento conciliado, pero no se pudo actualizar ${entry.tabla}.`, 'warning')
+                    showToast(`Movimiento conciliado, pero no se pudo actualizar ${entry.tabla}.`, 'warning')
                 } else {
-                    showToast('✅ Conciliación aplicada correctamente', 'success')
+                    showToast('Conciliación aplicada correctamente', 'success')
                 }
             } else {
                 // caja_chica u otro tipo sin tabla asociada
-                showToast('✅ Conciliación aplicada', 'success')
+                showToast('Conciliación aplicada', 'success')
             }
 
             await Promise.all([
@@ -664,7 +664,7 @@ export default function useFinanzas({
                 loadLiquidaciones(),
             ])
         } catch (error) {
-            showToast(`❌ Error: ${(error as Error).message}`, 'error')
+            showToast(`Error: ${(error as Error).message}`, 'error')
         }
     }
 
@@ -695,7 +695,7 @@ export default function useFinanzas({
             await aplicarConciliacion(String(movimiento.id), 'caja_chica', String(newId))
             loadCajaChica()
         } catch (error) {
-            showToast(`❌ Error: ${(error as Error).message}`, 'error')
+            showToast(`Error: ${(error as Error).message}`, 'error')
         }
     }
 

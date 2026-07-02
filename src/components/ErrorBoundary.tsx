@@ -1,4 +1,5 @@
 import { Component, ReactNode, ErrorInfo } from 'react'
+import { AlertTriangle } from 'lucide-react'
 
 interface ErrorBoundaryState {
     hasError: boolean
@@ -61,7 +62,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
                 <div className="max-w-2xl w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
                     <div className="flex items-start gap-3 mb-4">
-                        <span className="text-3xl" aria-hidden>⚠️</span>
+                        <AlertTriangle size={28} className="text-yellow-500 flex-shrink-0 mt-0.5" aria-hidden />
                         <div>
                             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                                 Algo se rompió en el CRM

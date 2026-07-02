@@ -1,3 +1,4 @@
+import { FileText, Sparkles, Pencil, Trash2, RefreshCw, CheckCircle2, KeyRound, XCircle, History } from 'lucide-react'
 import useEscapeKey from '../../hooks/useEscapeKey'
 
 interface HistoryItem {
@@ -42,16 +43,16 @@ export default function HistoryModal({ open, title, items, loading, onClose }: H
     }
 
     const getEventIcon = (eventType: string | undefined) => {
-        if (!eventType) return '📝'
-        if (eventType.includes('insert') || eventType.includes('created')) return '✨'
-        if (eventType.includes('update')) return '✏️'
-        if (eventType.includes('delete')) return '🗑️'
-        if (eventType.includes('stage') || eventType.includes('moved')) return '🔄'
-        if (eventType.includes('closed')) return '✅'
-        if (eventType.includes('converted')) return '🔄'
-        if (eventType.includes('renewal')) return '🔑'
-        if (eventType.includes('cancelled')) return '❌'
-        return '📝'
+        if (!eventType) return <FileText size={14} className="text-gray-400" />
+        if (eventType.includes('insert') || eventType.includes('created')) return <Sparkles size={14} className="text-naranja" />
+        if (eventType.includes('update')) return <Pencil size={14} className="text-gray-400" />
+        if (eventType.includes('delete')) return <Trash2 size={14} className="text-red-400" />
+        if (eventType.includes('stage') || eventType.includes('moved')) return <RefreshCw size={14} className="text-azul" />
+        if (eventType.includes('closed')) return <CheckCircle2 size={14} className="text-verde" />
+        if (eventType.includes('converted')) return <RefreshCw size={14} className="text-azul" />
+        if (eventType.includes('renewal')) return <KeyRound size={14} className="text-verde" />
+        if (eventType.includes('cancelled')) return <XCircle size={14} className="text-red-400" />
+        return <FileText size={14} className="text-gray-400" />
     }
 
     const getDetalles = (item: HistoryItem) => {
@@ -82,7 +83,7 @@ export default function HistoryModal({ open, title, items, loading, onClose }: H
             <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
                 <div className="flex items-start justify-between p-6 border-b dark:border-gray-700">
                     <div>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">📜 Historial de Actividad</h3>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2"><History size={18} className="text-gray-400" /> Historial de actividad</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400">{title}</p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl transition">✕</button>
@@ -94,7 +95,7 @@ export default function HistoryModal({ open, title, items, loading, onClose }: H
                     <div className="flex-1 overflow-auto">
                         {(!items || items.length === 0) ? (
                             <div className="p-8 text-center">
-                                <div className="text-4xl mb-2">📭</div>
+                                <History size={32} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
                                 <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sin actividad registrada</div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">Los cambios futuros se registrarán aquí automáticamente</div>
                             </div>

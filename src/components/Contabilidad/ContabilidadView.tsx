@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { Paperclip, Trash2, XCircle, ClipboardList } from 'lucide-react'
 import { clpToUF } from '../../utils/formatters'
 import { parseLiquidacionPDF } from '../../utils/parseLiquidacionPDF'
 import { supabase } from '../../utils/supabase'
@@ -262,7 +263,7 @@ export default function ContabilidadView({
                 pendingPDFRef.current = null
             }
 
-            showToast('✅ Guardado exitosamente', 'success')
+            showToast('Guardado exitosamente', 'success')
             setShowModal(false); setEditing(null); onReload()
         } catch (err) {
             showToast('Error al guardar: ' + (err as Error).message, 'error')
@@ -288,15 +289,15 @@ export default function ContabilidadView({
             const file = (e.target as HTMLInputElement).files?.[0]
             if (!file) return
             try {
-                showToast('⏳ Leyendo PDF…', 'info')
+                showToast('Leyendo PDF…', 'info')
                 const parsed = await parseLiquidacionPDF(file)
                 pendingPDFRef.current = file
                 setEditing(parsed as unknown as FinancialRecord)
                 setModalType('liquidacion')
                 setShowModal(true)
-                showToast('✅ PDF leído — revisa los datos antes de guardar', 'success')
+                showToast('PDF leído — revisa los datos antes de guardar', 'success')
             } catch (err) {
-                showToast('❌ No se pudo leer el PDF: ' + (err as Error).message, 'error')
+                showToast('No se pudo leer el PDF: ' + (err as Error).message, 'error')
             }
         }
         input.click()
@@ -334,16 +335,16 @@ export default function ContabilidadView({
             : 'Todos'
         const fechaExport = new Date().toISOString().split('T')[0]
         XLSX.writeFile(wb, `THO_Retiros_Socios_${periodoTexto}_${fechaExport}.xlsx`)
-        showToast(`✅ Excel exportado`, 'success')
+        showToast(`Excel exportado`, 'success')
     }
 
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <h2 className="text-2xl font-bold">
-                    {contaTab === 'dashboard' && '💰 Dashboard Financiero'}
-                    {contaTab === 'conciliacion' && '🏦 Conciliación Bancaria'}
-                    {['pl','emitidas','recibidas','boletas','sueldos','caja'].includes(contaTab) && '📊 Estado de Resultados'}
+                    {contaTab === 'dashboard' && 'Dashboard Financiero'}
+                    {contaTab === 'conciliacion' && 'Conciliación Bancaria'}
+                    {['pl','emitidas','recibidas','boletas','sueldos','caja'].includes(contaTab) && 'Estado de Resultados'}
                 </h2>
             </div>
 
@@ -351,10 +352,10 @@ export default function ContabilidadView({
             {contaTab === 'dashboard' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     <MetricCard title="💵 Emitidas" value={`${Math.round(totalEmitidas)} UF`} subtitle={`$${Math.round(totalEmitidas * ufActual).toLocaleString('es-CL')}`} color="verde" />
-                    <MetricCard title="📥 Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * ufActual).toLocaleString('es-CL')}`} color="naranja" />
+                    <MetricCard title="Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * ufActual).toLocaleString('es-CL')}`} color="naranja" />
                     <MetricCard title="👤 Honorarios" value={`${Math.round(totalBoletas)} UF`} subtitle={`Bruto (15.25% ret.)`} color="azul" />
                     <MetricCard title="💵 Gastos Menores" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / ufActual)} UF`} color="fucsia" />
-                    <MetricCard title="📊 Margen" value={`${Math.round(margen)} UF`} subtitle={margen >= 0 ? '🟢 Positivo' : '🔴 Negativo'} color={margen >= 0 ? 'verde' : 'naranja'} />
+                    <MetricCard title="Margen" value={`${Math.round(margen)} UF`} subtitle={margen >= 0 ? 'Positivo' : 'Negativo'} color={margen >= 0 ? 'verde' : 'naranja'} />
                 </div>
             )}
 
@@ -363,9 +364,9 @@ export default function ContabilidadView({
                     <div className="border-b dark:border-gray-700 px-6">
                         <nav className="flex space-x-6 overflow-x-auto">
                             {[
-                                { id: 'pl', nombre: '📋 Estado de Resultados' },
-                                { id: 'emitidas', nombre: '📤 Emitidas' },
-                                { id: 'recibidas', nombre: '📥 Recibidas' },
+                                { id: 'pl', nombre: 'Estado de Resultados' },
+                                { id: 'emitidas', nombre: 'Emitidas' },
+                                { id: 'recibidas', nombre: 'Recibidas' },
                                 { id: 'boletas', nombre: '👤 Remuneraciones' },
                                 { id: 'sueldos', nombre: '💼 Retiros' },
                                 { id: 'caja', nombre: '💵 Gastos Menores' },
@@ -484,7 +485,7 @@ export default function ContabilidadView({
                                                 a.tipo === 'fiscal' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
                                                 'bg-blue-50 text-blue-700 border border-blue-200'
                                             }`}>
-                                                <span>{a.tipo === 'danger' ? '🔴' : a.tipo === 'warning' ? '⚠️' : a.tipo === 'fiscal' ? '💸' : 'ℹ️'}</span>
+                                                <span className={`inline-block w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${a.tipo === 'danger' ? 'bg-red-500' : a.tipo === 'warning' ? 'bg-yellow-400' : a.tipo === 'fiscal' ? 'bg-naranja' : 'bg-azul'}`}></span>
                                                 <span>{a.msg}</span>
                                             </div>
                                         ))}
@@ -493,26 +494,26 @@ export default function ContabilidadView({
 
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                     <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
-                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">💰 Ingresos</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Ingresos</div>
                                         <DualCurrency amountUF={Math.round(emitidaActual)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
                                         <div className={`text-xs mt-1 ${cambioIngresos === null ? 'text-gray-400' : cambioIngresos >= 0 ? 'text-verde' : 'text-red-500'}`}>
                                             {cambioIngresos === null ? 'Sin datos período anterior' : `${cambioIngresos >= 0 ? '↑' : '↓'} ${Math.abs(Math.round(cambioIngresos))}% vs período anterior`}
                                         </div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
-                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">📥 Gastos Total</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Gastos Total</div>
                                         <DualCurrency amountUF={Math.round(gastosActual + honorariosActual + cajaActual)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
                                         <div className={`text-xs mt-1 ${cambioGastos === null ? 'text-gray-400' : cambioGastos >= 0 ? 'text-red-500' : 'text-verde'}`}>
                                             {cambioGastos === null ? 'Sin datos período anterior' : `${cambioGastos >= 0 ? '↑' : '↓'} ${Math.abs(Math.round(cambioGastos))}% vs período anterior`}
                                         </div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
-                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">📊 Flujo Neto</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Flujo Neto</div>
                                         <DualCurrency amountUF={Math.round(flujoNeto)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
                                         <div className="text-xs text-gray-400 mt-1">Ingresos - Gastos</div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
-                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">💸 Retenciones</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Retenciones</div>
                                         <DualCurrency amountUF={Math.round(retenciones)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
                                         <div className="text-xs text-gray-400 mt-1">Por pagar al SII</div>
                                     </div>
@@ -521,7 +522,7 @@ export default function ContabilidadView({
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 flex items-center justify-between">
                                         <div>
-                                            <div className="text-xs text-green-600 font-medium">📤 Por Cobrar</div>
+                                            <div className="text-xs text-green-600 font-medium">Por Cobrar</div>
                                             <DualCurrency amountUF={Math.round(porCobrar)} ufValue={ufActual} size="md" primary={monedaPreferida} />
                                             <div className="text-xs text-green-500">{facturasEmitidas.filter(f => f.estado === 'Pendiente').length} facturas</div>
                                         </div>
@@ -529,18 +530,18 @@ export default function ContabilidadView({
                                     </div>
                                     <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 flex items-center justify-between">
                                         <div>
-                                            <div className="text-xs text-orange-600 font-medium">📥 Por Pagar</div>
+                                            <div className="text-xs text-orange-600 font-medium">Por Pagar</div>
                                             <DualCurrency amountUF={Math.round(porPagar)} ufValue={ufActual} size="md" primary={monedaPreferida} />
                                             <div className="text-xs text-orange-500">{facturasRecibidas.filter(f => f.estado === 'Pendiente').length} facturas</div>
                                         </div>
-                                        <span className="text-3xl opacity-30">📋</span>
+                                        <ClipboardList size={28} className="opacity-30" />
                                     </div>
                                 </div>
 
                                 {alertasValidacion.length > 0 && (
                                     <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 rounded-xl p-4">
                                         <div className="flex items-start justify-between mb-2">
-                                            <h4 className="font-bold text-yellow-800">⚠️ Alertas de Validación</h4>
+                                            <h4 className="font-bold text-yellow-800">Alertas de Validación</h4>
                                             <button onClick={() => setAlertasValidacion([])} className="text-yellow-600 hover:text-yellow-800 text-sm">✕ Cerrar</button>
                                         </div>
                                         <div className="space-y-2">
@@ -555,7 +556,7 @@ export default function ContabilidadView({
 
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                                     <div className="lg:col-span-2 bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
-                                        <h4 className="font-bold text-sm mb-3">📈 Ingresos vs Gastos ({datos6Meses.length} {datos6Meses.length === 1 ? 'mes' : 'meses'})</h4>
+                                        <h4 className="font-bold text-sm mb-3">Ingresos vs Gastos ({datos6Meses.length} {datos6Meses.length === 1 ? 'mes' : 'meses'})</h4>
                                         <div style={{ height: '220px', position: 'relative' }}><canvas id="chartIngGastos"></canvas></div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
@@ -580,8 +581,8 @@ export default function ContabilidadView({
                                 <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
                                     <h4 className="font-bold text-sm mb-3">⚡ Acciones Rápidas</h4>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                        <button onClick={() => { setContaTab('emitidas'); setEditing(null); setModalType('emitida'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-green-50 hover:bg-green-100 rounded-lg transition"><span className="text-xl">📤</span><span className="text-xs font-medium text-green-700">Nueva Factura</span></button>
-                                        <button onClick={() => { setContaTab('recibidas'); setEditing(null); setModalType('recibida'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-orange-50 hover:bg-orange-100 rounded-lg transition"><span className="text-xl">📥</span><span className="text-xs font-medium text-orange-700">Nuevo Gasto</span></button>
+                                        <button onClick={() => { setContaTab('emitidas'); setEditing(null); setModalType('emitida'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-green-50 hover:bg-green-100 rounded-lg transition"><span className="text-xs font-medium text-green-700">Nueva Factura</span></button>
+                                        <button onClick={() => { setContaTab('recibidas'); setEditing(null); setModalType('recibida'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-orange-50 hover:bg-orange-100 rounded-lg transition"><span className="text-xs font-medium text-orange-700">Nuevo Gasto</span></button>
                                         <button onClick={() => { setContaTab('boletas'); setEditing(null); setModalType('boleta'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition"><span className="text-xl">👤</span><span className="text-xs font-medium text-blue-700">Boleta Honor.</span></button>
                                         <button onClick={() => { setContaTab('caja'); setEditing(null); setModalType('caja'); setShowModal(true) }} className="flex flex-col items-center gap-1 p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition"><span className="text-xl">💵</span><span className="text-xs font-medium text-purple-700">Gastos Menores</span></button>
                                     </div>
@@ -589,7 +590,7 @@ export default function ContabilidadView({
 
                                 {/* Zona de limpieza */}
                                 <details className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
-                                    <summary className="px-4 py-3 text-sm font-medium text-red-700 dark:text-red-400 cursor-pointer select-none">🗑️ Zona de administración — Limpiar datos EERR</summary>
+                                    <summary className="px-4 py-3 text-sm font-medium text-red-700 dark:text-red-400 cursor-pointer select-none">Zona de administración — Limpiar datos EERR</summary>
                                     <div className="px-4 pb-4 pt-2 space-y-4">
                                         <p className="text-xs text-red-600 dark:text-red-400">Selecciona qué tablas y qué año limpiar. <strong>No se puede deshacer.</strong></p>
 
@@ -610,8 +611,8 @@ export default function ContabilidadView({
                                         {/* Checkboxes por tabla */}
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             {([
-                                                { key: 'facturas_emitidas', label: '📤 Facturas emitidas' },
-                                                { key: 'facturas_recibidas', label: '📥 Facturas recibidas' },
+                                                { key: 'facturas_emitidas', label: 'Facturas emitidas' },
+                                                { key: 'facturas_recibidas', label: 'Facturas recibidas' },
                                                 { key: 'boletas_honorarios', label: '👤 Boletas de honorarios' },
                                                 { key: 'sueldos_socios', label: '💼 Retiros de socios' },
                                                 { key: 'caja_chica', label: '💵 Gastos menores' },
@@ -674,13 +675,13 @@ export default function ContabilidadView({
                                                 if (errores.length > 0) {
                                                     showToast('Error parcial: ' + errores.join(', '), 'error')
                                                 } else {
-                                                    showToast(`✅ ${listado} del año ${añoSeleccionado} eliminados.`, 'success')
+                                                    showToast(`${listado} del año ${añoSeleccionado} eliminados.`, 'success')
                                                 }
                                                 onReload()
                                             }}
                                             className="px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition"
                                         >
-                                            🗑️ Limpiar selección — {añoSeleccionado}
+                                            Limpiar selección — {añoSeleccionado}
                                         </button>
 
                                         <p className="text-xs text-red-500">Los movimientos bancarios se limpian desde la pestaña de Conciliación.</p>
@@ -696,7 +697,7 @@ export default function ContabilidadView({
                             <div className="flex justify-between items-center">
                                 <h3 className="font-bold dark:text-gray-200">Facturas Emitidas</h3>
                                 <div className="flex gap-2">
-                                    <button onClick={importarFacturasEmitidasExcel} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">📄 Importar Excel</button>
+                                    <button onClick={importarFacturasEmitidasExcel} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Importar Excel</button>
                                     <button onClick={() => { setEditing(null); setModalType('emitida'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                 </div>
                             </div>
@@ -729,13 +730,13 @@ export default function ContabilidadView({
                                                 <td className="px-4 py-3 text-sm">{f.cliente}</td>
                                                 <td className="px-4 py-3 text-sm">{f.fecha_emision}</td>
                                                 <td className="px-4 py-3"><DualCurrency amountUF={f.monto_uf} amountCLP={f.monto_clp} ufValue={f.uf_dia || ufActual} size="sm" primary={monedaPreferida} /></td>
-                                                <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Vencida' ? 'bg-red-100 text-red-800' : f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span></td>
+                                                <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Vencida' ? 'bg-red-100 text-red-800' : f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado === 'Reclamada' ? 'Anulada' : f.estado}</span></td>
                                                 <td className="px-4 py-3 text-right space-x-2">
                                                     {f.estado !== 'Reclamada' && (
-                                                        <button onClick={async () => { if (await confirmModal(`¿Anular factura #${f.numero_factura}?`)) { const r = await supabase.from('facturas_emitidas').update({ estado: 'Reclamada' }).eq('id', f.id); if (!r.error) onReload() } }} className="text-gray-500 text-sm hover:text-red-600">❌</button>
+                                                        <button onClick={async () => { if (await confirmModal(`¿Anular factura #${f.numero_factura}?`)) { const r = await supabase.from('facturas_emitidas').update({ estado: 'Reclamada' }).eq('id', f.id); if (!r.error) onReload() } }} className="text-gray-500 text-sm hover:text-red-600"><XCircle size={14} /></button>
                                                     )}
                                                     <button onClick={() => { setEditing(f); setModalType('emitida'); setShowModal(true) }} className="text-azul text-sm">Editar</button>
-                                                    <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura}`)} className="text-gray-700 text-sm">📎</button>
+                                                    <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura}`)} className="text-gray-700 text-sm"><Paperclip size={14} /></button>
                                                     <button onClick={() => handleDelete(f.id, 'emitida')} className="text-red-600 text-sm">Eliminar</button>
                                                 </td>
                                             </tr>
@@ -752,8 +753,8 @@ export default function ContabilidadView({
                                         </div>
                                         <div className="flex gap-2 pt-2 border-t">
                                             <button onClick={() => { setEditing(f); setModalType('emitida'); setShowModal(true) }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                            <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
-                                            <button onClick={() => handleDelete(f.id, 'emitida')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                            <button onClick={() => onFiles('facturas_emitidas', f.id, `Factura ${f.numero_factura}`)} className="px-3 py-2 text-sm bg-gray-50 rounded"><Paperclip size={14} /></button>
+                                            <button onClick={() => handleDelete(f.id, 'emitida')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded"><Trash2 size={14} /></button>
                                         </div>
                                     </div>
                                 ))}
@@ -767,7 +768,7 @@ export default function ContabilidadView({
                             <div className="flex justify-between items-center">
                                 <h3 className="font-bold dark:text-gray-200">Facturas Recibidas (Gastos)</h3>
                                 <div className="flex gap-2">
-                                    <button onClick={importarFacturasRecibidasExcel} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">📄 Importar Excel</button>
+                                    <button onClick={importarFacturasRecibidasExcel} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Importar Excel</button>
                                     <button onClick={() => { setEditing(null); setModalType('recibida'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                 </div>
                             </div>
@@ -800,13 +801,13 @@ export default function ContabilidadView({
                                                 <td className="px-4 py-3 text-sm">{f.categoria}</td>
                                                 <td className="px-4 py-3 text-sm">{f.fecha_emision}</td>
                                                 <td className="px-4 py-3"><DualCurrency amountUF={f.monto_uf} amountCLP={f.monto_clp} ufValue={f.uf_dia || ufActual} size="sm" primary={monedaPreferida} /></td>
-                                                <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado === 'Reclamada' ? '❌ Anulada' : f.estado}</span></td>
+                                                <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 text-xs rounded-full ${f.estado === 'Pagada' ? 'bg-green-100 text-green-800' : f.estado === 'Reclamada' ? 'bg-gray-200 text-gray-600 line-through' : 'bg-yellow-100 text-yellow-800'}`}>{f.estado === 'Reclamada' ? 'Anulada' : f.estado}</span></td>
                                                 <td className="px-4 py-3 text-right space-x-2">
                                                     {f.estado !== 'Reclamada' && (
-                                                        <button onClick={async () => { if (await confirmModal(`¿Anular factura de ${f.proveedor}?`)) { const r = await supabase.from('facturas_recibidas').update({ estado: 'Reclamada' }).eq('id', f.id); if (!r.error) onReload() } }} className="text-gray-500 text-sm hover:text-red-600">❌</button>
+                                                        <button onClick={async () => { if (await confirmModal(`¿Anular factura de ${f.proveedor}?`)) { const r = await supabase.from('facturas_recibidas').update({ estado: 'Reclamada' }).eq('id', f.id); if (!r.error) onReload() } }} className="text-gray-500 text-sm hover:text-red-600"><XCircle size={14} /></button>
                                                     )}
                                                     <button onClick={() => { setEditing(f); setModalType('recibida'); setShowModal(true) }} className="text-azul text-sm">Editar</button>
-                                                    <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor} - ${f.categoria}`)} className="text-gray-700 text-sm">📎</button>
+                                                    <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor} - ${f.categoria}`)} className="text-gray-700 text-sm"><Paperclip size={14} /></button>
                                                     <button onClick={() => handleDelete(f.id, 'recibida')} className="text-red-600 text-sm">Eliminar</button>
                                                 </td>
                                             </tr>
@@ -823,8 +824,8 @@ export default function ContabilidadView({
                                         </div>
                                         <div className="flex gap-2 pt-2 border-t">
                                             <button onClick={() => { setEditing(f); setModalType('recibida'); setShowModal(true) }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                            <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor} - ${f.categoria}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
-                                            <button onClick={() => handleDelete(f.id, 'recibida')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                            <button onClick={() => onFiles('facturas_recibidas', f.id, `${f.proveedor} - ${f.categoria}`)} className="px-3 py-2 text-sm bg-gray-50 rounded"><Paperclip size={14} /></button>
+                                            <button onClick={() => handleDelete(f.id, 'recibida')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded"><Trash2 size={14} /></button>
                                         </div>
                                     </div>
                                 ))}
@@ -838,7 +839,7 @@ export default function ContabilidadView({
                             <div className="flex justify-between items-center flex-wrap gap-3">
                                 <h3 className="font-bold dark:text-gray-200">Retiros Socios</h3>
                                 <div className="flex gap-2">
-                                    <button onClick={() => exportarSueldosExcel(sueldosAct, 'periodo')} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition">📊 Exportar Excel</button>
+                                    <button onClick={() => exportarSueldosExcel(sueldosAct, 'periodo')} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition">Exportar Excel</button>
                                     <button onClick={() => { setEditing(null); setModalType('sueldo'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Retiro</button>
                                 </div>
                             </div>
@@ -866,7 +867,7 @@ export default function ContabilidadView({
                                                 <td className="px-4 py-3 text-sm">{s.concepto}</td>
                                                 <td className="px-4 py-3 text-right space-x-2">
                                                     <button onClick={() => { setEditing(s); setModalType('sueldo'); setShowModal(true) }} className="text-azul text-sm">Editar</button>
-                                                    <button onClick={() => onFiles('sueldos_socios', s.id, `Retiro ${s.socio} ${s.mes_servicio}`)} className="text-gray-700 text-sm">📎</button>
+                                                    <button onClick={() => onFiles('sueldos_socios', s.id, `Retiro ${s.socio} ${s.mes_servicio}`)} className="text-gray-700 text-sm"><Paperclip size={14} /></button>
                                                     <button onClick={async () => { if (await confirmModal('¿Eliminar este retiro?')) { await supabase.from('sueldos_socios').delete().eq('id', s.id); onReload() } }} className="text-red-600 text-sm">Eliminar</button>
                                                 </td>
                                             </tr>
@@ -880,8 +881,8 @@ export default function ContabilidadView({
                                         <div className="font-bold dark:text-gray-200">{s.socio} · {s.mes_servicio}</div>
                                         <div className="flex gap-2 pt-2 border-t mt-2">
                                             <button onClick={() => { setEditing(s); setModalType('sueldo'); setShowModal(true) }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                            <button onClick={() => onFiles('sueldos_socios', s.id, `Retiro ${s.socio}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
-                                            <button onClick={async () => { if (await confirmModal('¿Eliminar?')) { await supabase.from('sueldos_socios').delete().eq('id', s.id); onReload() } }} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                            <button onClick={() => onFiles('sueldos_socios', s.id, `Retiro ${s.socio}`)} className="px-3 py-2 text-sm bg-gray-50 rounded"><Paperclip size={14} /></button>
+                                            <button onClick={async () => { if (await confirmModal('¿Eliminar?')) { await supabase.from('sueldos_socios').delete().eq('id', s.id); onReload() } }} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded"><Trash2 size={14} /></button>
                                         </div>
                                     </div>
                                 ))}
@@ -895,7 +896,7 @@ export default function ContabilidadView({
                             <div className="flex justify-between items-center">
                                 <h3 className="font-bold dark:text-gray-200">Gastos Menores</h3>
                                 <div className="flex gap-2">
-                                    <button onClick={() => { setContaTab('conciliacion'); importarCartola() }} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">🏦 Importar Cartola</button>
+                                    <button onClick={() => { setContaTab('conciliacion'); importarCartola() }} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Importar Cartola</button>
                                     <button onClick={() => { setEditing(null); setModalType('caja'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nuevo Gasto</button>
                                 </div>
                             </div>
@@ -923,7 +924,7 @@ export default function ContabilidadView({
                                                 <td className="px-4 py-3 text-sm">{c.responsable}</td>
                                                 <td className="px-4 py-3 text-right space-x-2">
                                                     <button onClick={() => { setEditing(c); setModalType('caja'); setShowModal(true) }} className="text-azul text-sm">Editar</button>
-                                                    <button onClick={() => onFiles('caja_chica', c.id, c.concepto)} className="text-gray-700 text-sm">📎</button>
+                                                    <button onClick={() => onFiles('caja_chica', c.id, c.concepto)} className="text-gray-700 text-sm"><Paperclip size={14} /></button>
                                                     <button onClick={() => handleDelete(c.id, 'caja')} className="text-red-600 text-sm">Eliminar</button>
                                                 </td>
                                             </tr>
@@ -937,8 +938,8 @@ export default function ContabilidadView({
                                         <div className="flex justify-between"><div className="font-bold dark:text-gray-200">{c.concepto}</div><span className="font-medium text-verde">${Math.round(c.monto_clp).toLocaleString('es-CL')}</span></div>
                                         <div className="flex gap-2 pt-2 border-t mt-2">
                                             <button onClick={() => { setEditing(c); setModalType('caja'); setShowModal(true) }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                            <button onClick={() => onFiles('caja_chica', c.id, c.concepto)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
-                                            <button onClick={() => handleDelete(c.id, 'caja')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                            <button onClick={() => onFiles('caja_chica', c.id, c.concepto)} className="px-3 py-2 text-sm bg-gray-50 rounded"><Paperclip size={14} /></button>
+                                            <button onClick={() => handleDelete(c.id, 'caja')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded"><Trash2 size={14} /></button>
                                         </div>
                                     </div>
                                 ))}
@@ -955,7 +956,7 @@ export default function ContabilidadView({
                             <div className="flex justify-between items-center">
                                 <h3 className="font-bold dark:text-gray-200">Boletas de Honorarios</h3>
                                 <div className="flex gap-2">
-                                    <button onClick={importarBoletasExcel} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">📄 Importar Excel</button>
+                                    <button onClick={importarBoletasExcel} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Importar Excel</button>
                                     <button onClick={() => { setEditing(null); setModalType('boleta'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva Boleta</button>
                                 </div>
                             </div>
@@ -985,7 +986,7 @@ export default function ContabilidadView({
                                                 <td className="px-4 py-3"><DualCurrency amountUF={b.monto_liquido_uf} amountCLP={b.monto_liquido_clp} ufValue={b.uf_dia || ufActual} size="sm" primary={monedaPreferida} /></td>
                                                 <td className="px-4 py-3 text-right space-x-2">
                                                     <button onClick={() => { setEditing(b); setModalType('boleta'); setShowModal(true) }} className="text-azul text-sm">Editar</button>
-                                                    <button onClick={() => onFiles('boletas_honorarios', b.id, `${b.prestador} - ${b.mes_servicio}`)} className="text-gray-700 text-sm">📎</button>
+                                                    <button onClick={() => onFiles('boletas_honorarios', b.id, `${b.prestador} - ${b.mes_servicio}`)} className="text-gray-700 text-sm"><Paperclip size={14} /></button>
                                                     <button onClick={() => handleDelete(b.id, 'boleta')} className="text-red-600 text-sm">Eliminar</button>
                                                 </td>
                                             </tr>
@@ -999,8 +1000,8 @@ export default function ContabilidadView({
                                         <div className="flex justify-between"><div><div className="font-bold dark:text-gray-200">{b.prestador}</div><div className="text-sm text-gray-600">{b.mes_servicio}</div></div><span className="text-sm font-medium text-verde">{b.monto_liquido_uf} UF</span></div>
                                         <div className="flex gap-2 pt-2 border-t mt-2">
                                             <button onClick={() => { setEditing(b); setModalType('boleta'); setShowModal(true) }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                            <button onClick={() => onFiles('boletas_honorarios', b.id, `${b.prestador} - ${b.mes_servicio}`)} className="px-3 py-2 text-sm bg-gray-50 rounded">📎</button>
-                                            <button onClick={() => handleDelete(b.id, 'boleta')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                            <button onClick={() => onFiles('boletas_honorarios', b.id, `${b.prestador} - ${b.mes_servicio}`)} className="px-3 py-2 text-sm bg-gray-50 rounded"><Paperclip size={14} /></button>
+                                            <button onClick={() => handleDelete(b.id, 'boleta')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded"><Trash2 size={14} /></button>
                                         </div>
                                     </div>
                                 ))}
@@ -1012,7 +1013,7 @@ export default function ContabilidadView({
                             <div className="flex justify-between items-center">
                                 <h3 className="font-bold dark:text-gray-200">Liquidaciones de Sueldo</h3>
                                 <div className="flex gap-2">
-                                    <button onClick={handleImportarLiquidacionPDF} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">📄 Importar PDF</button>
+                                    <button onClick={handleImportarLiquidacionPDF} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Importar PDF</button>
                                     <button onClick={() => { setEditing(null); setModalType('liquidacion'); setShowModal(true) }} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">+ Nueva</button>
                                 </div>
                             </div>
@@ -1061,7 +1062,7 @@ export default function ContabilidadView({
                                         </div>
                                         <div className="flex gap-2 pt-2 border-t mt-2">
                                             <button onClick={() => { setEditing(l); setModalType('liquidacion'); setShowModal(true) }} className="flex-1 px-3 py-2 text-sm bg-blue-50 text-azul rounded">Editar</button>
-                                            <button onClick={() => handleDelete(l.id, 'liquidacion')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded">🗑️</button>
+                                            <button onClick={() => handleDelete(l.id, 'liquidacion')} className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded"><Trash2 size={14} /></button>
                                         </div>
                                     </div>
                                 ))}
@@ -1078,19 +1079,19 @@ export default function ContabilidadView({
                                 <span className="text-sm text-gray-500">{movBancAct.length} movimientos · {movBancAct.filter(m => m.estado_conciliacion === 'pendiente').length} pendientes</span>
                                 <div className="flex gap-2">
                                     <button onClick={async () => {
-                                        if (!(await confirmModal(`⚠️ ESTO ELIMINA TODOS los movimientos bancarios. No se puede deshacer.`, { title: 'Confirmar eliminación masiva', danger: true, confirmLabel: 'Continuar' }))) return
+                                        if (!(await confirmModal(`ESTO ELIMINA TODOS los movimientos bancarios. No se puede deshacer.`, { title: 'Confirmar eliminación masiva', danger: true, confirmLabel: 'Continuar' }))) return
                                         const verificacion = window.prompt('Para confirmar, escribe ELIMINAR (en mayúsculas):')
                                         if (verificacion !== 'ELIMINAR') { showToast('Operación cancelada', 'info'); return }
                                         const { error } = await supabase.from('movimientos_bancarios').delete().neq('id', '00000000-0000-0000-0000-000000000000')
                                         if (error) showToast('Error: ' + error.message, 'error')
-                                        else { showToast('✅ Movimientos eliminados', 'success'); onReload() }
-                                    }} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm">🗑️ Limpiar Todo</button>
-                                    <button onClick={importarCartola} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">📤 Importar Cartola</button>
+                                        else { showToast('Movimientos eliminados', 'success'); onReload() }
+                                    }} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm">Limpiar Todo</button>
+                                    <button onClick={importarCartola} className="px-4 py-2 color-naranja text-white rounded-lg text-sm">Importar Cartola</button>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700"><div className="text-sm text-gray-600">⏳ Pendientes por Revisar</div><div className="text-2xl font-bold text-orange-600">{movBancAct.filter(m => m.estado_conciliacion === 'pendiente').length}</div></div>
-                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700"><div className="text-sm text-gray-600">✅ Conciliados</div><div className="text-2xl font-bold text-verde">{movBancAct.filter(m => m.estado_conciliacion === 'conciliado').length}</div></div>
+                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700"><div className="text-sm text-gray-600">Pendientes por Revisar</div><div className="text-2xl font-bold text-orange-600">{movBancAct.filter(m => m.estado_conciliacion === 'pendiente').length}</div></div>
+                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700"><div className="text-sm text-gray-600">Conciliados</div><div className="text-2xl font-bold text-verde">{movBancAct.filter(m => m.estado_conciliacion === 'conciliado').length}</div></div>
                             </div>
                             <div className="space-y-3">
                                 {movBancAct.filter(m => m.estado_conciliacion === 'pendiente').map(mov => {
@@ -1107,7 +1108,7 @@ export default function ContabilidadView({
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 flex-wrap">
                                                         <span className={`px-2 py-1 rounded text-xs font-medium ${esEntrada ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                            {esEntrada ? '📈 Entrada' : '📉 Salida'}
+                                                            {esEntrada ? 'Entrada' : 'Salida'}
                                                         </span>
                                                         <span className="text-sm text-gray-500">{movAny.fecha || mov.fecha}</span>
                                                         {movAny.sucursal && <span className="text-xs text-gray-400">{String(movAny.sucursal)}</span>}
@@ -1126,7 +1127,7 @@ export default function ContabilidadView({
                                             {mejorMatch && mejorMatch.score >= 0.60 ? (
                                                 <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded mb-2 border border-blue-200 dark:border-blue-700">
                                                     <div className="flex items-center justify-between mb-1">
-                                                        <div className="text-sm font-medium text-azul">✨ Match sugerido</div>
+                                                        <div className="text-sm font-medium text-azul">Match sugerido</div>
                                                         <div className="flex items-center gap-1">
                                                             <div className="h-2 rounded-full bg-blue-200 w-16 overflow-hidden">
                                                                 <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.round(mejorMatch.score * 100)}%` }} />
@@ -1137,7 +1138,7 @@ export default function ContabilidadView({
                                                     <div className="text-sm font-medium dark:text-gray-200">{mejorMatch.descripcion}</div>
                                                     <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-3">
                                                         <span>${mejorMatch.monto_clp?.toLocaleString('es-CL')}</span>
-                                                        {mejorMatch.fecha && <span className="text-gray-400">📅 {mejorMatch.fecha}</span>}
+                                                        {mejorMatch.fecha && <span className="text-gray-400">{mejorMatch.fecha}</span>}
                                                         {(mejorMatch as FinancialRecord).detalle && <span className="italic">{String((mejorMatch as FinancialRecord).detalle)}</span>}
                                                     </div>
                                                     <div className="flex gap-2 mt-2 flex-wrap">
@@ -1149,7 +1150,7 @@ export default function ContabilidadView({
                                                                         <div key={idx} className="text-xs flex justify-between items-center p-2 bg-white dark:bg-gray-700 rounded gap-2">
                                                                             <div className="flex-1 min-w-0">
                                                                                 <span className="truncate block">{match.descripcion}</span>
-                                                                                <span className="text-gray-400">${match.monto_clp?.toLocaleString('es-CL')} · {Math.round(match.score * 100)}%{match.fecha ? ` · 📅 ${match.fecha}` : ''}</span>
+                                                                                <span className="text-gray-400">${match.monto_clp?.toLocaleString('es-CL')} · {Math.round(match.score * 100)}%{match.fecha ? ` · ${match.fecha}` : ''}</span>
                                                                             </div>
                                                                             <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${match.descripcion}?`)) { aplicarConciliacion(mov.id, match.tipo, match.id) } }} className="px-2 py-1 bg-blue-600 text-white rounded text-xs shrink-0">Aplicar</button>
                                                                         </div>
@@ -1163,13 +1164,13 @@ export default function ContabilidadView({
                                             ) : resultado.matches.length > 0 ? (
                                                 /* Matches de baja confianza (35-60%) */
                                                 <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded mb-2 border border-gray-200 dark:border-gray-600">
-                                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">🔍 Posibles coincidencias (revisar manualmente)</div>
+                                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">Posibles coincidencias (revisar manualmente)</div>
                                                     <div className="space-y-1">
                                                         {resultado.matches.slice(0, 4).map((match, idx) => (
                                                             <div key={idx} className="text-xs flex justify-between items-center p-2 bg-white dark:bg-gray-700 rounded gap-2">
                                                                 <div className="flex-1 min-w-0">
                                                                     <span className="truncate block dark:text-gray-200">{match.descripcion}</span>
-                                                                    <span className="text-gray-400">${match.monto_clp?.toLocaleString('es-CL')} · {Math.round(match.score * 100)}% confianza{match.fecha ? ` · 📅 ${match.fecha}` : ''}</span>
+                                                                    <span className="text-gray-400">${match.monto_clp?.toLocaleString('es-CL')} · {Math.round(match.score * 100)}% confianza{match.fecha ? ` · ${match.fecha}` : ''}</span>
                                                                 </div>
                                                                 <button onClick={async () => { if (await confirmModal(`¿Conciliar con ${match.descripcion}?`)) { aplicarConciliacion(mov.id, match.tipo, match.id) } }} className="px-2 py-1 bg-gray-600 text-white rounded text-xs shrink-0">Aplicar</button>
                                                             </div>
@@ -1181,7 +1182,7 @@ export default function ContabilidadView({
                                             {/* Sin match → sugerencia Caja Chica (solo salidas) */}
                                             {!esEntrada && resultado.sugerenciaCategoria && (mejorMatch?.score ?? 0) < 0.60 && (
                                                 <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded mb-2 border border-yellow-200 dark:border-yellow-700">
-                                                    <div className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-1">💡 Sin documento registrado — proponer Gasto Menor</div>
+                                                    <div className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-1">Sin documento registrado — proponer Gasto Menor</div>
                                                     <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">Categoría detectada: <span className="font-medium">{resultado.sugerenciaCategoria}</span></div>
                                                     <button onClick={async () => { if (await confirmModal(`¿Crear en Gastos Menores (${resultado.sugerenciaCategoria})?`)) { crearGastoCajaChica(mov, resultado.sugerenciaCategoria!) } }} className="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700">+ Crear en Gastos Menores</button>
                                                 </div>
@@ -1190,8 +1191,8 @@ export default function ContabilidadView({
                                             {/* Entrada sin factura */}
                                             {esEntrada && (mejorMatch?.score ?? 0) < 0.60 && (
                                                 <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded mb-2 border border-green-200 dark:border-green-700">
-                                                    <div className="text-sm font-medium text-green-700 dark:text-green-400 mb-1">💡 Depósito sin factura emitida registrada</div>
-                                                    <button onClick={() => showToast('Próximamente: crear factura emitida prellenada', 'info')} className="px-3 py-1 bg-green-600 text-white rounded text-sm">✏️ Crear Factura</button>
+                                                    <div className="text-sm font-medium text-green-700 dark:text-green-400 mb-1">Depósito sin factura emitida registrada</div>
+                                                    <button onClick={() => showToast('Próximamente: crear factura emitida prellenada', 'info')} className="px-3 py-1 bg-green-600 text-white rounded text-sm">Crear Factura</button>
                                                 </div>
                                             )}
 
@@ -1200,7 +1201,7 @@ export default function ContabilidadView({
                                                     <button onClick={async () => { const cat = resultado.sugerenciaCategoria || 'Otros'; if (await confirmModal(`¿Crear en Gastos Menores como "${cat}"?`)) { crearGastoCajaChica(mov, cat) } }} className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200">💵 Gastos Menores</button>
                                                 )}
                                                 {esEntrada && (
-                                                    <button onClick={() => showToast('Próximamente: crear factura emitida', 'info')} className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">📤 Factura Emitida</button>
+                                                    <button onClick={() => showToast('Próximamente: crear factura emitida', 'info')} className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">Factura Emitida</button>
                                                 )}
                                                 <button onClick={() => ignorarMovimiento(mov.id)} className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400">🚫 Ignorar</button>
                                             </div>
@@ -1208,12 +1209,12 @@ export default function ContabilidadView({
                                     )
                                 })}
                                 {movBancAct.filter(m => m.estado_conciliacion === 'pendiente').length === 0 && (
-                                    <div className="text-center py-8 text-gray-500">✅ Todos los movimientos están conciliados o ignorados</div>
+                                    <div className="text-center py-8 text-gray-500">Todos los movimientos están conciliados o ignorados</div>
                                 )}
                             </div>
                             {movBancAct.filter(m => m.estado_conciliacion === 'conciliado').length > 0 && (
                                 <details className="mt-6">
-                                    <summary className="font-medium mb-2 cursor-pointer dark:text-gray-200">✅ Conciliados ({movBancAct.filter(m => m.estado_conciliacion === 'conciliado').length})</summary>
+                                    <summary className="font-medium mb-2 cursor-pointer dark:text-gray-200">Conciliados ({movBancAct.filter(m => m.estado_conciliacion === 'conciliado').length})</summary>
                                     <div className="space-y-2 mt-3">
                                         {movBancAct.filter(m => m.estado_conciliacion === 'conciliado').sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()).map(mov => (
                                             <div key={mov.id} className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg text-sm flex justify-between items-center">
@@ -1308,7 +1309,7 @@ export default function ContabilidadView({
                                         const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
                                         const url = window.URL.createObjectURL(blob)
                                         const a = document.createElement('a'); a.href = url; a.download = `estado-resultados-${añoSeleccionado}.csv`; a.click()
-                                    }} className="px-4 py-2 bg-gray-100 rounded-lg text-sm whitespace-nowrap">📥 CSV</button>
+                                    }} className="px-4 py-2 bg-gray-100 rounded-lg text-sm whitespace-nowrap">CSV</button>
                                     <button onClick={() => {
                                         const data = generarDatosPL()
                                         const rows = [
@@ -1335,15 +1336,15 @@ export default function ContabilidadView({
                                         for (let R = 7; R <= range.e.r; R++) { for (let C = 1; C <= range.e.c; C++) { const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]; if (cell && typeof cell.v === 'number') cell.z = '#,##0' } }
                                         XLSX.utils.book_append_sheet(wb, ws, `EERR ${añoSeleccionado}`)
                                         XLSX.writeFile(wb, `THO_Estado_Resultados_${añoSeleccionado}.xlsx`)
-                                        showToast(`✅ Estado de Resultados ${añoSeleccionado} exportado`, 'success')
-                                    }} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm whitespace-nowrap">📊 Excel Profesional</button>
+                                        showToast(`Estado de Resultados ${añoSeleccionado} exportado`, 'success')
+                                    }} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm whitespace-nowrap">Excel Profesional</button>
                                 </div>
 
                                 <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-gray-800 dark:to-gray-800 rounded-lg p-6">
-                                    <h4 className="font-bold mb-4 text-lg">📊 Resumen {añoSeleccionado}</h4>
-                                    <div className="mb-4"><div className="text-sm font-bold text-gray-600 mb-2">💰 INGRESOS</div><div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Facturas Emitidas (exentas):</span><span className="font-bold text-verde">{fmtVal(totEmitidas)}</span></div></div>
+                                    <h4 className="font-bold mb-4 text-lg">Resumen {añoSeleccionado}</h4>
+                                    <div className="mb-4"><div className="text-sm font-bold text-gray-600 mb-2">INGRESOS</div><div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Facturas Emitidas (exentas):</span><span className="font-bold text-verde">{fmtVal(totEmitidas)}</span></div></div>
                                     <div className="mb-4">
-                                        <div className="text-sm font-bold text-gray-600 mb-2">📥 GASTOS</div>
+                                        <div className="text-sm font-bold text-gray-600 mb-2">GASTOS</div>
                                         <div className="grid grid-cols-1 gap-2">
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Gastos Operacionales (+ IVA):</span><span className="font-bold text-naranja">{fmtVal(totGastos)}</span></div>
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Honorarios (bruto):</span><span className="font-bold text-azul">{fmtVal(totHonorarios)}</span></div>
@@ -1379,17 +1380,17 @@ export default function ContabilidadView({
                                             <div className="flex justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded font-bold"><span>TOTAL GASTOS:</span><span className="text-naranja">{fmtVal(totGastosConsolidado)}</span></div>
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center p-4 bg-white rounded mb-4 border-2"><span className="text-lg font-bold">📊 UTILIDAD OPERACIONAL:</span><span className={`text-2xl font-bold ${utilidadOp >= 0 ? 'text-verde' : 'text-red-600'}`}>{utilidadOp >= 0 ? '+' : ''}{fmtVal(utilidadOp)}</span></div>
+                                    <div className="flex justify-between items-center p-4 bg-white rounded mb-4 border-2"><span className="text-lg font-bold">UTILIDAD OPERACIONAL:</span><span className={`text-2xl font-bold ${utilidadOp >= 0 ? 'text-verde' : 'text-red-600'}`}>{utilidadOp >= 0 ? '+' : ''}{fmtVal(utilidadOp)}</span></div>
                                     <div className="mb-4">
-                                        <div className="text-sm font-bold text-gray-600 mb-2">💸 OBLIGACIONES FISCALES</div>
+                                        <div className="text-sm font-bold text-gray-600 mb-2">OBLIGACIONES FISCALES</div>
                                         <div className="grid grid-cols-1 gap-2">
                                             <div className="flex justify-between p-3 bg-orange-50 rounded"><span className="font-medium">Retenciones por pagar (15.25%):</span><span className="font-bold text-orange-600">{fmtVal(totRetenciones)}</span></div>
                                             <div className="flex justify-between p-3 bg-purple-50 rounded"><span className="font-medium">Impuesto estimado (20%):</span><span className="font-bold text-purple-600">{fmtVal(impuestosEstimados)}</span></div>
                                             <div className="flex justify-between p-3 bg-gray-100 rounded font-bold"><span>TOTAL FISCAL:</span><span className="text-orange-600">{fmtVal(totRetenciones + impuestosEstimados)}</span></div>
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-blue-100 rounded border-2 border-verde"><span className="text-lg font-bold">🎯 UTILIDAD NETA (después impuestos):</span><span className={`text-2xl font-bold ${utilidadDespuesImpuestos >= 0 ? 'text-verde' : 'text-red-600'}`}>{utilidadDespuesImpuestos >= 0 ? '+' : ''}{fmtVal(utilidadDespuesImpuestos)}</span></div>
-                                    <div className="text-xs text-gray-600 mt-4 text-center">ℹ️ Impuesto estimado al 20% (consultar con contador para cálculo exacto)</div>
+                                    <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-blue-100 rounded border-2 border-verde"><span className="text-lg font-bold">UTILIDAD NETA (después impuestos):</span><span className={`text-2xl font-bold ${utilidadDespuesImpuestos >= 0 ? 'text-verde' : 'text-red-600'}`}>{utilidadDespuesImpuestos >= 0 ? '+' : ''}{fmtVal(utilidadDespuesImpuestos)}</span></div>
+                                    <div className="text-xs text-gray-600 mt-4 text-center">Impuesto estimado al 20% (consultar con contador para cálculo exacto)</div>
                                 </div>
 
                                 <div>
@@ -1399,13 +1400,13 @@ export default function ContabilidadView({
                                             <thead className="bg-gray-50 dark:bg-gray-700">
                                                 <tr>
                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mes</th>
-                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💰 Ingresos</th>
-                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📥 Gastos</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ingresos</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Gastos</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">👤 Honorarios</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💼 Retiros</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💵 Caja</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">🔶 Retenc.</th>
-                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">📊 Utilidad</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Utilidad</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y">
@@ -1429,11 +1430,11 @@ export default function ContabilidadView({
                                             <div key={idx} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
                                                 <div className="font-bold text-lg mb-3 border-b pb-2">{m.mes}</div>
                                                 <div className="space-y-2 text-sm">
-                                                    <div className="flex justify-between"><span className="text-gray-600">💰 Ingresos:</span><span className="font-medium text-verde">{fmtVal(m.emitidas)}</span></div>
-                                                    <div className="flex justify-between"><span className="text-gray-600">📥 Gastos:</span><span className="font-medium text-naranja">{fmtVal(m.gastos)}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Ingresos:</span><span className="font-medium text-verde">{fmtVal(m.emitidas)}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-600">Gastos:</span><span className="font-medium text-naranja">{fmtVal(m.gastos)}</span></div>
                                                     <div className="flex justify-between"><span className="text-gray-600">👤 Honorarios:</span><span className="font-medium text-azul">{fmtVal(m.honorarios)}</span></div>
                                                     <div className="flex justify-between"><span className="text-gray-600">💼 Retiros:</span><span className="font-medium text-purple-600">{fmtVal(m.sueldos)}</span></div>
-                                                    <div className="flex justify-between pt-2 border-t"><span className="font-bold">📊 Utilidad:</span><span className={`font-bold ${m.utilidadNeta >= 0 ? 'text-verde' : 'text-red-600'}`}>{m.utilidadNeta >= 0 ? '+' : ''}{fmtVal(m.utilidadNeta)}</span></div>
+                                                    <div className="flex justify-between pt-2 border-t"><span className="font-bold">Utilidad:</span><span className={`font-bold ${m.utilidadNeta >= 0 ? 'text-verde' : 'text-red-600'}`}>{m.utilidadNeta >= 0 ? '+' : ''}{fmtVal(m.utilidadNeta)}</span></div>
                                                 </div>
                                             </div>
                                         ))}

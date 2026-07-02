@@ -77,12 +77,12 @@ export default function OrgDetail({ org, keyAccounts, tickets, cerrados, prospec
     }
 
     const tabs = [
-        { id: 'resumen', label: '📊 Resumen' },
-        { id: 'ka', label: `🏢 KA (${orgKAs.length})` },
-        { id: 'tickets', label: `🎫 Tickets (${orgTickets.length})` },
-        { id: 'pipeline', label: `🔭 Pipeline (${orgProspectos.length})` },
-        { id: 'historial', label: `📋 Historial (${orgCerrados.length})` },
-        { id: 'facturas', label: '💰 Facturas' },
+        { id: 'resumen', label: 'Resumen' },
+        { id: 'ka', label: `KA (${orgKAs.length})` },
+        { id: 'tickets', label: `Tickets (${orgTickets.length})` },
+        { id: 'pipeline', label: `Pipeline (${orgProspectos.length})` },
+        { id: 'historial', label: `Historial (${orgCerrados.length})` },
+        { id: 'facturas', label: 'Facturas' },
     ]
 
     const estadoBadge = (e: string) =>

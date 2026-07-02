@@ -255,7 +255,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">📈 Reportes y Análisis</h2>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Reportes y Análisis</h2>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center hover:shadow-md transition-shadow">
@@ -283,12 +283,12 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">💰 Ingresos Mensuales</h3>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">Ingresos Mensuales</h3>
                     <div style={{ height: '250px', position: 'relative' }}><canvas id="chartIngresos"></canvas></div>
                     <div className="text-xs text-gray-500 mt-2 text-center">MRR + Tickets + Cierres · {rangoMeses.length} {rangoMeses.length === 1 ? 'mes' : 'meses'}{dateRange?.desde || dateRange?.hasta ? ' (filtrado)' : ''}</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">🎯 Pipeline por Etapa</h3>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">Pipeline por Etapa</h3>
                     <div style={{ height: '250px', position: 'relative' }}><canvas id="chartPipeline"></canvas></div>
                     <div className="text-xs text-gray-500 mt-2 text-center">Solo prospectos activos (excluye convertidos)</div>
                 </div>
@@ -296,12 +296,12 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">📊 Tasa de Conversión</h3>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">Tasa de Conversión</h3>
                     <div style={{ height: '250px', position: 'relative' }}><canvas id="chartConversion"></canvas></div>
                     <div className="text-xs text-gray-500 mt-2 text-center">% prospectos ganados por mes</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">🏆 Ganados vs Perdidos</h3>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">Ganados vs Perdidos</h3>
                     <div style={{ height: '250px', position: 'relative' }}><canvas id="chartWinLoss"></canvas></div>
                     <div className="text-xs text-gray-500 mt-2 text-center">Cierres por mes · {rangoMeses.length} {rangoMeses.length === 1 ? 'mes' : 'meses'}{dateRange?.desde || dateRange?.hasta ? ' (filtrado)' : ''}</div>
                 </div>
@@ -309,7 +309,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">⏳ Antigüedad Pipeline</h3>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">Antigüedad Pipeline</h3>
                     <div style={{ height: '220px', position: 'relative' }}><canvas id="chartAging"></canvas></div>
                     <div className="text-xs text-gray-500 mt-2 text-center">Solo prospectos activos · Días desde creación</div>
                 </div>
@@ -340,7 +340,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">📋 Resumen Comercial</h3>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">Resumen Comercial</h3>
                     <div className="mb-5">
                         <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Salud Key Accounts</div>
                         <div className="flex gap-2">
@@ -375,7 +375,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                     <div style={{ height: '220px', position: 'relative' }}><canvas id="chartForecast"></canvas></div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-1">📅 Detalle Forecast</h3>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-1">Detalle Forecast</h3>
                     <p className="text-xs text-gray-400 mb-4">Prospectos activos por mes de cierre esperado</p>
                     <div className="space-y-2">
                         {datosForecast.every(m => m.count === 0)
@@ -394,7 +394,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
                     </div>
                     {prospectosActivos.filter(p => !p.fecha_limite).length > 0 && (
                         <p className="text-[10px] text-gray-400 mt-3">
-                            ⚠️ {prospectosActivos.filter(p => !p.fecha_limite).length} prospecto{prospectosActivos.filter(p => !p.fecha_limite).length > 1 ? 's' : ''} sin fecha límite (incluido{prospectosActivos.filter(p => !p.fecha_limite).length > 1 ? 's' : ''} en mes actual)
+                            {prospectosActivos.filter(p => !p.fecha_limite).length} prospecto{prospectosActivos.filter(p => !p.fecha_limite).length > 1 ? 's' : ''} sin fecha límite (incluido{prospectosActivos.filter(p => !p.fecha_limite).length > 1 ? 's' : ''} en mes actual)
                         </p>
                     )}
                 </div>

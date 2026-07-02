@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
+import type { ReactNode } from 'react'
+import { StickyNote, Phone, Handshake, Mail, CheckSquare, RefreshCw, KeyRound, Paperclip, CheckCircle2, Sparkles, MapPin, ClipboardList } from 'lucide-react'
 import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
 import { confirmModal } from '../../utils/confirmModal'
@@ -6,22 +8,25 @@ import useEscapeKey from '../../hooks/useEscapeKey'
 import ProposalGenerator from '../Proposals/ProposalGenerator'
 import type { Prospecto, Cerrado, Ticket, KeyAccount } from '../../types'
 
-const tipoIcons: Record<string, string> = { nota: '📝', llamada: '📞', reunion: '🤝', email: '📧', tarea: '✅' }
+const tipoIcons: Record<string, ReactNode> = {
+    nota: <StickyNote size={12} />, llamada: <Phone size={12} />, reunion: <Handshake size={12} />,
+    email: <Mail size={12} />, tarea: <CheckSquare size={12} />
+}
 const tipoLabels: Record<string, string> = { nota: 'Nota', llamada: 'Llamada', reunion: 'Reunión', email: 'Email', tarea: 'Tarea' }
 const tableMap: Record<string, string> = { prospecto: 'prospectos', cerrado: 'cerrados', ticket: 'tickets', keyaccount: 'key_accounts' }
 const servicioOptions = ['Ticket RC Express', 'Ticket Diag Org', 'Ticket ESG', 'Key Account Nivel 1', 'Key Account Nivel 2', 'Key Account Nivel 3', 'Gestión de Contenido']
 
 // Lifecycle helpers
 const lcTypeName = (t: string) => ({ prospecto: 'Prospecto', ticket: 'Ticket', key_account: 'Key Account', keyaccount: 'Key Account', cerrado: 'Cerrado' }[t] || t)
-const lcEventIcon = (t: string) => {
-    if (!t) return '📋'
-    if (t.startsWith('created_from')) return '🔄'
-    if (t.includes('renewal')) return '🔑'
-    if (t.includes('file')) return '📎'
-    if (t.includes('closed') || t.includes('cancel')) return '✅'
-    if (t.includes('created')) return '✨'
-    if (t.includes('stage') || t.includes('estado') || t.includes('moved')) return '📍'
-    return '📋'
+const lcEventIcon = (t: string): ReactNode => {
+    if (!t) return <ClipboardList size={10} />
+    if (t.startsWith('created_from')) return <RefreshCw size={10} />
+    if (t.includes('renewal')) return <KeyRound size={10} />
+    if (t.includes('file')) return <Paperclip size={10} />
+    if (t.includes('closed') || t.includes('cancel')) return <CheckCircle2 size={10} />
+    if (t.includes('created')) return <Sparkles size={10} />
+    if (t.includes('stage') || t.includes('estado') || t.includes('moved')) return <MapPin size={10} />
+    return <ClipboardList size={10} />
 }
 const lcEventLabel = (t: string) => {
     const m: Record<string, string> = {
@@ -34,7 +39,7 @@ const lcEventLabel = (t: string) => {
 
 interface LifecycleItem {
     id: string; kind: 'event' | 'link'; created_at: string
-    icon: string; label: string; title: string; email?: string
+    icon: ReactNode; label: string; title: string; email?: string
     payload?: Record<string, unknown>
 }
 interface LifecycleOrigin { tipo: string; id: string; org: string; fecha: string }
@@ -208,7 +213,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                 })),
                 ...(links || []).map((l: Record<string, string>) => ({
                     id: String(l.id), kind: 'link' as const, created_at: l.created_at || '',
-                    icon: '🔄',
+                    icon: <RefreshCw size={10} />,
                     label: l.from_id === item.id ? `Convertido a ${lcTypeName(l.to_type)}` : `Creado desde ${lcTypeName(l.from_type)}`,
                     title: '', email: ''
                 }))
@@ -393,11 +398,11 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
     })()
 
     const sections = [
-        { id: 'ficha', label: '📄 Ficha' },
-        { id: 'timeline', label: '📋 Timeline', count: entityNotas.length + lifecycleItems.length },
-        { id: 'contactos', label: '👤 Contactos', count: entityContactos.length },
-        ...(type === 'keyaccount' ? [{ id: 'contratos', label: '📜 Contratos', count: contractsLoaded ? contracts.length : undefined }] : []),
-        ...((type === 'ticket' || type === 'keyaccount') ? [{ id: 'facturacion', label: '💰 Facturación', count: facturasLoaded ? facturasVinculadas.length : undefined }] : []),
+        { id: 'ficha', label: 'Ficha' },
+        { id: 'timeline', label: 'Timeline', count: entityNotas.length + lifecycleItems.length },
+        { id: 'contactos', label: 'Contactos', count: entityContactos.length },
+        ...(type === 'keyaccount' ? [{ id: 'contratos', label: 'Contratos', count: contractsLoaded ? contracts.length : undefined }] : []),
+        ...((type === 'ticket' || type === 'keyaccount') ? [{ id: 'facturacion', label: 'Facturación', count: facturasLoaded ? facturasVinculadas.length : undefined }] : []),
     ]
 
     // Render helpers (functions, NOT components — avoids remount/focus-loss)
@@ -445,7 +450,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                         <div className="flex items-center gap-2 ml-4">
                             {(type === 'prospecto' || type === 'keyaccount') && (
                                 <button onClick={() => setShowProposalModal(true)} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Generar propuesta PDF">
-                                    📄 Propuesta
+                                    Propuesta
                                 </button>
                             )}
                             {dirty && <button onClick={handleSave} disabled={saving} className="px-4 py-1.5 color-naranja text-white text-xs rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition">{saving ? '...' : 'Guardar'}</button>}
@@ -576,7 +581,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                     {Object.entries(tipoLabels).map(([k, v]) => (
                                         <button key={k} onClick={() => setNewNota({ ...newNota, tipo: k })}
                                             className={`px-2 py-1 text-[10px] rounded-lg transition ${newNota.tipo === k ? 'bg-naranja text-white' : 'bg-white dark:bg-gray-600 text-gray-600 dark:text-gray-300 border dark:border-gray-500'}`}>
-                                            {tipoIcons[k]} {v}
+                                            <span className="inline-flex items-center gap-1">{tipoIcons[k]} {v}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -621,7 +626,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                                 <div className="bg-white dark:bg-gray-700 rounded-lg p-3 border dark:border-gray-600 shadow-sm">
                                                     <div className="flex items-center justify-between mb-1">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="text-xs">{tipoIcons[n.tipo] || '📝'}</span>
+                                                            <span className="text-xs text-gray-400">{tipoIcons[n.tipo] || tipoIcons.nota}</span>
                                                             <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase">{tipoLabels[n.tipo] || n.tipo}</span>
                                                             {n.tipo === 'tarea' && (
                                                                 <button onClick={() => handleToggleTarea(n)} className={`text-[10px] px-1.5 py-0.5 rounded ${n.completada ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>
@@ -742,7 +747,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                         <div>
                                             <div className="flex items-center justify-between mb-2">
                                                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
-                                                    ✅ Vinculadas ({facturasVinculadas.length})
+                                                    Vinculadas ({facturasVinculadas.length})
                                                 </p>
                                                 {facturasVinculadas.length > 0 && (
                                                     <p className="text-[10px] text-verde font-medium">
@@ -764,7 +769,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                                         {sugeridasVisibles.length > 0 && (
                                             <div>
                                                 <p className="text-[10px] font-semibold text-naranja uppercase tracking-wide mb-2">
-                                                    🔍 Sugeridas — mismo cliente que facturas ya vinculadas ({sugeridasVisibles.length})
+                                                    Sugeridas — mismo cliente que facturas ya vinculadas ({sugeridasVisibles.length})
                                                 </p>
                                                 <div className="space-y-1.5">
                                                     {sugeridasVisibles.map(f => (
