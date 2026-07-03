@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Download, Plus, Paperclip, History, Trash2, Pencil, Bell } from 'lucide-react'
 import { diasDesdeHoy } from '../../utils/formatters'
 import MetricCard from '../shared/MetricCard'
+import Paginator, { usePaged } from '../shared/Paginator'
 import type { KeyAccount } from '../../types'
 
 // Calcula salud automáticamente desde fin_contrato (para display, no sobreescribe BD)
@@ -65,6 +66,9 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
 
     const uniqueOrgs = grouped.length
 
+    // Paginación por organización (las métricas usan la lista completa)
+    const pag = usePaged(grouped)
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between gap-3">
@@ -116,7 +120,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
             <div className="hidden md:block space-y-4">
                 {grouped.length === 0 ? (
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos</div>
-                ) : grouped.map(group => (
+                ) : pag.items.map(group => (
                     <div key={group.org} className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
                         <div className="px-6 py-4 border-b dark:border-gray-700 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition" onClick={() => onOrgDetail ? onOrgDetail(group.org) : onDetail && onDetail(group.services[0])}>
                             <div className="flex items-center gap-3">
@@ -163,7 +167,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
             <div className="md:hidden space-y-4">
                 {grouped.length === 0 ? (
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos</div>
-                ) : grouped.map(group => (
+                ) : pag.items.map(group => (
                     <div key={group.org} className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
                         <div className="p-4 border-b dark:border-gray-700 cursor-pointer" onClick={() => onOrgDetail ? onOrgDetail(group.org) : onDetail && onDetail(group.services[0])}>
                             <div className="flex justify-between items-start">
@@ -195,6 +199,8 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                     </div>
                 ))}
             </div>
+
+            <Paginator {...pag.controls} />
         </div>
     )
 }

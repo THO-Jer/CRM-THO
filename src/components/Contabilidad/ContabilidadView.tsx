@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Paperclip, Trash2, XCircle, ClipboardList } from 'lucide-react'
-import { clpToUF } from '../../utils/formatters'
+import { clpToUF, parseLocalDate } from '../../utils/formatters'
 import { parseLiquidacionPDF } from '../../utils/parseLiquidacionPDF'
 import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
@@ -9,6 +9,7 @@ import { Chart } from '../../utils/chartSetup'
 import * as XLSX from 'xlsx'
 import DualCurrency from '../shared/DualCurrency'
 import MetricCard from '../shared/MetricCard'
+import Paginator, { usePaged } from '../shared/Paginator'
 import ContaModal from './ContaModal'
 import type { Ticket, KeyAccount } from '../../types'
 
@@ -210,7 +211,10 @@ export default function ContabilidadView({
             : calcularRango()
 
     const estEnRango = (fechaStr: string) => {
-        const d = new Date(fechaStr)
+        // parseLocalDate evita el corrimiento UTC en fechas 'YYYY-MM-DD' —
+        // con new Date() los documentos del día 1 del rango quedaban fuera.
+        const d = parseLocalDate(fechaStr) ?? new Date(fechaStr)
+        if (isNaN(d.getTime())) return false
         const desde = new Date(rango.desde.getFullYear(), rango.desde.getMonth(), rango.desde.getDate())
         const hasta = new Date(rango.hasta.getFullYear(), rango.hasta.getMonth(), rango.hasta.getDate())
         const valor = new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -224,6 +228,15 @@ export default function ContabilidadView({
     const cajaAct = cajaChica.filter(c => estEnRango(c.fecha))
     const movBancAct = movimientosBancarios.filter(m => estEnRango(m.fecha))
     const sueldosAct = sueldosSocios.filter(s => estEnRango(s.fecha))
+
+    // Paginación por tabla (25 por página) — los cálculos/EERR siguen usando
+    // los arrays completos (*Act); solo el render de las tablas usa *Pag.items.
+    const facturasEmiPag = usePaged(facturasEmiAct)
+    const facturasRecPag = usePaged(facturasRecAct)
+    const boletasPag = usePaged(boletasAct)
+    const liquidacionesPag = usePaged(liquidacionesAct)
+    const cajaPag = usePaged(cajaAct)
+    const sueldosPag = usePaged(sueldosAct)
 
     const handleSave = async (data: FinancialRecord) => {
         try {
@@ -717,7 +730,7 @@ export default function ContabilidadView({
                                     <tbody className="divide-y">
                                         {facturasEmiAct.length === 0 ? (
                                             <tr><td colSpan={7} className="px-4 py-4 text-center text-sm text-gray-500">Sin facturas emitidas</td></tr>
-                                        ) : facturasEmiAct.map(f => (
+                                        ) : facturasEmiPag.items.map(f => (
                                             <tr key={f.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                 <td className="px-2 py-3 text-center">
                                                     <input type="checkbox" checked={f.estado === 'Pagada'} onChange={async () => {
@@ -745,7 +758,7 @@ export default function ContabilidadView({
                                 </table>
                             </div>
                             <div className="md:hidden space-y-3">
-                                {facturasEmiAct.map(f => (
+                                {facturasEmiPag.items.map(f => (
                                     <div key={f.id} className="border rounded-lg p-4">
                                         <div className="flex justify-between items-start mb-2">
                                             <div><div className="font-bold dark:text-gray-200">{f.numero_factura}</div><div className="text-sm text-gray-600">{f.cliente}</div></div>
@@ -759,6 +772,7 @@ export default function ContabilidadView({
                                     </div>
                                 ))}
                             </div>
+                            <Paginator {...facturasEmiPag.controls} />
                         </div>
                     )}
 
@@ -788,7 +802,7 @@ export default function ContabilidadView({
                                     <tbody className="divide-y">
                                         {facturasRecAct.length === 0 ? (
                                             <tr><td colSpan={7} className="px-4 py-4 text-center text-sm text-gray-500">Sin facturas recibidas</td></tr>
-                                        ) : facturasRecAct.map(f => (
+                                        ) : facturasRecPag.items.map(f => (
                                             <tr key={f.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                 <td className="px-2 py-3 text-center">
                                                     <input type="checkbox" checked={f.estado === 'Pagada'} onChange={async () => {
@@ -816,7 +830,7 @@ export default function ContabilidadView({
                                 </table>
                             </div>
                             <div className="md:hidden space-y-3">
-                                {facturasRecAct.map(f => (
+                                {facturasRecPag.items.map(f => (
                                     <div key={f.id} className="border rounded-lg p-4">
                                         <div className="flex justify-between items-start mb-2">
                                             <div><div className="font-bold dark:text-gray-200">{f.proveedor}</div><div className="text-sm text-gray-600">{f.categoria}</div></div>
@@ -830,6 +844,7 @@ export default function ContabilidadView({
                                     </div>
                                 ))}
                             </div>
+                            <Paginator {...facturasRecPag.controls} />
                         </div>
                     )}
 
@@ -858,7 +873,7 @@ export default function ContabilidadView({
                                     <tbody className="divide-y">
                                         {sueldosAct.length === 0 ? (
                                             <tr><td colSpan={6} className="text-center text-sm text-gray-500 py-4">Sin retiros en el período</td></tr>
-                                        ) : sueldosAct.map(s => (
+                                        ) : sueldosPag.items.map(s => (
                                             <tr key={s.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                 <td className="px-4 py-3 text-sm font-medium">{s.socio}</td>
                                                 <td className="px-4 py-3 text-sm">{s.mes_servicio}</td>
@@ -876,7 +891,7 @@ export default function ContabilidadView({
                                 </table>
                             </div>
                             <div className="md:hidden space-y-3">
-                                {sueldosAct.map(s => (
+                                {sueldosPag.items.map(s => (
                                     <div key={s.id} className="border rounded-lg p-4">
                                         <div className="font-bold dark:text-gray-200">{s.socio} · {s.mes_servicio}</div>
                                         <div className="flex gap-2 pt-2 border-t mt-2">
@@ -887,6 +902,7 @@ export default function ContabilidadView({
                                     </div>
                                 ))}
                             </div>
+                            <Paginator {...sueldosPag.controls} />
                         </div>
                     )}
 
@@ -915,7 +931,7 @@ export default function ContabilidadView({
                                     <tbody className="divide-y">
                                         {cajaAct.length === 0 ? (
                                             <tr><td colSpan={6} className="px-4 py-4 text-center text-sm text-gray-500">Sin gastos menores registrados</td></tr>
-                                        ) : cajaAct.map(c => (
+                                        ) : cajaPag.items.map(c => (
                                             <tr key={c.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                 <td className="px-4 py-3 text-sm">{c.fecha}</td>
                                                 <td className="px-4 py-3 text-sm font-medium">{c.concepto}</td>
@@ -933,7 +949,7 @@ export default function ContabilidadView({
                                 </table>
                             </div>
                             <div className="md:hidden space-y-3">
-                                {cajaAct.map(c => (
+                                {cajaPag.items.map(c => (
                                     <div key={c.id} className="border rounded-lg p-4">
                                         <div className="flex justify-between"><div className="font-bold dark:text-gray-200">{c.concepto}</div><span className="font-medium text-verde">${Math.round(c.monto_clp).toLocaleString('es-CL')}</span></div>
                                         <div className="flex gap-2 pt-2 border-t mt-2">
@@ -944,6 +960,7 @@ export default function ContabilidadView({
                                     </div>
                                 ))}
                             </div>
+                            <Paginator {...cajaPag.controls} />
                         </div>
                     )}
 
@@ -976,7 +993,7 @@ export default function ContabilidadView({
                                     <tbody className="divide-y">
                                         {boletasAct.length === 0 ? (
                                             <tr><td colSpan={7} className="px-4 py-4 text-center text-sm text-gray-500">Sin boletas de honorarios</td></tr>
-                                        ) : boletasAct.map(b => (
+                                        ) : boletasPag.items.map(b => (
                                             <tr key={b.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                 <td className="px-4 py-3 text-sm font-medium">{b.prestador}</td>
                                                 <td className="px-4 py-3 text-sm">{b.mes_servicio}</td>
@@ -995,7 +1012,7 @@ export default function ContabilidadView({
                                 </table>
                             </div>
                             <div className="md:hidden space-y-3">
-                                {boletasAct.map(b => (
+                                {boletasPag.items.map(b => (
                                     <div key={b.id} className="border rounded-lg p-4">
                                         <div className="flex justify-between"><div><div className="font-bold dark:text-gray-200">{b.prestador}</div><div className="text-sm text-gray-600">{b.mes_servicio}</div></div><span className="text-sm font-medium text-verde">{b.monto_liquido_uf} UF</span></div>
                                         <div className="flex gap-2 pt-2 border-t mt-2">
@@ -1006,6 +1023,7 @@ export default function ContabilidadView({
                                     </div>
                                 ))}
                             </div>
+                            <Paginator {...boletasPag.controls} />
                         </div>{/* fin boletas honorarios */}
 
                         {/* ── Liquidaciones de Sueldo ── */}
@@ -1033,7 +1051,7 @@ export default function ContabilidadView({
                                     <tbody className="divide-y">
                                         {liquidacionesAct.length === 0 ? (
                                             <tr><td colSpan={7} className="px-4 py-4 text-center text-sm text-gray-500">Sin liquidaciones registradas</td></tr>
-                                        ) : liquidacionesAct.map(l => (
+                                        ) : liquidacionesPag.items.map(l => (
                                             <tr key={l.id} className="hover:bg-gray-50 dark:bg-gray-700">
                                                 <td className="px-4 py-3 text-sm font-medium">{l.trabajador}</td>
                                                 <td className="px-4 py-3 text-sm">{l.periodo ? new Date(l.periodo + 'T12:00:00').toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }) : ''}</td>
@@ -1051,7 +1069,7 @@ export default function ContabilidadView({
                                 </table>
                             </div>
                             <div className="md:hidden space-y-3">
-                                {liquidacionesAct.map(l => (
+                                {liquidacionesPag.items.map(l => (
                                     <div key={l.id} className="border rounded-lg p-4">
                                         <div className="flex justify-between">
                                             <div>
@@ -1067,6 +1085,7 @@ export default function ContabilidadView({
                                     </div>
                                 ))}
                             </div>
+                            <Paginator {...liquidacionesPag.controls} />
                         </div>{/* fin liquidaciones */}
 
                         </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Download, Plus, Paperclip, History, Trash2 } from 'lucide-react'
 import MetricCard from '../shared/MetricCard'
+import Paginator, { usePaged } from '../shared/Paginator'
 import type { Cerrado, KeyAccount } from '../../types'
 
 interface CerradosViewProps {
@@ -30,6 +31,9 @@ export default function CerradosView({ cerrados, onAdd, onEdit, onDelete, onExpo
 
     const ganados = cerradosFiltrados.filter(c => c.estado_final === 'Ganado')
     const valorGanado = ganados.reduce((sum, c) => sum + (parseFloat(String(c.valor)) || 0), 0)
+
+    // Paginación: las métricas usan cerradosFiltrados completo; la tabla usa pag.items
+    const pag = usePaged(cerradosFiltrados)
 
     return (
         <div className="space-y-6">
@@ -65,7 +69,7 @@ export default function CerradosView({ cerrados, onAdd, onEdit, onDelete, onExpo
                     <tbody className="divide-y dark:divide-gray-700">
                         {cerradosFiltrados.length === 0
                             ? <tr><td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos para {filtroAño === 'todos' ? 'mostrar' : `el año ${filtroAño}`}</td></tr>
-                            : cerradosFiltrados.map(c => {
+                            : pag.items.map(c => {
                                 const activeSvcs = activeServicesFor(c.organizacion)
                                 return (
                                     <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition" onClick={() => onDetail && onDetail(c)}>
@@ -98,7 +102,7 @@ export default function CerradosView({ cerrados, onAdd, onEdit, onDelete, onExpo
             <div className="md:hidden space-y-3">
                 {cerradosFiltrados.length === 0 ? (
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos</div>
-                ) : cerradosFiltrados.map(c => {
+                ) : pag.items.map(c => {
                     const activeSvcs = activeServicesFor(c.organizacion)
                     return (
                         <div key={c.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 cursor-pointer hover:shadow-md transition" onClick={() => onDetail && onDetail(c)}>
@@ -126,6 +130,8 @@ export default function CerradosView({ cerrados, onAdd, onEdit, onDelete, onExpo
                     )
                 })}
             </div>
+
+            <Paginator {...pag.controls} />
         </div>
     )
 }

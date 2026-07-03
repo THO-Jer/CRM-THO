@@ -1,5 +1,6 @@
 import { Download, Plus, Paperclip, History, Trash2 } from 'lucide-react'
 import { parseLocalDate } from '../../utils/formatters'
+import Paginator, { usePaged } from '../shared/Paginator'
 import type { Ticket } from '../../types'
 
 // Formatea el valor del ticket usando uf_dia almacenado para la conversión estable
@@ -43,6 +44,8 @@ interface TicketsViewProps {
 }
 
 export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport, onHistory, onClose, onFiles, onDetail, onOrgDetail }: TicketsViewProps) {
+    void onEdit
+    const pag = usePaged(tickets)
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between gap-3">
@@ -67,7 +70,7 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                         </tr>
                     </thead>
                     <tbody className="divide-y dark:divide-gray-700">
-                        {tickets.length === 0 ? <tr><td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos</td></tr> : tickets.map(t => (
+                        {tickets.length === 0 ? <tr><td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos</td></tr> : pag.items.map(t => (
                             <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition" onClick={() => onDetail && onDetail(t)}>
                                 <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100" onClick={e => { e.stopPropagation(); onOrgDetail && onOrgDetail(t.organizacion) }}><span className="hover:text-naranja transition cursor-pointer">{t.organizacion}</span></td>
                                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{t.ticket}</td>
@@ -92,7 +95,7 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
             <div className="md:hidden space-y-3">
                 {tickets.length === 0 ? (
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center text-sm text-gray-500 dark:text-gray-400">Sin datos</div>
-                ) : tickets.map(t => (
+                ) : pag.items.map(t => (
                     <div key={t.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 cursor-pointer hover:shadow-md transition" onClick={() => onDetail && onDetail(t)}>
                         <div className="flex justify-between items-start mb-2">
                             <div><h3 className="font-bold dark:text-gray-100 hover:text-naranja cursor-pointer" onClick={e => { e.stopPropagation(); onOrgDetail && onOrgDetail(t.organizacion) }}>{t.organizacion}</h3><p className="text-sm text-gray-500 dark:text-gray-400">{t.ticket}</p></div>
@@ -112,6 +115,8 @@ export default function TicketsView({ tickets, onAdd, onEdit, onDelete, onExport
                     </div>
                 ))}
             </div>
+
+            <Paginator {...pag.controls} />
         </div>
     )
 }
