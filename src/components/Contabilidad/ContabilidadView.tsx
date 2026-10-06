@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Paperclip, Trash2, XCircle, ClipboardList } from 'lucide-react'
-import { clpToUF, parseLocalDate } from '../../utils/formatters'
+import { parseLocalDate } from '../../utils/formatters'
+import { ESTADOS_EMITIDA_COBRADA } from '../../utils/conciliacion'
+import { type Monto, montoEmitida, montoRecibida, montoBoleta, montoRetencion, montoLiquidacion, montoSueldoSocio, montoCaja, sumar, mas, menos, por } from '../../utils/montos'
 import { parseLiquidacionPDF } from '../../utils/parseLiquidacionPDF'
 import { supabase } from '../../utils/supabase'
 import { showToast } from '../../utils/toast'
@@ -210,6 +212,11 @@ export default function ContabilidadView({
             ? { desde: new Date(2020, 0, 1), hasta: new Date(2099, 11, 31) }
             : calcularRango()
 
+    /** Fecha 'YYYY-MM-DD' como fecha LOCAL (new Date() la corría al día anterior: los documentos del día 1 caían en el mes previo). */
+    const fechaLocal = (s: string) => parseLocalDate(s) ?? new Date(s)
+    /** Factura emitida aún no pagada por el cliente (Pendiente o Vencida). */
+    const emitidaPorCobrar = (f: FinancialRecord) => !ESTADOS_EMITIDA_COBRADA.includes(String(f.estado))
+
     const estEnRango = (fechaStr: string) => {
         // parseLocalDate evita el corrimiento UTC en fechas 'YYYY-MM-DD' —
         // con new Date() los documentos del día 1 del rango quedaban fuera.
@@ -256,6 +263,11 @@ export default function ContabilidadView({
                 } else {
                     cleanedData[key] = value
                 }
+            }
+            // Facturas emitidas: las importadas del SII usan total_monto_clp y las manuales monto_clp.
+            // Mantener ambas sincronizadas para que la ficha del cliente y la conciliación vean el mismo monto.
+            if (table === 'facturas_emitidas' && cleanedData.monto_clp != null && cleanedData.monto_clp !== '') {
+                cleanedData.total_monto_clp = Math.round(Number(cleanedData.monto_clp))
             }
             let result
             if (editing) {
@@ -316,12 +328,15 @@ export default function ContabilidadView({
         input.click()
     }, [])
 
-    const totalEmitidas = facturasEmiAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0)
-    const totalRecibidas = facturasRecAct.reduce((sum, f) => sum + (parseFloat(f.monto_uf) || 0), 0)
-    const totalBoletas = boletasAct.reduce((sum, b) => sum + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
-    const totalCajaChicaUF = cajaAct.reduce((sum, c) => sum + clpToUF(c.monto_clp, c.uf_dia, ufActual || 38000), 0)
-    const totalCajaChica = cajaAct.reduce((sum, c) => sum + (parseFloat(c.monto_clp) || 0), 0) // CLP puro para display
-    const margen = totalEmitidas - totalRecibidas - totalBoletas - totalCajaChicaUF
+    // Totales del período: cada documento aporta su CLP real y su UF de fecha (ver utils/montos.ts)
+    const totalEmitidas = sumar(facturasEmiAct, montoEmitida)
+    const totalRecibidas = sumar(facturasRecAct, montoRecibida)
+    const totalBoletas = sumar(boletasAct, montoBoleta)
+    const totalCajaChica = sumar(cajaAct, montoCaja)
+    const totalLiquidaciones = sumar(liquidacionesAct, montoLiquidacion)
+    const margen = menos(totalEmitidas, mas(totalRecibidas, totalBoletas, totalCajaChica, totalLiquidaciones))
+    const clp = (m: Monto) => `$${Math.round(m.clp).toLocaleString('es-CL')}`
+    const ufTxt = (m: Monto) => `${Math.round(m.uf)} UF`
 
     const exportarSueldosExcel = (sueldos: FinancialRecord[], _periodo: string) => {
         const datosExport = sueldos.map(s => ({
@@ -364,11 +379,11 @@ export default function ContabilidadView({
             {/* Métricas resumen - solo en dashboard */}
             {contaTab === 'dashboard' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <MetricCard title="💵 Emitidas" value={`${Math.round(totalEmitidas)} UF`} subtitle={`$${Math.round(totalEmitidas * ufActual).toLocaleString('es-CL')}`} color="verde" />
-                    <MetricCard title="Gastos" value={`${Math.round(totalRecibidas)} UF`} subtitle={`$${Math.round(totalRecibidas * ufActual).toLocaleString('es-CL')}`} color="naranja" />
-                    <MetricCard title="👤 Honorarios" value={`${Math.round(totalBoletas)} UF`} subtitle={`Bruto (15.25% ret.)`} color="azul" />
-                    <MetricCard title="💵 Gastos Menores" value={`$${Math.round(totalCajaChica).toLocaleString('es-CL')}`} subtitle={`~${Math.round(totalCajaChica / ufActual)} UF`} color="fucsia" />
-                    <MetricCard title="Margen" value={`${Math.round(margen)} UF`} subtitle={margen >= 0 ? 'Positivo' : 'Negativo'} color={margen >= 0 ? 'verde' : 'naranja'} />
+                    <MetricCard title="💵 Emitidas" value={monedaPreferida === 'CLP' ? clp(totalEmitidas) : ufTxt(totalEmitidas)} subtitle={monedaPreferida === 'CLP' ? ufTxt(totalEmitidas) : clp(totalEmitidas)} color="verde" />
+                    <MetricCard title="Gastos" value={monedaPreferida === 'CLP' ? clp(totalRecibidas) : ufTxt(totalRecibidas)} subtitle={monedaPreferida === 'CLP' ? ufTxt(totalRecibidas) : clp(totalRecibidas)} color="naranja" />
+                    <MetricCard title="👤 Honorarios" value={monedaPreferida === 'CLP' ? clp(totalBoletas) : ufTxt(totalBoletas)} subtitle={`Bruto (15.25% ret.)`} color="azul" />
+                    <MetricCard title="💵 Gastos Menores" value={clp(totalCajaChica)} subtitle={ufTxt(totalCajaChica)} color="fucsia" />
+                    <MetricCard title="Margen" value={monedaPreferida === 'CLP' ? clp(margen) : ufTxt(margen)} subtitle={margen.clp >= 0 ? 'Positivo (incluye sueldos)' : 'Negativo (incluye sueldos)'} color={margen.clp >= 0 ? 'verde' : 'naranja'} />
                 </div>
             )}
 
@@ -396,38 +411,48 @@ export default function ContabilidadView({
                 <div className="p-6">
                     {/* Dashboard */}
                     {contaTab === 'dashboard' && (() => {
-                        const montoUFBoleta = (b: FinancialRecord) => parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0
-                        const montoUFLiquidacion = (l: FinancialRecord) => parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0
-                        const emitidaActual = facturasEmiAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                        const gastosActual = facturasRecAct.reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                        const honorariosActual = boletasAct.reduce((s, b) => s + montoUFBoleta(b), 0)
-                        const liquidacionesActual = liquidacionesAct.reduce((s, l) => s + montoUFLiquidacion(l), 0)
-                        const retenciones = boletasAct.reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0)
-                        const cajaActual = cajaAct.reduce((s, c) => s + clpToUF(c.monto_clp, c.uf_dia, ufActual || 38000), 0)
-                        const flujoNeto = emitidaActual - gastosActual - honorariosActual - liquidacionesActual - cajaActual
+                        // Montos {uf, clp} por documento (utils/montos.ts). Las tarjetas muestran el CLP real;
+                        // los gráficos siguen en UF (UF de la fecha de cada documento).
+                        const emitidaM = sumar(facturasEmiAct, montoEmitida)
+                        const gastosM = sumar(facturasRecAct, montoRecibida)
+                        const honorariosM = sumar(boletasAct, montoBoleta)
+                        const liquidacionesM = sumar(liquidacionesAct, montoLiquidacion)
+                        const retencionesM = sumar(boletasAct, montoRetencion)
+                        const cajaM = sumar(cajaAct, montoCaja)
+                        const gastosTotalM = mas(gastosM, honorariosM, liquidacionesM, cajaM)
+                        const flujoNetoM = menos(emitidaM, gastosTotalM)
+                        const gastosActual = gastosM.uf
+                        const honorariosActual = honorariosM.uf
+                        const liquidacionesActual = liquidacionesM.uf
+                        const retenciones = retencionesM.uf
+                        const cajaActual = cajaM.uf
 
                         const largo = rango.hasta.getTime() - rango.desde.getTime()
                         const prevHasta = new Date(rango.desde.getTime() - 1)
                         const prevDesde = new Date(prevHasta.getTime() - largo)
                         const estEnPrev = (fechaStr: string) => {
-                            const d = new Date(fechaStr)
+                            const d = fechaLocal(fechaStr)
                             const v = new Date(d.getFullYear(), d.getMonth(), d.getDate())
                             const pd = new Date(prevDesde.getFullYear(), prevDesde.getMonth(), prevDesde.getDate())
                             const ph = new Date(prevHasta.getFullYear(), prevHasta.getMonth(), prevHasta.getDate())
                             return v >= pd && v <= ph
                         }
                         // Fix: excluir Reclamadas del período anterior (consistente con facturasEmiAct)
-                        const emitidaAnterior = facturasEmitidas.filter(f => f.estado !== 'Reclamada' && estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
+                        const emitidaAnterior = sumar(facturasEmitidas.filter(f => f.estado !== 'Reclamada' && estEnPrev(f.fecha_emision)), montoEmitida).clp
                         // Fix: incluir honorarios y caja en el período anterior para comparar manzanas con manzanas
-                        const gastosRecAnt = facturasRecibidas.filter(f => f.estado !== 'Reclamada' && estEnPrev(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                        const honorariosAnt = boletasHonorarios.filter(b => estEnPrev(b.fecha)).reduce((s, b) => s + montoUFBoleta(b), 0)
-                        const liquidacionesAnt = liquidaciones.filter(l => estEnPrev(l.periodo)).reduce((s, l) => s + montoUFLiquidacion(l), 0)
-                        const cajaAnt = cajaChica.filter(c => estEnPrev(c.fecha)).reduce((s, c) => s + clpToUF(c.monto_clp, c.uf_dia, ufActual || 38000), 0)
-                        const gastosAnterior = gastosRecAnt + honorariosAnt + liquidacionesAnt + cajaAnt
+                        // Comparación vs período anterior en CLP reales (no depende de la UF de hoy)
+                        const gastosAnterior = mas(
+                            sumar(facturasRecibidas.filter(f => f.estado !== 'Reclamada' && estEnPrev(f.fecha_emision)), montoRecibida),
+                            sumar(boletasHonorarios.filter(b => estEnPrev(b.fecha)), montoBoleta),
+                            sumar(liquidaciones.filter(l => estEnPrev(l.periodo)), montoLiquidacion),
+                            sumar(cajaChica.filter(c => estEnPrev(c.fecha)), montoCaja),
+                        ).clp
 
                         // Fix: respetar rango de fechas para por cobrar/pagar
-                        const porCobrar = facturasEmiAct.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                        const porPagar = facturasRecAct.filter(f => f.estado === 'Pendiente').reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
+                        // Por cobrar = Pendiente o Vencida (antes las Vencidas desaparecían del total)
+                        const facturasPorCobrar = facturasEmiAct.filter(emitidaPorCobrar)
+                        const porCobrarM = sumar(facturasPorCobrar, montoEmitida)
+                        const porPagarM = sumar(facturasRecAct.filter(f => f.estado === 'Pendiente'), montoRecibida)
 
                         const datos6Meses = (() => {
                             const result: { label: string; ingresos: number; gastos: number }[] = []
@@ -440,15 +465,15 @@ export default function ContabilidadView({
                                 const mesDesde = new Date(y, m, 1)
                                 const mesHasta = new Date(y, m + 1, 0)
                                 const estEnMes = (fechaStr: string) => {
-                                    const d = new Date(fechaStr)
+                                    const d = fechaLocal(fechaStr)
                                     const v = new Date(d.getFullYear(), d.getMonth(), d.getDate())
                                     return v >= mesDesde && v <= mesHasta
                                 }
-                                const ing = facturasEmitidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                                const gas = facturasRecibidas.filter(f => estEnMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                                const hon = boletasHonorarios.filter(b => estEnMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
-                                const liq = liquidaciones.filter(l => estEnMes(l.periodo)).reduce((s, l) => s + (parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0), 0)
-                                const caj = cajaChica.filter(c => estEnMes(c.fecha)).reduce((s, c) => s + clpToUF(c.monto_clp, c.uf_dia, ufActual || 38000), 0)
+                                const ing = sumar(facturasEmitidas.filter(f => f.estado !== 'Reclamada' && estEnMes(f.fecha_emision)), montoEmitida).uf
+                                const gas = sumar(facturasRecibidas.filter(f => f.estado !== 'Reclamada' && estEnMes(f.fecha_emision)), montoRecibida).uf
+                                const hon = sumar(boletasHonorarios.filter(b => estEnMes(b.fecha)), montoBoleta).uf
+                                const liq = sumar(liquidaciones.filter(l => estEnMes(l.periodo)), montoLiquidacion).uf
+                                const caj = sumar(cajaChica.filter(c => estEnMes(c.fecha)), montoCaja).uf
                                 result.push({ label, ingresos: Math.round(ing), gastos: Math.round(gas + hon + liq + caj) })
                                 m++
                                 if (m > 11) { m = 0; y++ }
@@ -459,13 +484,14 @@ export default function ContabilidadView({
                         const totalGastosDonut = gastosActual + honorariosActual + liquidacionesActual + cajaActual
 
                         const alertas: { tipo: string; msg: string }[] = []
-                        if (flujoNeto < 0) alertas.push({ tipo: 'danger', msg: `Flujo neto negativo en el período: ${Math.round(flujoNeto)} UF` })
-                        if (porCobrar > 0) alertas.push({ tipo: 'warning', msg: `${Math.round(porCobrar)} UF por cobrar en facturas pendientes` })
-                        if (porPagar > 0) alertas.push({ tipo: 'info', msg: `${Math.round(porPagar)} UF por pagar en facturas recibidas` })
-                        if (retenciones > 0) alertas.push({ tipo: 'fiscal', msg: `${Math.round(retenciones)} UF en retenciones del período (15.25%)` })
+                        const fmtM = (m: Monto) => monedaPreferida === 'CLP' ? `$${Math.round(m.clp).toLocaleString('es-CL')}` : `${Math.round(m.uf)} UF`
+                        if (flujoNetoM.clp < 0) alertas.push({ tipo: 'danger', msg: `Flujo neto negativo en el período: ${fmtM(flujoNetoM)}` })
+                        if (porCobrarM.clp > 0) alertas.push({ tipo: 'warning', msg: `${fmtM(porCobrarM)} por cobrar en facturas pendientes o vencidas` })
+                        if (porPagarM.clp > 0) alertas.push({ tipo: 'info', msg: `${fmtM(porPagarM)} por pagar en facturas recibidas` })
+                        if (retencionesM.clp > 0 || retenciones > 0) alertas.push({ tipo: 'fiscal', msg: `${fmtM(retencionesM)} en retenciones del período (15.25%)` })
 
-                        const cambioIngresos = emitidaAnterior > 0 ? ((emitidaActual - emitidaAnterior) / emitidaAnterior * 100) : (emitidaActual > 0 ? null : 0)
-                        const gastosActualTotal = gastosActual + honorariosActual + liquidacionesActual + cajaActual
+                        const cambioIngresos = emitidaAnterior > 0 ? ((emitidaM.clp - emitidaAnterior) / emitidaAnterior * 100) : (emitidaM.clp > 0 ? null : 0)
+                        const gastosActualTotal = gastosTotalM.clp
                         const cambioGastos = gastosAnterior > 0 ? ((gastosActualTotal - gastosAnterior) / gastosAnterior * 100) : (gastosActualTotal > 0 ? null : 0)
 
                         // Datos para gráfico de personal (últimos 6 meses)
@@ -477,9 +503,9 @@ export default function ContabilidadView({
                             while (new Date(y, m, 1) <= hasta) {
                                 const label = new Date(y, m, 1).toLocaleDateString('es-CL', { month: 'short' })
                                 const mesDesde = new Date(y, m, 1); const mesHasta = new Date(y, m + 1, 0)
-                                const enMes = (f: string) => { const d = new Date(f); const v = new Date(d.getFullYear(), d.getMonth(), d.getDate()); return v >= mesDesde && v <= mesHasta }
-                                const hon = boletasHonorarios.filter(b => enMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
-                                const sue = liquidaciones.filter(l => enMes(l.periodo)).reduce((s, l) => s + (parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0), 0)
+                                const enMes = (f: string) => { const d = fechaLocal(f); const v = new Date(d.getFullYear(), d.getMonth(), d.getDate()); return v >= mesDesde && v <= mesHasta }
+                                const hon = sumar(boletasHonorarios.filter(b => enMes(b.fecha)), montoBoleta).uf
+                                const sue = sumar(liquidaciones.filter(l => enMes(l.periodo)), montoLiquidacion).uf
                                 result.push({ label, honorarios: Math.round(hon * 10) / 10, sueldos: Math.round(sue * 10) / 10 })
                                 m++; if (m > 11) { m = 0; y++ }
                             }
@@ -508,26 +534,26 @@ export default function ContabilidadView({
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                     <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
                                         <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Ingresos</div>
-                                        <DualCurrency amountUF={Math.round(emitidaActual)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
+                                        <DualCurrency amountUF={Math.round(emitidaM.uf)} amountCLP={emitidaM.clp} size="lg" primary={monedaPreferida} />
                                         <div className={`text-xs mt-1 ${cambioIngresos === null ? 'text-gray-400' : cambioIngresos >= 0 ? 'text-verde' : 'text-red-500'}`}>
                                             {cambioIngresos === null ? 'Sin datos período anterior' : `${cambioIngresos >= 0 ? '↑' : '↓'} ${Math.abs(Math.round(cambioIngresos))}% vs período anterior`}
                                         </div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
                                         <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Gastos Total</div>
-                                        <DualCurrency amountUF={Math.round(gastosActual + honorariosActual + cajaActual)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
+                                        <DualCurrency amountUF={Math.round(gastosTotalM.uf)} amountCLP={gastosTotalM.clp} size="lg" primary={monedaPreferida} />
                                         <div className={`text-xs mt-1 ${cambioGastos === null ? 'text-gray-400' : cambioGastos >= 0 ? 'text-red-500' : 'text-verde'}`}>
                                             {cambioGastos === null ? 'Sin datos período anterior' : `${cambioGastos >= 0 ? '↑' : '↓'} ${Math.abs(Math.round(cambioGastos))}% vs período anterior`}
                                         </div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
                                         <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Flujo Neto</div>
-                                        <DualCurrency amountUF={Math.round(flujoNeto)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
+                                        <DualCurrency amountUF={Math.round(flujoNetoM.uf)} amountCLP={flujoNetoM.clp} size="lg" primary={monedaPreferida} />
                                         <div className="text-xs text-gray-400 mt-1">Ingresos - Gastos</div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-xl p-4">
                                         <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Retenciones</div>
-                                        <DualCurrency amountUF={Math.round(retenciones)} ufValue={ufActual} size="lg" primary={monedaPreferida} />
+                                        <DualCurrency amountUF={Math.round(retencionesM.uf * 10) / 10} amountCLP={retencionesM.clp} size="lg" primary={monedaPreferida} />
                                         <div className="text-xs text-gray-400 mt-1">Por pagar al SII</div>
                                     </div>
                                 </div>
@@ -536,16 +562,16 @@ export default function ContabilidadView({
                                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 flex items-center justify-between">
                                         <div>
                                             <div className="text-xs text-green-600 font-medium">Por Cobrar</div>
-                                            <DualCurrency amountUF={Math.round(porCobrar)} ufValue={ufActual} size="md" primary={monedaPreferida} />
-                                            <div className="text-xs text-green-500">{facturasEmitidas.filter(f => f.estado === 'Pendiente').length} facturas</div>
+                                            <DualCurrency amountUF={Math.round(porCobrarM.uf)} amountCLP={porCobrarM.clp} size="md" primary={monedaPreferida} />
+                                            <div className="text-xs text-green-500">{facturasPorCobrar.length} facturas</div>
                                         </div>
                                         <span className="text-3xl opacity-30">💵</span>
                                     </div>
                                     <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 flex items-center justify-between">
                                         <div>
                                             <div className="text-xs text-orange-600 font-medium">Por Pagar</div>
-                                            <DualCurrency amountUF={Math.round(porPagar)} ufValue={ufActual} size="md" primary={monedaPreferida} />
-                                            <div className="text-xs text-orange-500">{facturasRecibidas.filter(f => f.estado === 'Pendiente').length} facturas</div>
+                                            <DualCurrency amountUF={Math.round(porPagarM.uf)} amountCLP={porPagarM.clp} size="md" primary={monedaPreferida} />
+                                            <div className="text-xs text-orange-500">{facturasRecAct.filter(f => f.estado === 'Pendiente').length} facturas</div>
                                         </div>
                                         <ClipboardList size={28} className="opacity-30" />
                                     </div>
@@ -1270,48 +1296,51 @@ export default function ContabilidadView({
                     {/* Estado de Resultados */}
                     {contaTab === 'pl' && (() => {
                         const isCLP = monedaPreferida === 'CLP'
-                        const uf = ufActual || 38000
-                        const fmtVal = (valUF: number) => isCLP ? `$${Math.round(valUF * uf).toLocaleString('es-CL')}` : `${Math.round(valUF * 10) / 10} UF`
+                        // Cada celda es {uf, clp} sumado documento a documento: en CLP muestra los pesos reales
+                        // (cuadra con SII/banco); en UF, la UF de la fecha de cada documento.
+                        const fmtVal = (m: Monto) => isCLP ? `$${Math.round(m.clp).toLocaleString('es-CL')}` : `${Math.round(m.uf * 10) / 10} UF`
+                        const r1 = (m: Monto): Monto => ({ uf: Math.round(m.uf * 10) / 10, clp: Math.round(m.clp) })
 
                         const añosDisponibles = [...new Set([
-                            ...facturasEmitidas.map(f => new Date(f.fecha_emision).getFullYear()),
-                            ...facturasRecibidas.map(f => new Date(f.fecha_emision).getFullYear()),
-                            ...boletasHonorarios.map(b => new Date(b.fecha).getFullYear()),
-                            ...liquidaciones.map(l => new Date(l.periodo).getFullYear()),
-                            ...cajaChica.map(c => new Date(c.fecha).getFullYear())
-                        ])].sort((a, b) => b - a)
+                            ...facturasEmitidas.map(f => fechaLocal(f.fecha_emision).getFullYear()),
+                            ...facturasRecibidas.map(f => fechaLocal(f.fecha_emision).getFullYear()),
+                            ...boletasHonorarios.map(b => fechaLocal(b.fecha).getFullYear()),
+                            ...liquidaciones.map(l => fechaLocal(l.periodo).getFullYear()),
+                            ...cajaChica.map(c => fechaLocal(c.fecha).getFullYear())
+                        ])].filter(a => Number.isFinite(a)).sort((a, b) => b - a)
                         if (añosDisponibles.length === 0) añosDisponibles.push(new Date().getFullYear())
 
                         const generarDatosPL = () => {
                             const meses = []
                             for (let mes = 0; mes < 12; mes++) {
                                 const mesNombre = new Date(añoSeleccionado, mes, 1).toLocaleDateString('es-CL', { month: 'short' })
-                                const inMes = (fechaStr: string) => { const d = new Date(fechaStr); return d.getMonth() === mes && d.getFullYear() === añoSeleccionado }
-                                const emitidas = facturasEmitidas.filter(f => f.estado !== 'Reclamada' && inMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                                const gastos = facturasRecibidas.filter(f => f.estado !== 'Reclamada' && inMes(f.fecha_emision)).reduce((s, f) => s + (parseFloat(f.monto_uf) || 0), 0)
-                                const honorarios = boletasHonorarios.filter(b => inMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0), 0)
-                                const sueldos = sueldosSocios.filter(s => inMes(s.fecha)).reduce((s, sv) => s + (parseFloat(sv.monto_uf) || 0), 0)
-                                const liquidacionesMes = liquidaciones.filter(l => inMes(l.periodo)).reduce((s, l) => s + (parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0), 0)
-                                const retenciones = boletasHonorarios.filter(b => inMes(b.fecha)).reduce((s, b) => s + (parseFloat(b.monto_retencion_uf) || 0), 0)
-                                const cajaChicaUF = cajaChica.filter(c => inMes(c.fecha)).reduce((s, c) => s + clpToUF(c.monto_clp, c.uf_dia, ufActual || 38000), 0)
-                                const totalGastos = gastos + honorarios + sueldos + liquidacionesMes + cajaChicaUF
-                                const utilidadOperacional = emitidas - totalGastos
-                                meses.push({ mes: mesNombre, emitidas: Math.round(emitidas * 10) / 10, gastos: Math.round(gastos * 10) / 10, honorarios: Math.round(honorarios * 10) / 10, sueldos: Math.round(sueldos * 10) / 10, liquidaciones: Math.round(liquidacionesMes * 10) / 10, cajaChica: Math.round(cajaChicaUF * 10) / 10, retenciones: Math.round(retenciones * 10) / 10, utilidadOperacional: Math.round(utilidadOperacional * 10) / 10, utilidadNeta: Math.round(utilidadOperacional * 10) / 10 })
+                                // fechaLocal: con new Date('2026-03-01') las liquidaciones (período = día 1) caían en febrero
+                                const inMes = (fechaStr: string) => { const d = fechaLocal(fechaStr); return d.getMonth() === mes && d.getFullYear() === añoSeleccionado }
+                                const emitidas = sumar(facturasEmitidas.filter(f => f.estado !== 'Reclamada' && inMes(f.fecha_emision)), montoEmitida)
+                                const gastos = sumar(facturasRecibidas.filter(f => f.estado !== 'Reclamada' && inMes(f.fecha_emision)), montoRecibida)
+                                const honorarios = sumar(boletasHonorarios.filter(b => inMes(b.fecha)), montoBoleta)
+                                const sueldos = sumar(sueldosSocios.filter(sv => inMes(sv.fecha)), montoSueldoSocio)
+                                const liquidacionesMes = sumar(liquidaciones.filter(l => inMes(l.periodo)), montoLiquidacion)
+                                const retenciones = sumar(boletasHonorarios.filter(b => inMes(b.fecha)), montoRetencion)
+                                const cajaChicaM = sumar(cajaChica.filter(c => inMes(c.fecha)), montoCaja)
+                                const totalGastos = mas(gastos, honorarios, sueldos, liquidacionesMes, cajaChicaM)
+                                const utilidadOperacional = menos(emitidas, totalGastos)
+                                meses.push({ mes: mesNombre, emitidas: r1(emitidas), gastos: r1(gastos), honorarios: r1(honorarios), sueldos: r1(sueldos), liquidaciones: r1(liquidacionesMes), cajaChica: r1(cajaChicaM), retenciones: r1(retenciones), totalGastos: r1(totalGastos), utilidadOperacional: r1(utilidadOperacional), utilidadNeta: r1(utilidadOperacional) })
                             }
                             return meses
                         }
                         const datosPL = generarDatosPL()
-                        const totEmitidas = datosPL.reduce((s, m) => s + m.emitidas, 0)
-                        const totGastos = datosPL.reduce((s, m) => s + m.gastos, 0)
-                        const totHonorarios = datosPL.reduce((s, m) => s + m.honorarios, 0)
-                        const totSueldos = datosPL.reduce((s, m) => s + m.sueldos, 0)
-                        const totLiquidaciones = datosPL.reduce((s, m) => s + (m.liquidaciones || 0), 0)
-                        const totCaja = datosPL.reduce((s, m) => s + m.cajaChica, 0)
-                        const totRetenciones = datosPL.reduce((s, m) => s + m.retenciones, 0)
-                        const totGastosConsolidado = totGastos + totHonorarios + totSueldos + totLiquidaciones + totCaja
-                        const utilidadOp = totEmitidas - totGastosConsolidado
-                        const impuestosEstimados = Math.max(0, utilidadOp * 0.20)
-                        const utilidadDespuesImpuestos = utilidadOp - impuestosEstimados
+                        const totEmitidas = sumar(datosPL, m => m.emitidas)
+                        const totGastos = sumar(datosPL, m => m.gastos)
+                        const totHonorarios = sumar(datosPL, m => m.honorarios)
+                        const totSueldos = sumar(datosPL, m => m.sueldos)
+                        const totLiquidaciones = sumar(datosPL, m => m.liquidaciones)
+                        const totCaja = sumar(datosPL, m => m.cajaChica)
+                        const totRetenciones = sumar(datosPL, m => m.retenciones)
+                        const totGastosConsolidado = mas(totGastos, totHonorarios, totSueldos, totLiquidaciones, totCaja)
+                        const utilidadOp = menos(totEmitidas, totGastosConsolidado)
+                        const impuestosEstimados = utilidadOp.clp > 0 ? por(utilidadOp, 0.20) : { uf: 0, clp: 0 }
+                        const utilidadDespuesImpuestos = menos(utilidadOp, impuestosEstimados)
 
                         return (
                             <div className="space-y-6">
@@ -1324,28 +1353,32 @@ export default function ContabilidadView({
                                     </div>
                                     <button onClick={() => {
                                         const data = generarDatosPL()
-                                        const csv = [['Mes', 'Ingresos', 'Gastos', 'Honorarios', 'Gastos Menores', 'Retenciones', 'Utilidad'], ...data.map(m => [m.mes, m.emitidas, m.gastos, m.honorarios, m.cajaChica, m.retenciones, m.utilidadNeta])].map(r => r.join(',')).join('\n')
+                                        const k = (m: Monto) => isCLP ? Math.round(m.clp) : m.uf
+                                        const csv = [[`Mes (${isCLP ? 'CLP' : 'UF'})`, 'Ingresos', 'Gastos', 'Honorarios', 'Retiros Socios', 'Sueldos', 'Gastos Menores', 'Total Gastos', 'Retenciones', 'Utilidad'], ...data.map(m => [m.mes, k(m.emitidas), k(m.gastos), k(m.honorarios), k(m.sueldos), k(m.liquidaciones), k(m.cajaChica), k(m.totalGastos), k(m.retenciones), k(m.utilidadNeta)])].map(r => r.join(';')).join('\n')
                                         const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
                                         const url = window.URL.createObjectURL(blob)
                                         const a = document.createElement('a'); a.href = url; a.download = `estado-resultados-${añoSeleccionado}.csv`; a.click()
                                     }} className="px-4 py-2 bg-gray-100 rounded-lg text-sm whitespace-nowrap">CSV</button>
                                     <button onClick={() => {
                                         const data = generarDatosPL()
+                                        // Montos en CLP REALES (suma de documentos), no UF × UF de hoy
+                                        const fila = (label: string, get: (m: typeof data[number]) => Monto) => [label, ...data.map(m => Math.round(get(m).clp)), Math.round(sumar(data, get).clp)]
                                         const rows = [
-                                            ['THE HUMAN ORG Ltda.'], [`Estado de Resultados - Año ${añoSeleccionado}`], [`Generado: ${new Date().toLocaleDateString('es-CL')} | UF referencia: $${uf.toLocaleString('es-CL')}`], [],
+                                            ['THE HUMAN ORG Ltda.'], [`Estado de Resultados - Año ${añoSeleccionado}`], [`Generado: ${new Date().toLocaleDateString('es-CL')} | Montos en CLP según documentos (SII / banco)`], [],
                                             ['', ...data.map(m => m.mes.toUpperCase()), 'TOTAL AÑO'], [],
                                             ['INGRESOS'],
-                                            ['  Facturación (exento IVA)', ...data.map(m => Math.round((m.emitidas || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.emitidas || 0), 0) * uf)],
-                                            ['TOTAL INGRESOS', ...data.map(m => Math.round((m.emitidas || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.emitidas || 0), 0) * uf)], [],
+                                            fila('  Facturación (exenta)', m => m.emitidas),
+                                            fila('TOTAL INGRESOS', m => m.emitidas), [],
                                             ['GASTOS OPERACIONALES'],
-                                            ['  Proveedores (+ IVA)', ...data.map(m => Math.round((m.gastos || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.gastos || 0), 0) * uf)],
-                                            ['  Honorarios (bruto)', ...data.map(m => Math.round((m.honorarios || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.honorarios || 0), 0) * uf)],
-                                            ['  Retiros Socios', ...data.map(m => Math.round((m.sueldos || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.sueldos || 0), 0) * uf)],
-                                            ['  Gastos Menores', ...data.map(m => Math.round((m.cajaChica || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.cajaChica || 0), 0) * uf)],
-                                            ['TOTAL GASTOS', ...data.map(m => Math.round(((m.gastos || 0) + (m.honorarios || 0) + (m.sueldos || 0) + (m.cajaChica || 0)) * uf)), Math.round(data.reduce((s, m) => s + (m.gastos || 0) + (m.honorarios || 0) + (m.sueldos || 0) + (m.cajaChica || 0), 0) * uf)], [],
-                                            ['UTILIDAD OPERACIONAL', ...data.map(m => Math.round((m.utilidadOperacional || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.utilidadOperacional || 0), 0) * uf)], [],
-                                            ['  Retención Boletas', ...data.map(m => Math.round((m.retenciones || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.retenciones || 0), 0) * uf)], [],
-                                            ['UTILIDAD NETA', ...data.map(m => Math.round((m.utilidadNeta || 0) * uf)), Math.round(data.reduce((s, m) => s + (m.utilidadNeta || 0), 0) * uf)],
+                                            fila('  Proveedores (total c/IVA)', m => m.gastos),
+                                            fila('  Honorarios (bruto)', m => m.honorarios),
+                                            fila('  Sueldos (costo empresa)', m => m.liquidaciones),
+                                            fila('  Retiros Socios', m => m.sueldos),
+                                            fila('  Gastos Menores', m => m.cajaChica),
+                                            fila('TOTAL GASTOS', m => m.totalGastos), [],
+                                            fila('UTILIDAD OPERACIONAL', m => m.utilidadOperacional), [],
+                                            fila('  Retención Boletas (informativo)', m => m.retenciones), [],
+                                            fila('UTILIDAD NETA', m => m.utilidadNeta),
                                         ]
                                         const wb = XLSX.utils.book_new()
                                         const ws = XLSX.utils.aoa_to_sheet(rows)
@@ -1367,48 +1400,47 @@ export default function ContabilidadView({
                                         <div className="grid grid-cols-1 gap-2">
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Gastos Operacionales (+ IVA):</span><span className="font-bold text-naranja">{fmtVal(totGastos)}</span></div>
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Honorarios (bruto):</span><span className="font-bold text-azul">{fmtVal(totHonorarios)}</span></div>
-                                            {totLiquidaciones > 0 && <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Sueldos (costo empresa):</span><span className="font-bold text-teal-600">{fmtVal(totLiquidaciones)}</span></div>}
+                                            {totLiquidaciones.clp > 0 && <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Sueldos (costo empresa):</span><span className="font-bold text-teal-600">{fmtVal(totLiquidaciones)}</span></div>}
                                             {/* Desglose por persona — visible si hay datos de remuneraciones */}
-                                            {(totHonorarios > 0 || totLiquidaciones > 0) && (() => {
-                                                const montoUFLiq = (l: FinancialRecord) => parseFloat(l.monto_uf) || (parseFloat(l.costo_total_empleador) / (parseFloat(l.uf_dia) || ufActual)) || 0
-                                                const montoUFBol = (b: FinancialRecord) => parseFloat(b.monto_bruto_uf) || parseFloat(b.monto_uf) || 0
-                                                const porPersona: Record<string, { tipo: string; total_uf: number; meses: number }> = {}
-                                                boletasHonorarios.filter(b => new Date(b.fecha).getFullYear() === añoSeleccionado).forEach(b => {
+                                            {(totHonorarios.clp > 0 || totLiquidaciones.clp > 0) && (() => {
+                                                const porPersona: Record<string, { tipo: string; total: Monto; meses: number }> = {}
+                                                boletasHonorarios.filter(b => fechaLocal(b.fecha).getFullYear() === añoSeleccionado).forEach(b => {
                                                     const n = String(b.prestador || b.nombre_emisor || 'Sin nombre')
-                                                    if (!porPersona[n]) porPersona[n] = { tipo: 'Honorarios', total_uf: 0, meses: 0 }
-                                                    porPersona[n].total_uf += montoUFBol(b); porPersona[n].meses++
+                                                    if (!porPersona[n]) porPersona[n] = { tipo: 'Honorarios', total: { uf: 0, clp: 0 }, meses: 0 }
+                                                    porPersona[n].total = mas(porPersona[n].total, montoBoleta(b)); porPersona[n].meses++
                                                 })
-                                                liquidaciones.filter(l => new Date(l.periodo).getFullYear() === añoSeleccionado).forEach(l => {
+                                                liquidaciones.filter(l => fechaLocal(l.periodo).getFullYear() === añoSeleccionado).forEach(l => {
                                                     const n = String(l.trabajador || 'Sin nombre')
-                                                    if (!porPersona[n]) porPersona[n] = { tipo: 'Sueldo', total_uf: 0, meses: 0 }
-                                                    porPersona[n].total_uf += montoUFLiq(l); porPersona[n].meses++
+                                                    if (!porPersona[n]) porPersona[n] = { tipo: 'Sueldo', total: { uf: 0, clp: 0 }, meses: 0 }
+                                                    porPersona[n].total = mas(porPersona[n].total, montoLiquidacion(l)); porPersona[n].meses++
                                                 })
                                                 if (Object.keys(porPersona).length === 0) return null
                                                 return (
                                                     <div className="ml-4 border-l-2 border-gray-200 dark:border-gray-600 pl-3 space-y-1">
-                                                        {Object.entries(porPersona).sort((a, b) => b[1].total_uf - a[1].total_uf).map(([nombre, datos]) => (
+                                                        {Object.entries(porPersona).sort((a, b) => b[1].total.clp - a[1].total.clp).map(([nombre, datos]) => (
                                                             <div key={nombre} className="flex justify-between py-1.5 px-2 text-sm text-gray-600 dark:text-gray-400">
                                                                 <span>{nombre} <span className="text-xs text-gray-400">({datos.tipo} · {datos.meses} {datos.meses === 1 ? 'mes' : 'meses'})</span></span>
-                                                                <span className="font-medium">{Math.round(datos.total_uf * 10) / 10} UF</span>
+                                                                <span className="font-medium">{fmtVal(datos.total)}</span>
                                                             </div>
                                                         ))}
                                                     </div>
                                                 )
                                             })()}
+                                            {totSueldos.clp > 0 && <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Retiros socios:</span><span className="font-bold text-purple-600">{fmtVal(totSueldos)}</span></div>}
                                             <div className="flex justify-between p-3 bg-white dark:bg-gray-700 rounded"><span className="font-medium">Gastos Menores:</span><span className="font-bold text-fucsia">{fmtVal(totCaja)}</span></div>
                                             <div className="flex justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded font-bold"><span>TOTAL GASTOS:</span><span className="text-naranja">{fmtVal(totGastosConsolidado)}</span></div>
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center p-4 bg-white rounded mb-4 border-2"><span className="text-lg font-bold">UTILIDAD OPERACIONAL:</span><span className={`text-2xl font-bold ${utilidadOp >= 0 ? 'text-verde' : 'text-red-600'}`}>{utilidadOp >= 0 ? '+' : ''}{fmtVal(utilidadOp)}</span></div>
+                                    <div className="flex justify-between items-center p-4 bg-white rounded mb-4 border-2"><span className="text-lg font-bold">UTILIDAD OPERACIONAL:</span><span className={`text-2xl font-bold ${utilidadOp.clp >= 0 ? 'text-verde' : 'text-red-600'}`}>{utilidadOp.clp >= 0 ? '+' : ''}{fmtVal(utilidadOp)}</span></div>
                                     <div className="mb-4">
                                         <div className="text-sm font-bold text-gray-600 mb-2">OBLIGACIONES FISCALES</div>
                                         <div className="grid grid-cols-1 gap-2">
                                             <div className="flex justify-between p-3 bg-orange-50 rounded"><span className="font-medium">Retenciones por pagar (15.25%):</span><span className="font-bold text-orange-600">{fmtVal(totRetenciones)}</span></div>
                                             <div className="flex justify-between p-3 bg-purple-50 rounded"><span className="font-medium">Impuesto estimado (20%):</span><span className="font-bold text-purple-600">{fmtVal(impuestosEstimados)}</span></div>
-                                            <div className="flex justify-between p-3 bg-gray-100 rounded font-bold"><span>TOTAL FISCAL:</span><span className="text-orange-600">{fmtVal(totRetenciones + impuestosEstimados)}</span></div>
+                                            <div className="flex justify-between p-3 bg-gray-100 rounded font-bold"><span>TOTAL FISCAL:</span><span className="text-orange-600">{fmtVal(mas(totRetenciones, impuestosEstimados))}</span></div>
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-blue-100 rounded border-2 border-verde"><span className="text-lg font-bold">UTILIDAD NETA (después impuestos):</span><span className={`text-2xl font-bold ${utilidadDespuesImpuestos >= 0 ? 'text-verde' : 'text-red-600'}`}>{utilidadDespuesImpuestos >= 0 ? '+' : ''}{fmtVal(utilidadDespuesImpuestos)}</span></div>
+                                    <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-blue-100 rounded border-2 border-verde"><span className="text-lg font-bold">UTILIDAD NETA (después impuestos):</span><span className={`text-2xl font-bold ${utilidadDespuesImpuestos.clp >= 0 ? 'text-verde' : 'text-red-600'}`}>{utilidadDespuesImpuestos.clp >= 0 ? '+' : ''}{fmtVal(utilidadDespuesImpuestos)}</span></div>
                                     <div className="text-xs text-gray-600 mt-4 text-center">Impuesto estimado al 20% (consultar con contador para cálculo exacto)</div>
                                 </div>
 
@@ -1423,6 +1455,7 @@ export default function ContabilidadView({
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Gastos</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">👤 Honorarios</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💼 Retiros</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Sueldos</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">💵 Caja</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">🔶 Retenc.</th>
                                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Utilidad</th>
@@ -1432,13 +1465,14 @@ export default function ContabilidadView({
                                                 {datosPL.map((m, idx) => (
                                                     <tr key={idx} className="hover:bg-gray-50 dark:bg-gray-700">
                                                         <td className="px-4 py-3 text-sm font-medium">{m.mes}</td>
-                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.emitidas} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
-                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.gastos} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
-                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.honorarios} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
-                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.sueldos} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
-                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.cajaChica} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
-                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.retenciones} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
-                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.utilidadNeta} ufValue={ufActual} size="sm" primary={monedaPreferida} /></td>
+                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.emitidas.uf} amountCLP={m.emitidas.clp} size="sm" primary={monedaPreferida} /></td>
+                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.gastos.uf} amountCLP={m.gastos.clp} size="sm" primary={monedaPreferida} /></td>
+                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.honorarios.uf} amountCLP={m.honorarios.clp} size="sm" primary={monedaPreferida} /></td>
+                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.sueldos.uf} amountCLP={m.sueldos.clp} size="sm" primary={monedaPreferida} /></td>
+                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.liquidaciones.uf} amountCLP={m.liquidaciones.clp} size="sm" primary={monedaPreferida} /></td>
+                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.cajaChica.uf} amountCLP={m.cajaChica.clp} size="sm" primary={monedaPreferida} /></td>
+                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.retenciones.uf} amountCLP={m.retenciones.clp} size="sm" primary={monedaPreferida} /></td>
+                                                        <td className="px-4 py-3 text-right"><DualCurrency amountUF={m.utilidadNeta.uf} amountCLP={m.utilidadNeta.clp} size="sm" primary={monedaPreferida} /></td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -1453,7 +1487,7 @@ export default function ContabilidadView({
                                                     <div className="flex justify-between"><span className="text-gray-600">Gastos:</span><span className="font-medium text-naranja">{fmtVal(m.gastos)}</span></div>
                                                     <div className="flex justify-between"><span className="text-gray-600">👤 Honorarios:</span><span className="font-medium text-azul">{fmtVal(m.honorarios)}</span></div>
                                                     <div className="flex justify-between"><span className="text-gray-600">💼 Retiros:</span><span className="font-medium text-purple-600">{fmtVal(m.sueldos)}</span></div>
-                                                    <div className="flex justify-between pt-2 border-t"><span className="font-bold">Utilidad:</span><span className={`font-bold ${m.utilidadNeta >= 0 ? 'text-verde' : 'text-red-600'}`}>{m.utilidadNeta >= 0 ? '+' : ''}{fmtVal(m.utilidadNeta)}</span></div>
+                                                    <div className="flex justify-between pt-2 border-t"><span className="font-bold">Utilidad:</span><span className={`font-bold ${m.utilidadNeta.clp >= 0 ? 'text-verde' : 'text-red-600'}`}>{m.utilidadNeta.clp >= 0 ? '+' : ''}{fmtVal(m.utilidadNeta)}</span></div>
                                                 </div>
                                             </div>
                                         ))}

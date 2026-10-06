@@ -25,7 +25,7 @@ const getDefault = (type: ModalType): FormData => {
     return { organizacion: '', servicio: 'RC Nivel 3', uf_mes: '', inicio_contrato: '', fin_contrato: '', renovacion: 'Por definir', salud: 'Buena' }
 }
 
-export default function UniversalModal({ type, item, onSave, onClose, ufActual = 38000 }: UniversalModalProps) {
+export default function UniversalModal({ type, item, onSave, onClose, ufActual = 0 }: UniversalModalProps) {
     const ufHoy = ufActual
     useEscapeKey(onClose)
     const [formData, setFormData] = useState<FormData>(item || getDefault(type))

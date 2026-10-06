@@ -95,7 +95,7 @@ export default function ProposalGenerator({ prospecto, onClose, ufActual }: Prop
 
         const refNum = `COT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`
         const valorNum  = parseFloat(form.valor_uf) || 0
-        const valorCLP  = Math.round(valorNum * (ufActual || 38000))
+        const valorCLP  = Math.round(valorNum * ufActual)
         const isRecurr  = form.tipo.startsWith('Key Account') || form.tipo === 'Gestión de Contenido'
 
         // ── BANDA SUPERIOR ──────────────────────────────────────────────
@@ -211,7 +211,7 @@ export default function ProposalGenerator({ prospecto, onClose, ufActual }: Prop
             ML + 5, boxY + 15, { size: 14, bold: true, color: blanco }
         )
         txt(`$${valorCLP.toLocaleString('es-CL')} + IVA`, W - MR - 5, boxY + 10, { size: 10, bold: true, color: blanco, align: 'right' })
-        txt(`UF ${form.fecha}: $${(ufActual || 38000).toLocaleString('es-CL')}`, W - MR - 5, boxY + 17, { size: 7, color: grisCla, align: 'right' })
+        txt(`UF ${form.fecha}: $${ufActual.toLocaleString('es-CL')}`, W - MR - 5, boxY + 17, { size: 7, color: grisCla, align: 'right' })
 
         // ── PIE ────────────────────────────────────────────────────────────
         const footY = H - 10
@@ -330,7 +330,7 @@ export default function ProposalGenerator({ prospecto, onClose, ufActual }: Prop
                     {form.valor_uf && (
                         <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg px-4 py-2.5 flex justify-between items-center">
                             <span className="text-xs text-gray-500 dark:text-gray-400">Equivalente CLP</span>
-                            <span className="font-bold text-naranja">${Math.round((parseFloat(form.valor_uf) || 0) * (ufActual || 38000)).toLocaleString('es-CL')} + IVA</span>
+                            <span className="font-bold text-naranja">${Math.round((parseFloat(form.valor_uf) || 0) * ufActual).toLocaleString('es-CL')} + IVA</span>
                         </div>
                     )}
 

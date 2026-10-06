@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import PlanCobroPanel from '../Cobros/PlanCobroPanel'
 import type { ReactNode } from 'react'
 import { StickyNote, Phone, Handshake, Mail, CheckSquare, RefreshCw, KeyRound, Paperclip, CheckCircle2, Sparkles, MapPin, ClipboardList } from 'lucide-react'
 import { supabase } from '../../utils/supabase'
@@ -80,7 +81,7 @@ interface EntityDetailProps {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FormData = Record<string, any>
 
-export default function EntityDetail({ entity, onClose, contactos, notas, user, keyAccounts = [], ufActual = 38000, onRefresh }: EntityDetailProps) {
+export default function EntityDetail({ entity, onClose, contactos, notas, user, keyAccounts = [], ufActual = 0, onRefresh }: EntityDetailProps) {
     const { type, item } = entity
     const [activeSection, setActiveSection] = useState('ficha')
     const [formData, setFormData] = useState<FormData>({ ...item })
@@ -709,6 +710,9 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                     {/* FACTURACIÓN (ticket y keyaccount) */}
                     {activeSection === 'facturacion' && (type === 'ticket' || type === 'keyaccount') && (
                         <div className="space-y-5">
+                            {/* Plan de cobro: cuotas pactadas vs facturas (se remonta al cambiar las vinculadas para refrescar candidatas) */}
+                            <PlanCobroPanel key={`plan-${facturasVinculadas.length}`} tipo={type} item={item as unknown as Record<string, unknown>} ufActual={ufActual} userEmail={user?.email}
+                                onCambio={() => { setFacturasLoaded(false); void loadFacturacion() }} />
                             {facturasLoading && <p className="text-xs text-gray-400 text-center py-4 animate-pulse">Cargando facturas…</p>}
 
                             {facturasError && (
@@ -720,7 +724,7 @@ export default function EntityDetail({ entity, onClose, contactos, notas, user, 
                             )}
 
                             {!facturasLoading && !facturasError && (() => {
-                                const estadoBadge = (e: string) => e === 'Pagada' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : e === 'Pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : e === 'Vencida' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                const estadoBadge = (e: string) => (e === 'Pagada' || e === 'Cobrada') ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : e === 'Pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : e === 'Vencida' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                                 const fmtMonto = (f: FacturaRow) => f.monto_uf ? `${f.monto_uf} UF` : f.total_monto_clp ? `$${Math.round(f.total_monto_clp).toLocaleString('es-CL')}` : '—'
 
                                 const FacturaItem = ({ f, actions }: { f: FacturaRow; actions: React.ReactNode }) => (

@@ -76,3 +76,17 @@ export function compositeScore(sAmt: number, sDate: number, sText: number): numb
     }
     return sAmt * 0.55 + sDate * 0.30 + sText * 0.15
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTADOS
+// Históricamente convivieron 'Pagada' (formulario manual) y 'Cobrada'
+// (lo que escribe la conciliación) para facturas emitidas. Ambos significan
+// "el cliente ya pagó". Usar SIEMPRE estas listas para filtrar.
+// ─────────────────────────────────────────────────────────────────────────────
+export const ESTADOS_EMITIDA_COBRADA = ['Cobrada', 'Pagada', 'Reclamada', 'Anulada']
+export const ESTADOS_RECIBIDA_PAGADA = ['Pagada', 'Reclamada', 'Anulada']
+
+/** ¿La factura emitida ya fue pagada por el cliente? */
+export function emitidaEstaCobrada(estado: unknown): boolean {
+    return estado === 'Cobrada' || estado === 'Pagada'
+}

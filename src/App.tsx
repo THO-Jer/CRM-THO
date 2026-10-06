@@ -4,7 +4,7 @@ import { formatFileSize, normalizeSearch } from './utils/formatters'
 import {
     LayoutDashboard, Target, Ticket as TicketIcon, KeyRound, History, TrendingUp,
     ClipboardList, BarChart3, Landmark, Search, Sun, Moon, Plus, Download,
-    Menu, X, ChevronsLeft, ChevronsRight, LogOut
+    Menu, X, ChevronsLeft, ChevronsRight, LogOut, CalendarClock
 } from 'lucide-react'
 
 // Modales y utilidades — eager: son chicos y se renderizan condicionalmente.
@@ -15,6 +15,9 @@ import HistoryModal from './components/shared/HistoryModal'
 import FilesModal from './components/shared/FilesModal'
 import DateRangeFilter from './components/shared/DateRangeFilter'
 import useEscapeKey from './hooks/useEscapeKey'
+import PlanCobroEditor from './components/Cobros/PlanCobroEditor'
+import { regenerarMensual } from './utils/planDraft'
+import { mesesEntre } from './utils/cobros'
 
 // EntityDetail importa jsPDF; lazy-load para mantenerlo fuera del bundle inicial.
 const EntityDetail = lazy(() => import('./components/Detail/EntityDetail'))
@@ -30,6 +33,7 @@ const CerradosView = lazy(() => import('./components/Cerrados/CerradosView'))
 const TicketsView = lazy(() => import('./components/Tickets/TicketsView'))
 const KeyAccountsView = lazy(() => import('./components/KeyAccounts/KeyAccountsView'))
 const OrgDetail = lazy(() => import('./components/OrgDetail/OrgDetail'))
+const CobranzaView = lazy(() => import('./components/Cobros/CobranzaView'))
 
 import useData from './hooks/useData'
 import useCRMActions from './hooks/useCRMActions'
@@ -159,6 +163,7 @@ const NAV_SECTIONS: NavSection[] = [
         label: 'Finanzas',
         items: [
             { id: 'finanzas-dashboard', nombre: 'Resumen', icon: ClipboardList, cTab: 'dashboard' },
+            { id: 'cobranza', nombre: 'Cobranza', icon: CalendarClock },
             { id: 'contabilidad', nombre: 'EERR', icon: BarChart3, cTab: 'pl' },
             { id: 'conciliacion', nombre: 'Conciliación', icon: Landmark, cTab: 'conciliacion' },
         ]
@@ -168,7 +173,7 @@ const NAV_SECTIONS: NavSection[] = [
 const TAB_TITLES: Record<string, string> = {
     dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts',
     cerrados: 'Historial', reportes: 'Reportes', 'finanzas-dashboard': 'Dashboard Financiero',
-    contabilidad: 'Estado de Resultados', conciliacion: 'Conciliación Bancaria'
+    contabilidad: 'Estado de Resultados', conciliacion: 'Conciliación Bancaria', cobranza: 'Cobranza — plan de cobro por cliente'
 }
 
 function CRMApp() {
@@ -409,6 +414,7 @@ function CRMApp() {
     // Destructure actions for render convenience
     const { historyOpen, historyLoading, historyTitle, historyItems, setHistoryItems, openHistory, setHistoryOpen,
         convertOpen, convertSource, convertTarget, convertForm, openConvert, openConvertFromCerrado, closeConvert, setConvertTarget, setConvertForm, submitConvert,
+        planDraft, setPlanDraft, incluirPlan, setIncluirPlan,
         renewalOpen, renewalKA, renewalMode, renewalForm, cancelAlsoRegisterLoss, openRenewal, openCancelKA, closeRenewal, setRenewalForm, setCancelAlsoRegisterLoss, submitRenewal,
         filesModalOpen, filesEntityName, filesList, filesLoading, uploadingFile, openFilesModal, setFilesModalOpen,
         closeTicketOpen, closeTicketTarget, closeCloseTicketModal, submitCloseTicket,
@@ -427,6 +433,23 @@ function CRMApp() {
     // declaran ahí — si lo movemos arriba, TDZ en runtime.
     useEscapeKey(closeConvert, convertOpen);
     useEscapeKey(closeRenewal, renewalOpen);
+
+    // KA en el modal Convertir: UF/mes, inicio y fin alimentan el plan de cobro mensual
+    const syncConvertKA = (patch: Partial<typeof convertForm>) => {
+        const f = { ...convertForm, ...patch }
+        setConvertForm(f)
+        setPlanDraft(prev => {
+            if (!prev || prev.plan.modalidad !== 'mensual') return prev
+            const params = {
+                ...prev.params,
+                montoCuota: prev.plan.moneda === 'UF' ? String(f.uf_mes ?? '') : prev.params.montoCuota,
+                primeraFecha: f.inicio_contrato || prev.params.primeraFecha,
+                nCuotas: f.inicio_contrato && f.fin_contrato ? Math.max(1, mesesEntre(f.inicio_contrato, f.fin_contrato)) : prev.params.nCuotas,
+            }
+            const d = { ...prev, params }
+            return { ...d, cuotas: regenerarMensual(d) }
+        })
+    };
 
     const navigate = (item: NavItem) => {
         setActiveTab(item.id);
@@ -621,6 +644,7 @@ function CRMApp() {
                     {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={activeTickets} keyAccounts={activeKeyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={(m: string) => setMonedaPreferida(m as 'UF' | 'CLP')} actividadReciente={actividadReciente} />}
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {activeTab === 'pipeline' && <KanbanBoard onDetail={(p) => openDetail('prospecto', p)} onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstadoFiltrado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p as unknown as Record<string, unknown>); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
+                    {activeTab === 'cobranza' && <CobranzaView tickets={activeTickets} keyAccounts={activeKeyAccounts} ufActual={ufActual} userEmail={user?.email} />}
                     {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={filteredCerrados} tickets={filteredTickets} keyAccounts={filteredKeyAccounts} ufActual={ufActual} dateRange={dateRange} />}
                     {['finanzas-dashboard', 'contabilidad', 'conciliacion'].includes(activeTab) && (
                         financeLoading ? <TabLoader /> :
@@ -736,7 +760,7 @@ function CRMApp() {
             {closeTicketOpen && <CloseTicketModal ticket={closeTicketTarget as any} onSubmit={submitCloseTicket} onClose={closeCloseTicketModal} />}
             {convertOpen && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={closeConvert}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-slideUp" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-6 animate-slideUp" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-start">
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Convertir prospecto</h3>
@@ -783,19 +807,35 @@ function CRMApp() {
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">UF/mes</label>
-                                        <input type="number" step="0.01" min="0" value={convertForm.uf_mes || ''} onChange={(e) => setConvertForm({...convertForm, uf_mes: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+                                        <input type="number" step="0.01" min="0" value={convertForm.uf_mes || ''} onChange={(e) => syncConvertKA({ uf_mes: e.target.value })} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                     </div>
                                     <div>
                                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Fin contrato</label>
-                                        <input type="date" value={convertForm.fin_contrato || ''} onChange={(e) => setConvertForm({...convertForm, fin_contrato: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+                                        <input type="date" value={convertForm.fin_contrato || ''} onChange={(e) => syncConvertKA({ fin_contrato: e.target.value })} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                     </div>
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Inicio contrato</label>
-                                    <input type="date" value={convertForm.inicio_contrato || ''} onChange={(e) => setConvertForm({...convertForm, inicio_contrato: e.target.value})} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+                                    <input type="date" value={convertForm.inicio_contrato || ''} onChange={(e) => syncConvertKA({ inicio_contrato: e.target.value })} className="mt-1 w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                                 </div>
                             </div>
                         )}
+
+                        {/* Plan de cobro: lo que antes había que ir a buscar al Word del acuerdo */}
+                        <div className="mt-5 pt-4 border-t dark:border-gray-700">
+                            <label className="flex items-start gap-2 cursor-pointer">
+                                <input type="checkbox" checked={incluirPlan} onChange={(e) => setIncluirPlan(e.target.checked)} className="mt-1 w-4 h-4 accent-naranja" />
+                                <span>
+                                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Definir plan de cobro</span>
+                                    <span className="block text-xs text-gray-500 dark:text-gray-400">Duración, monto por cuota y UF pactada. Con esto, Cobranza muestra qué facturar cada mes.</span>
+                                </span>
+                            </label>
+                            {incluirPlan && planDraft && (
+                                <div className="mt-3">
+                                    <PlanCobroEditor draft={planDraft} onChange={setPlanDraft} ufHoy={ufActual} />
+                                </div>
+                            )}
+                        </div>
 
                         <div className="mt-6 flex justify-end space-x-2">
                             <button onClick={closeConvert} className="px-4 py-2 rounded-lg border">Cancelar</button>

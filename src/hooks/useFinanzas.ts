@@ -3,7 +3,8 @@ import { supabase } from '../utils/supabase'
 import { showToast } from '../utils/toast'
 // Helpers de matching — funciones puras extraídas a utils/conciliacion.ts,
 // con tests en utils/__tests__/conciliacion.test.ts.
-import { normalizeText, tokenSimilarity, scoreAmount, scoreDate, compositeScore } from '../utils/conciliacion'
+import { tokenSimilarity, scoreAmount, scoreDate, compositeScore, ESTADOS_EMITIDA_COBRADA, ESTADOS_RECIBIDA_PAGADA } from '../utils/conciliacion'
+import { aplicarUFHistorica, ufDeFecha, round2 } from '../utils/uf'
 import type {
     FacturaEmitida, FacturaRecibida, BoletaHonorario,
     SueldoSocio, CajaChica, MovimientoBancario, Liquidacion
@@ -159,6 +160,18 @@ function parsearCartolaSantander(arrayBuffer: ArrayBuffer, uf: number): any[] {
     return movimientos
 }
 
+/**
+ * Monto en CLP de una factura, tolerando el drift de columnas:
+ * las importadas del SII traen total_monto_clp; las manuales, monto_clp.
+ */
+function montoCLPDoc(f: Record<string, unknown>): number {
+    for (const k of ['total_monto_clp', 'monto_clp', 'monto_total']) {
+        const n = Number(f[k])
+        if (Number.isFinite(n) && n > 0) return n
+    }
+    return 0
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPOS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -209,7 +222,8 @@ export default function useFinanzas({
     loadMovimientosBancarios, loadCajaChica,
     loadFacturasEmitidas, loadFacturasRecibidas, loadBoletasHonorarios, loadSueldosSocios, loadLiquidaciones
 }: UseFinanzasParams) {
-    const uf = Number(ufActual) > 0 ? Number(ufActual) : 38000
+    // UF de HOY: solo como respaldo si no se puede obtener la UF de la fecha del documento
+    const uf = Number(ufActual) > 0 ? Number(ufActual) : 0
 
     // ─── Importar cartola bancaria ──────────────────────────────────────────
 
@@ -223,7 +237,12 @@ export default function useFinanzas({
             if (!file) return
             try {
                 const arrayBuffer = await file.arrayBuffer()
-                const movimientos = parsearCartolaSantander(arrayBuffer, uf)
+                const parsed = parsearCartolaSantander(arrayBuffer, uf)
+                // Cada movimiento con la UF de SU fecha (antes: UF del día de importación para todos)
+                const { rows: movimientos, sinUF } = await aplicarUFHistorica(parsed, {
+                    fecha: m => m.fecha, pares: [['monto_clp', 'monto_uf']], ufRespaldo: uf,
+                })
+                if (sinUF > 0) showToast(`${sinUF} movimiento(s) quedaron con la UF de hoy (no se pudo consultar la UF de su fecha)`, 'warning')
                 if (movimientos.length === 0) {
                     showToast('No se encontraron movimientos en la cartola', 'info')
                     return
@@ -335,10 +354,10 @@ export default function useFinanzas({
         if (esEntrada) {
             facturasEmitidas.forEach(f => {
                 const fAny = f as unknown as Record<string, unknown>
-                if (['Reclamada', 'Cobrada'].includes(String(fAny.estado || f.estado))) return
+                if (ESTADOS_EMITIDA_COBRADA.includes(String(fAny.estado || f.estado))) return
                 if (yaUsados.has(`factura_emitida:${f.id}`)) return
 
-                const montoFac = parseFloat(String(fAny.monto_clp ?? fAny.monto_total ?? 0))
+                const montoFac = montoCLPDoc(fAny)
                 const fechaDoc = String(fAny.fecha_pago || f.fecha_emision || fAny.fecha_emision || '')
                 const descDoc  = [fAny.cliente, fAny.razon_social_receptor, fAny.numero_factura, fAny.folio, f.descripcion].filter(Boolean).join(' ')
 
@@ -366,10 +385,10 @@ export default function useFinanzas({
         if (esSalida) {
             facturasRecibidas.forEach(f => {
                 const fAny = f as unknown as Record<string, unknown>
-                if (['Pagada', 'Reclamada'].includes(String(fAny.estado || f.estado))) return
+                if (ESTADOS_RECIBIDA_PAGADA.includes(String(fAny.estado || f.estado))) return
                 if (yaUsados.has(`factura_recibida:${f.id}`)) return
 
-                const montoFac = parseFloat(String(fAny.monto_clp ?? fAny.monto_total ?? 0))
+                const montoFac = montoCLPDoc(fAny)
                 const fechaDoc = String(fAny.fecha_pago || f.fecha_emision || fAny.fecha_emision || '')
                 const descDoc  = [fAny.proveedor, fAny.razon_social_proveedor, fAny.rut_proveedor, fAny.numero_factura, fAny.folio, fAny.categoria, f.descripcion].filter(Boolean).join(' ')
 
@@ -502,7 +521,7 @@ export default function useFinanzas({
                         id: String(c.id),
                         descripcion: `Gasto Menor: ${cAny.concepto ?? c.descripcion ?? ''}`,
                         monto_clp: montoCajaChica,
-                        monto_uf: montoCajaChica / uf,
+                        monto_uf: uf > 0 ? round2(montoCajaChica / uf) : 0,
                         fecha: fechaDoc || null,
                         score,
                     })
@@ -532,6 +551,8 @@ export default function useFinanzas({
     ) => {
         try {
             const movId = String(movimientoId)
+            const movLocal = movimientosBancarios.find(m => String(m.id) === movId)
+            const fechaPago = movLocal?.fecha ? String(movLocal.fecha).slice(0, 10) : null
             const conId = String(conciliadoConId)
 
             const { data: updMov, error: errorMov } = await supabase
@@ -562,10 +583,16 @@ export default function useFinanzas({
 
             const entry = tablaMap[conciliadoConTipo]
             if (entry) {
-                const { error: errorReg } = await supabase
+                // Facturas: además del estado, registrar la fecha real de pago (la del banco).
+                // Si la tabla no tuviera la columna, reintenta solo con el estado.
+                const conFecha = (conciliadoConTipo === 'factura_emitida' || conciliadoConTipo === 'factura_recibida') && fechaPago
+                let { error: errorReg } = await supabase
                     .from(entry.tabla)
-                    .update({ estado: entry.estado })
+                    .update(conFecha ? { estado: entry.estado, fecha_pago: fechaPago } : { estado: entry.estado })
                     .eq('id', conId)
+                if (errorReg && conFecha && /fecha_pago/.test(errorReg.message)) {
+                    ({ error: errorReg } = await supabase.from(entry.tabla).update({ estado: entry.estado }).eq('id', conId))
+                }
                 if (errorReg) {
                     console.warn(`No se pudo actualizar ${entry.tabla}:`, errorReg.message)
                     showToast(`Movimiento conciliado, pero no se pudo actualizar ${entry.tabla}.`, 'warning')
@@ -598,13 +625,15 @@ export default function useFinanzas({
             const montoCLPGasto = Number(movAny.monto_clp ?? movimiento.monto ?? 0)
             const descMov       = String(movimiento.descripcion ?? movAny.descripcion ?? '')
             const categoriaFinal = categoria || detectarCategoria(descMov)
+            // UF del día del movimiento, no la de hoy
+            const ufGasto = (await ufDeFecha(movimiento.fecha)) || uf
 
             const nuevoGasto = {
                 fecha:        movimiento.fecha,
                 concepto:     descMov,
                 monto_clp:    montoCLPGasto,
-                monto_uf:     uf > 0 ? montoCLPGasto / uf : null,
-                uf_dia:       uf,
+                monto_uf:     ufGasto > 0 ? round2(montoCLPGasto / ufGasto) : null,
+                uf_dia:       ufGasto || null,
                 categoria:    categoriaFinal,
                 responsable:  'Importado desde cartola',
                 comprobante:  movAny.numero_documento ?? null,

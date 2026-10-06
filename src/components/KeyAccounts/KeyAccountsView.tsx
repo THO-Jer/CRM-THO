@@ -36,7 +36,7 @@ interface OrgGroup {
     services: KeyAccount[]
 }
 
-export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles, onDetail, onOrgDetail, ufActual = 38000 }: KeyAccountsViewProps) {
+export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, onExport, onHistory, onRenew, onCancel, onFiles, onDetail, onOrgDetail, ufActual = 0 }: KeyAccountsViewProps) {
     const totalMRR = keyAccounts.reduce((sum, ka) => sum + (parseFloat(String(ka.uf_mes)) || 0), 0)
     const saludBadge = (s: string) => {
         if (s === 'Excelente' || s === 'Buena') return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
@@ -79,7 +79,7 @@ export default function KeyAccountsView({ keyAccounts, onAdd, onEdit, onDelete, 
                 </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <MetricCard title="MRR" value={`${Math.round(totalMRR)} UF/mes`} subtitle={`~$${Math.round(totalMRR * (ufActual || 38000)).toLocaleString('es-CL')}`} color="verde" />
+                <MetricCard title="MRR" value={`${Math.round(totalMRR)} UF/mes`} subtitle={`~$${Math.round(totalMRR * ufActual).toLocaleString('es-CL')}`} color="verde" />
                 <MetricCard title="Clientes" value={String(uniqueOrgs)} subtitle={`${keyAccounts.length} servicio${keyAccounts.length !== 1 ? 's' : ''} activo${keyAccounts.length !== 1 ? 's' : ''}`} color="azul" />
                 {renovacionesProximas.length > 0 && (
                     <MetricCard title="Renovar pronto" value={String(renovacionesProximas.length)} subtitle="contratos a ≤60 días" color="naranja" />

@@ -46,7 +46,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
     }, [dateRange?.desde, dateRange?.hasta])
 
     const datosIngresos = useMemo(() => {
-        const uf = Number(ufActual) > 0 ? Number(ufActual) : 38000
+        const uf = Number(ufActual) > 0 ? Number(ufActual) : 0
         const meses: string[] = [], mrrData: number[] = [], ticketsData: number[] = [], cerradosData: number[] = []
         rangoMeses.forEach(mesStart => {
             const mesEnd = new Date(mesStart.getFullYear(), mesStart.getMonth() + 1, 0)
@@ -238,7 +238,7 @@ export default function ReportesView({ prospectos, cerrados, tickets, keyAccount
 
     const totalPipeline = Math.round(prospectosActivos.reduce((s, p) => s + (parseFloat(String(p.valor)) || 0), 0))
     const mrrActual = Math.round(keyAccounts.reduce((s, ka) => s + (parseFloat(String(ka.uf_mes)) || 0), 0))
-    const ticketsValor = Math.round(tickets.reduce((s, t) => { const m = parseFloat(String(t.valor_monto)) || 0; return s + (t.valor_moneda === 'CLP' ? clpToUF(m, (t as unknown as Record<string, unknown>).uf_dia, ufActual || 38000) : m) }, 0))
+    const ticketsValor = Math.round(tickets.reduce((s, t) => { const m = parseFloat(String(t.valor_monto)) || 0; return s + (t.valor_moneda === 'CLP' ? clpToUF(m, (t as unknown as Record<string, unknown>).uf_dia, ufActual) : m) }, 0))
     const razonesPerdida = useMemo(() => {
         const r: Record<string, number> = {}
         cerrados.filter(c => c.estado_final === 'Perdido').forEach(c => { const k = c.razon_perdida || 'Sin especificar'; r[k] = (r[k] || 0) + 1 })

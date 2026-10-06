@@ -24,15 +24,20 @@ export default function DualCurrency({
     size = 'md',
     showLabel = false,
 }: DualCurrencyProps) {
-    const uf = ufValue || 38000
+    // Sin UF conocida NO se inventa una conversión (antes caía a 38.000 fijo).
+    const uf = Number(ufValue) > 0 ? Number(ufValue) : 0
 
-    let displayUF = amountUF ?? undefined
-    let displayCLP = amountCLP ?? undefined
+    // Montos pueden venir como string desde Supabase (numeric) → normalizar
+    const nUF = amountUF != null && amountUF !== ('' as unknown) ? Number(amountUF) : undefined
+    const nCLP = amountCLP != null && amountCLP !== ('' as unknown) ? Number(amountCLP) : undefined
 
-    if (amountUF && !amountCLP) {
-        displayCLP = Math.round(amountUF * uf)
-    } else if (amountCLP && !amountUF) {
-        displayUF = Math.round((amountCLP / uf) * 100) / 100
+    let displayUF = nUF !== undefined && Number.isFinite(nUF) ? nUF : undefined
+    let displayCLP = nCLP !== undefined && Number.isFinite(nCLP) ? Math.round(nCLP) : undefined
+
+    if (displayUF && !displayCLP && uf) {
+        displayCLP = Math.round(displayUF * uf)
+    } else if (displayCLP && !displayUF && uf) {
+        displayUF = Math.round((displayCLP / uf) * 100) / 100
     }
 
     const cls = SIZE_CLASSES[size]

@@ -1,3 +1,5 @@
+import { ufDeFecha } from './uf';
+
 // Helpers numéricos defensivos. Antes `!amount && amount !== 0` dejaba pasar NaN
 // como '$0' silenciosamente, ocultando bugs upstream.
 function toFiniteNumber(v: unknown): number | null {
@@ -106,22 +108,25 @@ export function formatFileSize(bytes: number | null | undefined): string {
     return (n / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
 }
 
+/**
+ * UF de HOY con sus decimales (antes se redondeaba a entero y se perdían
+ * pesos en cada conversión). Devuelve 0 si no hay forma de obtenerla:
+ * los consumidores deben tratar 0 como "UF desconocida" y no inventar valores.
+ */
 export async function obtenerUFHoy(): Promise<number> {
     try {
-        const res = await fetch('https://mindicador.cl/api/uf');
-        const data = await res.json();
-        if (data?.serie?.[0]?.valor) {
-            const uf = Math.round(data.serie[0].valor);
+        const uf = await ufDeFecha(todayYMD());
+        if (uf && uf > 0) {
             try { localStorage.setItem('uf_cache', String(uf)); } catch { /* silencio */ }
             return uf;
         }
     } catch (e) {
         console.warn('No se pudo obtener UF del día', e);
     }
-    // Fallback: última UF conocida (cache) antes que un valor hardcodeado desactualizado
+    // Fallback: última UF conocida (cache). Nunca un valor hardcodeado.
     try {
         const cached = Number(localStorage.getItem('uf_cache'));
         if (Number.isFinite(cached) && cached > 0) return cached;
     } catch { /* silencio */ }
-    return 39000;
+    return 0;
 }

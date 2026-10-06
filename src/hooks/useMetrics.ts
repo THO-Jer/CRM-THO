@@ -48,7 +48,7 @@ export default function useMetrics({ prospectos, cerrados, tickets, keyAccounts,
         const mrrActual = keyAccounts.filter(ka => (ka.salud || '').toLowerCase() !== 'cerrado').reduce((sum, ka) => sum + (parseFloat(String(ka.uf_mes)) || 0), 0)
 
         // ufActual ya viene con cache de localStorage (obtenerUFHoy); esto es último recurso
-        const ufSeguro = Number(ufActual) > 0 ? Number(ufActual) : 39000
+        const ufSeguro = Number(ufActual) > 0 ? Number(ufActual) : 0
         const valorTickets = tickets.reduce((sum, t) => {
             const tAny = t as unknown as Record<string, unknown>
             const monto = parseFloat(String(tAny.valor_monto)) || 0

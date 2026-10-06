@@ -35,7 +35,11 @@ export default function useData(user: User) {
     const [sueldosSocios, setSueldosSocios] = useState<SueldoSocio[]>([])
     const [movimientosBancarios, setMovimientosBancarios] = useState<MovimientoBancario[]>([])
     const [liquidaciones, setLiquidaciones] = useState<Liquidacion[]>([])
-    const [ufActual, setUfActual] = useState<number>(38000)
+    // UF inicial = última UF conocida (cache) para no partir con un valor inventado.
+    // 0 = desconocida hasta que responda mindicador.
+    const [ufActual, setUfActual] = useState<number>(() => {
+        try { const c = Number(localStorage.getItem('uf_cache')); return Number.isFinite(c) && c > 0 ? c : 0 } catch { return 0 }
+    })
 
     const [coreLoading, setCoreLoading] = useState(true)
     const [financeLoading, setFinanceLoading] = useState(false)
@@ -210,8 +214,9 @@ export default function useData(user: User) {
     }, [user?.email, loadCoreData])
 
     useEffect(() => {
-        obtenerUFHoy().then(uf => setUfActual(uf))
-        const t = setInterval(() => { obtenerUFHoy().then(uf => setUfActual(uf)) }, 6 * 60 * 60 * 1000)
+        const refrescar = () => obtenerUFHoy().then(uf => { if (uf > 0) setUfActual(uf) })
+        refrescar()
+        const t = setInterval(refrescar, 6 * 60 * 60 * 1000)
         return () => clearInterval(t)
     }, [])
 

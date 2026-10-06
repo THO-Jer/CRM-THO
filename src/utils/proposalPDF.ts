@@ -95,8 +95,8 @@ export function generateProposal({
 
     const fechaHoy = fecha || new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
     const valorNum = parseFloat(String(valor)) || 0
-    const valorCLP = moneda === 'UF' ? Math.round(valorNum * (ufActual || 38000)) : valorNum
-    const valorUF = moneda === 'CLP' ? Math.round(valorNum / (ufActual || 38000) * 100) / 100 : valorNum
+    const valorCLP = moneda === 'UF' ? Math.round(valorNum * ufActual) : valorNum
+    const valorUF = moneda === 'CLP' ? (ufActual > 0 ? Math.round(valorNum / ufActual * 100) / 100 : 0) : valorNum
 
     const setColor = (c: RgbColor) => doc.setTextColor(c[0], c[1], c[2])
     const setFill  = (c: RgbColor) => doc.setFillColor(c[0], c[1], c[2])
@@ -173,7 +173,7 @@ export function generateProposal({
     const valorUFFmt = Number(valorUF).toLocaleString('es-CL', { maximumFractionDigits: 2 })
     doc.text(isRecurrente ? `${valorUFFmt} UF /mes` : `${valorUFFmt} UF`, ML + 10, y + 12)
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10); setColor(COLORS.gray)
-    doc.text(`Equivalente aprox. $${valorCLP.toLocaleString('es-CL')} CLP (UF del día: $${(ufActual || 38000).toLocaleString('es-CL')})`, ML + 10, y + 24)
+    doc.text(`Equivalente aprox. $${valorCLP.toLocaleString('es-CL')} CLP (UF del día: $${ufActual.toLocaleString('es-CL')})`, ML + 10, y + 24)
     doc.text(
         isRecurrente
             ? 'Facturación mensual. Valores en UF, no sujetos a variación CLP.'

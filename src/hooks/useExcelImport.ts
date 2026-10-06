@@ -9,6 +9,7 @@ import {
     parseFacturasRecibidas,
     type FilaOmitida,
 } from '../utils/excelParsers'
+import { aplicarUFHistorica } from '../utils/uf'
 
 /**
  * Muestra el detalle de filas que el parser descartó (máx 10 en el modal,
@@ -27,6 +28,10 @@ async function reportarOmitidas(omitidas: FilaOmitida[]): Promise<void> {
 }
 
 type User = { email?: string } | null
+
+function avisarSinUF(n: number) {
+    if (n > 0) showToast(`${n} documento(s) quedaron con la UF de hoy porque no se pudo consultar la UF de su fecha. Revisa la conexión y reimporta si es necesario.`, 'warning')
+}
 
 interface UseExcelImportParams {
     user: User
@@ -114,7 +119,12 @@ export default function useExcelImport({
         try {
             const workbook = await readWorkbook(file)
             const omitidas: FilaOmitida[] = []
-            const rows = parseBoletasHonorarios(workbook, { ufActual, fileName: file.name, omitidas })
+            const parsed = parseBoletasHonorarios(workbook, { ufActual, fileName: file.name, omitidas })
+            // UF de la fecha de CADA boleta (antes: UF del día de importación para todas)
+            const { rows, sinUF } = await aplicarUFHistorica(parsed as unknown as Record<string, unknown>[], {
+                fecha: r => r.fecha as string, pares: [['monto_bruto_clp', 'monto_bruto_uf']], ufRespaldo: ufActual,
+            })
+            avisarSinUF(sinUF)
             if (!rows.length) { showToast('No se encontraron boletas en el archivo', 'warning'); await reportarOmitidas(omitidas); return }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const dedupKey = (b: any) => `${b.rut_prestador || b.rut || ''}|${b.fecha || ''}|${b.monto_bruto_clp || 0}`
@@ -136,7 +146,11 @@ export default function useExcelImport({
         try {
             const workbook = await readWorkbook(file)
             const omitidas: FilaOmitida[] = []
-            const rows = parseFacturasEmitidas(workbook, { fileName: file.name, ufActual, omitidas })
+            const parsed = parseFacturasEmitidas(workbook, { fileName: file.name, ufActual, omitidas })
+            const { rows, sinUF } = await aplicarUFHistorica(parsed as unknown as Record<string, unknown>[], {
+                fecha: r => r.fecha_emision as string, pares: [['monto_clp', 'monto_uf']], ufRespaldo: ufActual,
+            })
+            avisarSinUF(sinUF)
             if (!rows.length) { showToast('No se encontraron facturas emitidas en el archivo', 'warning'); await reportarOmitidas(omitidas); return }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const dedupKey = (f: any) => `${f.rut_emisor || ''}|${f.folio || f.numero_factura || ''}|${f.tipo_dte || ''}`
@@ -158,7 +172,11 @@ export default function useExcelImport({
         try {
             const workbook = await readWorkbook(file)
             const omitidas: FilaOmitida[] = []
-            const rows = parseFacturasRecibidas(workbook, { fileName: file.name, ufActual, omitidas })
+            const parsed = parseFacturasRecibidas(workbook, { fileName: file.name, ufActual, omitidas })
+            const { rows, sinUF } = await aplicarUFHistorica(parsed as unknown as Record<string, unknown>[], {
+                fecha: r => r.fecha_emision as string, pares: [['monto_clp', 'monto_uf']], ufRespaldo: ufActual,
+            })
+            avisarSinUF(sinUF)
             if (!rows.length) { showToast('No se encontraron facturas recibidas en el archivo', 'warning'); await reportarOmitidas(omitidas); return }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const dedupKey = (f: any) => `${(f.proveedor || '').toLowerCase()}|${f.numero_factura || ''}|${f.fecha_emision || ''}`

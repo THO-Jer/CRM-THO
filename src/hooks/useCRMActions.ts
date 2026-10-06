@@ -4,6 +4,9 @@ import { showToast, showUndoToast } from '../utils/toast'
 import { confirmModal } from '../utils/confirmModal'
 import { todayYMD } from '../utils/formatters'
 import type { Prospecto, Cerrado, Ticket, KeyAccount } from '../types'
+import { ufDeFecha } from '../utils/uf'
+import { crearPlanCobro, esTablaFaltante } from './useCobros'
+import { draftInicial, validarDraft, type PlanDraft } from '../utils/planDraft'
 
 type User = { email?: string; id?: string } | null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +61,31 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
     const [convertSource, setConvertSource] = useState<{ type: string; item: AnyRecord | null }>({ type: 'prospecto', item: null })
     const [convertTarget, setConvertTarget] = useState('ticket')
     const [convertForm, setConvertForm] = useState({ ticket: '', fecha_inicio: '', fecha_entrega: '', responsable: '', servicio: '', uf_mes: '', inicio_contrato: '', fin_contrato: '', notes: '' })
+    // Plan de cobro que se crea junto con la conversión (duración, monto por cuota, UF pactada)
+    const [planDraft, setPlanDraft] = useState<PlanDraft | null>(null)
+    const [incluirPlan, setIncluirPlan] = useState(true)
+
+    /** Arma el borrador del plan según el destino y trae la UF del día de cierre (UF congelada por defecto). */
+    const prepararPlan = (target: string, source: AnyRecord | null, form: typeof convertForm) => {
+        const esKA = target === 'key_account'
+        const hoy = todayYMD()
+        const d = draftInicial({
+            entidad_tipo: esKA ? 'key_account' : 'ticket',
+            organizacion: source?.organizacion ?? null,
+            servicio: esKA ? (form.servicio || source?.tipo) : (form.ticket || source?.tipo),
+            montoCuota: esKA ? form.uf_mes : (source?.valor ?? ''),
+            inicio: esKA ? form.inicio_contrato : form.fecha_inicio,
+            fin: esKA ? form.fin_contrato : null,
+            fechaUF: hoy,
+        })
+        setPlanDraft(d)
+        setIncluirPlan(true)
+        ufDeFecha(hoy).then(uf => { if (uf) setPlanDraft(prev => prev && !prev.plan.uf_pactada ? { ...prev, plan: { ...prev.plan, uf_pactada: uf } } : prev) })
+    }
+    const cambiarConvertTarget = (target: string) => {
+        setConvertTarget(target)
+        prepararPlan(target, convertSource?.item ?? null, convertForm)
+    }
 
     const [renewalOpen, setRenewalOpen] = useState(false)
     const [renewalKA, setRenewalKA] = useState<AnyRecord | null>(null)
@@ -82,14 +110,17 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
     const openConvert = (prospecto: AnyRecord, targetType = 'ticket') => {
         setConvertSource({ type: 'prospecto', item: prospecto })
         const today = new Date().toISOString().split('T')[0]
-        setConvertTarget(targetType === 'keyaccount' || targetType === 'key_account' ? 'key_account' : 'ticket')
-        setConvertForm({
+        const target = targetType === 'keyaccount' || targetType === 'key_account' ? 'key_account' : 'ticket'
+        setConvertTarget(target)
+        const form = {
             ticket: `Ejecución - ${prospecto?.organizacion || ''}`.trim(),
             fecha_inicio: today, fecha_entrega: prospecto?.fecha_limite || today,
             responsable: '', servicio: prospecto?.tipo || 'Servicio',
             uf_mes: String(prospecto?.valor ?? ''), inicio_contrato: today,
             fin_contrato: prospecto?.fecha_limite || today, notes: ''
-        })
+        }
+        setConvertForm(form)
+        prepararPlan(target, prospecto, form)
         setConvertOpen(true)
     }
 
@@ -97,16 +128,18 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
         setConvertSource({ type: 'cerrado', item: cerrado })
         const today = new Date().toISOString().split('T')[0]
         setConvertTarget('ticket')
-        setConvertForm({
+        const form = {
             ticket: `Ejecución - ${cerrado?.organizacion || ''}`.trim(),
             fecha_inicio: today, fecha_entrega: today, responsable: '',
             servicio: cerrado?.tipo || 'Servicio', uf_mes: String(cerrado?.valor ?? ''),
             inicio_contrato: today, fin_contrato: today, notes: ''
-        })
+        }
+        setConvertForm(form)
+        prepararPlan('ticket', cerrado, form)
         setConvertOpen(true)
     }
 
-    const closeConvert = () => { setConvertOpen(false); setConvertSource({ type: 'prospecto', item: null }) }
+    const closeConvert = () => { setConvertOpen(false); setConvertSource({ type: 'prospecto', item: null }); setPlanDraft(null) }
 
     const submitConvert = async () => {
         if (!requireAuth()) return
@@ -121,6 +154,12 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
             const ufMes = Number(convertForm.uf_mes || source.valor || 0)
             if (!isFinite(ufMes) || ufMes <= 0) { showToast('UF/mes debe ser un valor positivo', 'warning'); return }
         }
+        if (incluirPlan && planDraft) {
+            const v = validarDraft(planDraft)
+            if (v) { showToast(`Plan de cobro: ${v}`, 'warning'); return }
+        }
+        // Total del acuerdo (para dejar el valor en el Ticket, que antes se creaba sin monto)
+        const totalPlan = incluirPlan && planDraft ? planDraft.cuotas.filter(c => !c.omitida).reduce((s, c) => s + (Number(c.monto) || 0), 0) : 0
 
         try {
             const fromId = source.id
@@ -135,7 +174,11 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
                     fecha_inicio: convertForm.fecha_inicio, fecha_entrega: convertForm.fecha_entrega,
                     fase_actual: 'Inicio', porcentaje_avance: 0, responsable: convertForm.responsable || '',
                     satisfaccion: null, escalo: false,
-                    proxima_accion: sourceType === 'prospecto' ? (source.proximo_paso || '') : '', status: 'Activo'
+                    proxima_accion: sourceType === 'prospecto' ? (source.proximo_paso || '') : '', status: 'Activo',
+                    ...(totalPlan > 0 && planDraft ? {
+                        valor_monto: totalPlan, valor_moneda: planDraft.plan.moneda,
+                        uf_dia: planDraft.plan.moneda === 'UF' ? (planDraft.plan.uf_pactada || null) : null,
+                    } : {}),
                 }
                 const { data, error } = await supabase.from('tickets').insert([ticketRow]).select('id').single()
                 if (error) throw error
@@ -157,6 +200,16 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
                     await supabase.from('crm_renewals').insert([{ key_account_id: toId, start_date: kaRow.inicio_contrato, end_date: kaRow.fin_contrato, uf_mes: kaRow.uf_mes, status: 'active', notes: `Seed desde conversión (${transitionFrom})` }])
                 } catch { /* no-op */ }
                 await logEvent('key_accounts', toId, 'created_from_' + transitionFrom, `Creado desde ${transitionFrom}`, { from_type: transitionFrom, from_id: fromId })
+            }
+
+            // Plan de cobro: si falla (p.ej. falta correr sql/plan-cobros.sql) la conversión igual queda hecha
+            if (incluirPlan && planDraft && toId) {
+                try {
+                    await crearPlanCobro({ ...planDraft.plan, entidad_tipo: toType === 'ticket' ? 'ticket' : 'key_account', entidad_id: toId, organizacion: source.organizacion }, planDraft.cuotas, user?.email)
+                } catch (e) {
+                    const msg = (e as Error).message
+                    showToast(esTablaFaltante(msg) ? 'Convertido, pero el plan de cobro no se guardó: falta correr sql/plan-cobros.sql en Supabase' : `Convertido, pero el plan de cobro no se guardó: ${msg}`, 'warning')
+                }
             }
 
             try { await supabase.from('crm_entity_links').insert([{ from_type: transitionFrom, from_id: fromId, to_type: toType, to_id: toId, link_type: 'transition' }]) } catch { /* no-op */ }
@@ -474,7 +527,8 @@ export default function useCRMActions({ user, requireAuth, setShowModal, editing
 
     return {
         historyOpen, historyLoading, historyTitle, historyItems, setHistoryItems, openHistory, setHistoryOpen,
-        convertOpen, convertSource, convertTarget, convertForm, openConvert, openConvertFromCerrado, closeConvert, setConvertTarget, setConvertForm, submitConvert,
+        convertOpen, convertSource, convertTarget, convertForm, openConvert, openConvertFromCerrado, closeConvert, setConvertTarget: cambiarConvertTarget, setConvertForm, submitConvert,
+        planDraft, setPlanDraft, incluirPlan, setIncluirPlan,
         renewalOpen, renewalKA, renewalMode, renewalForm, cancelAlsoRegisterLoss, openRenewal, openCancelKA, closeRenewal, setRenewalForm, setCancelAlsoRegisterLoss, submitRenewal,
         filesModalOpen, filesEntityType, filesEntityId, filesEntityName, filesList, filesLoading, uploadingFile, openFilesModal, setFilesModalOpen,
         closeTicketOpen, closeTicketTarget, closeCloseTicketModal, submitCloseTicket,

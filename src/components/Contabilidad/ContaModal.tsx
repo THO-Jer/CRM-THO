@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { todayYMD } from '../../utils/formatters'
+import { ufDeFecha } from '../../utils/uf'
 import InputField from '../shared/InputField'
 import SelectField from '../shared/SelectField'
 import TextAreaField from '../shared/TextAreaField'
@@ -24,10 +26,10 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
     useEscapeKey(onClose)
 
     const getDefault = (): FormState => {
-        if (type === 'emitida') return { numero_factura: '', cliente: '', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, ticket_id: null, key_account_id: null, moneda_principal: 'UF' }
-        if (type === 'recibida') return { numero_factura: '', proveedor: '', categoria: 'Servicios', fecha_emision: new Date().toISOString().split('T')[0], monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, moneda_principal: 'UF' }
-        if (type === 'boleta') return { fecha: new Date().toISOString().split('T')[0], prestador: '', rut: '', monto_bruto_uf: '', monto_bruto_clp: '', uf_dia: ufActual, porcentaje_retencion: 15.25, monto_retencion_uf: '', monto_retencion_clp: '', monto_liquido_uf: '', monto_liquido_clp: '', descripcion: '', mes_servicio: '', proyecto: '', moneda_principal: 'UF' }
-        if (type === 'sueldo') return { fecha: new Date().toISOString().split('T')[0], socio: 'Jere', monto_uf: '', monto_clp: '', uf_dia: ufActual, concepto: '', mes_servicio: '', moneda_principal: 'UF' }
+        if (type === 'emitida') return { numero_factura: '', cliente: '', fecha_emision: todayYMD(), monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, moneda_principal: 'UF' }
+        if (type === 'recibida') return { numero_factura: '', proveedor: '', categoria: 'Servicios', fecha_emision: todayYMD(), monto_uf: '', monto_clp: '', uf_dia: ufActual, descripcion: '', estado: 'Pendiente', fecha_pago: null, moneda_principal: 'UF' }
+        if (type === 'boleta') return { fecha: todayYMD(), prestador: '', rut: '', monto_bruto_uf: '', monto_bruto_clp: '', uf_dia: ufActual, porcentaje_retencion: 15.25, monto_retencion_uf: '', monto_retencion_clp: '', monto_liquido_uf: '', monto_liquido_clp: '', descripcion: '', mes_servicio: '', proyecto: '', moneda_principal: 'UF' }
+        if (type === 'sueldo') return { fecha: todayYMD(), socio: 'Jere', monto_uf: '', monto_clp: '', uf_dia: ufActual, concepto: '', mes_servicio: '', moneda_principal: 'UF' }
         if (type === 'liquidacion') return {
             trabajador: '', rut_trabajador: '',
             periodo: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
@@ -38,12 +40,56 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
             uf_dia: ufActual, monto_uf: '', estado: 'Pagada', notas: ''
         }
         // caja
-        return { fecha: new Date().toISOString().split('T')[0], concepto: '', monto_clp: '', categoria: 'Otros', responsable: '', comprobante: '' }
+        return { fecha: todayYMD(), concepto: '', monto_clp: '', categoria: 'Otros', responsable: '', comprobante: '' }
     }
 
     const [form, setForm] = useState<FormState>(item || getDefault())
     const [monedaPrincipal, setMonedaPrincipal] = useState<string>(form.moneda_principal || 'UF')
     const [saving, setSaving] = useState(false)
+    // Si el usuario escribió la UF a mano (p.ej. UF congelada por contrato) o está
+    // editando un registro existente, NO se pisa automáticamente al cambiar la fecha.
+    const [ufManual, setUfManual] = useState<boolean>(!!item)
+    const [buscandoUF, setBuscandoUF] = useState(false)
+
+    const elegirMoneda = (m: 'UF' | 'CLP') => {
+        setMonedaPrincipal(m)
+        setForm(prev => ({ ...prev, moneda_principal: m }))
+    }
+
+    /** Recalcula los montos derivados con una UF nueva, partiendo del monto que el usuario ingresó. */
+    const recalcularConUF = (prev: FormState, uf: number): FormState => {
+        const next: FormState = { ...prev, uf_dia: uf }
+        if (!(uf > 0)) return next
+        if (type === 'emitida' || type === 'recibida' || type === 'sueldo') {
+            if (monedaPrincipal === 'UF' && prev.monto_uf !== '' && prev.monto_uf != null) next.monto_clp = Math.round((parseFloat(prev.monto_uf) || 0) * uf)
+            else if (prev.monto_clp !== '' && prev.monto_clp != null) next.monto_uf = ((parseFloat(prev.monto_clp) || 0) / uf).toFixed(2)
+        } else if (type === 'boleta') {
+            const pct = parseFloat(prev.porcentaje_retencion) || 0
+            if (monedaPrincipal === 'UF' && prev.monto_bruto_uf !== '') {
+                Object.assign(next, { monto_bruto_clp: Math.round((parseFloat(prev.monto_bruto_uf) || 0) * uf) }, recalcularBoleta(prev.monto_bruto_uf, pct, uf))
+            } else if (prev.monto_bruto_clp !== '') {
+                const brutoUF = ((parseFloat(prev.monto_bruto_clp) || 0) / uf).toFixed(2)
+                Object.assign(next, { monto_bruto_uf: brutoUF }, recalcularBoleta(brutoUF, pct, uf))
+            }
+        }
+        return next
+    }
+
+    const cambiarUFManual = (valor: string) => {
+        setUfManual(true)
+        const uf = parseFloat(valor)
+        setForm(prev => Number.isFinite(uf) && uf > 0 ? recalcularConUF(prev, uf) : { ...prev, uf_dia: valor })
+    }
+
+    /** Al cambiar la fecha del documento, trae la UF de ESA fecha (no la de hoy). */
+    const cambiarFecha = (campo: string, valor: string) => {
+        setForm(prev => ({ ...prev, [campo]: valor }))
+        if (ufManual || !valor || type === 'caja') return
+        setBuscandoUF(true)
+        ufDeFecha(valor).then(uf => {
+            if (uf) setForm(prev => prev[campo] === valor ? recalcularConUF(prev, uf) : prev)
+        }).finally(() => setBuscandoUF(false))
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -55,18 +101,19 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
     // Auto-calcular UF o CLP para facturas
     const handleMontoChange = (field: string, value: string) => {
         const num = parseFloat(value) || 0
-        if (field === 'monto_uf') {
-            setForm({ ...form, monto_uf: value, monto_clp: Math.round(num * (form.uf_dia || ufActual)) })
-        } else if (field === 'monto_clp') {
-            setForm({ ...form, monto_clp: value, monto_uf: (num / (form.uf_dia || ufActual)).toFixed(2) })
-        }
+        // Funcional (prev) para no pisar cambios hechos en el mismo tick
+        setForm(prev => {
+            const uf = parseFloat(prev.uf_dia) || ufActual
+            if (field === 'monto_uf') return { ...prev, monto_uf: value, monto_clp: uf ? Math.round(num * uf) : '' }
+            return { ...prev, monto_clp: value, monto_uf: uf ? (num / uf).toFixed(2) : '' }
+        })
     }
 
     // Recalcular retención y líquido a partir de bruto + porcentaje
     const recalcularBoleta = (brutoUF: string | number, porcentaje: string | number, ufDia: number) => {
         const bruto = parseFloat(String(brutoUF)) || 0
         const pct = parseFloat(String(porcentaje)) || 0
-        const uf = ufDia || ufActual
+        const uf = parseFloat(String(ufDia)) || ufActual
         const retencionUF = (bruto * pct / 100).toFixed(2)
         const liquidoUF = (bruto - parseFloat(retencionUF)).toFixed(2)
         return {
@@ -80,12 +127,12 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
     const handleBoletaMontoChange = (field: string, value: string) => {
         const num = parseFloat(value) || 0
         const porcentaje = parseFloat(form.porcentaje_retencion) || 0
-        if (field === 'monto_bruto_uf') {
-            setForm({ ...form, monto_bruto_uf: value, monto_bruto_clp: Math.round(num * (form.uf_dia || ufActual)), ...recalcularBoleta(value, porcentaje, form.uf_dia) })
-        } else if (field === 'monto_bruto_clp') {
-            const brutoUF = (num / (form.uf_dia || ufActual)).toFixed(2)
-            setForm({ ...form, monto_bruto_clp: value, monto_bruto_uf: brutoUF, ...recalcularBoleta(brutoUF, porcentaje, form.uf_dia) })
-        }
+        setForm(prev => {
+            const uf = parseFloat(prev.uf_dia) || ufActual
+            if (field === 'monto_bruto_uf') return { ...prev, monto_bruto_uf: value, monto_bruto_clp: Math.round(num * uf), ...recalcularBoleta(value, porcentaje, uf) }
+            const brutoUF = uf ? (num / uf).toFixed(2) : '0'
+            return { ...prev, monto_bruto_clp: value, monto_bruto_uf: brutoUF, ...recalcularBoleta(brutoUF, porcentaje, uf) }
+        })
     }
 
     const handlePorcentajeChange = (value: string) => {
@@ -116,29 +163,29 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             <InputField label="Cliente" required value={form.cliente} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, cliente: e.target.value })} />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <InputField label="Fecha Emisión" type="date" required value={form.fecha_emision} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, fecha_emision: e.target.value })} />
-                            <SelectField label="Estado" value={form.estado} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, estado: e.target.value })} options={['Pendiente', 'Pagada', 'Vencida']} />
+                            <InputField label="Fecha Emisión" type="date" required value={form.fecha_emision} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarFecha('fecha_emision', e.target.value)} />
+                            <SelectField label="Estado" value={form.estado} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, estado: e.target.value })} options={['Pendiente', 'Vencida', 'Pagada', 'Cobrada']} />
                         </div>
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                             <label className="block text-xs font-medium text-gray-700 mb-2">Moneda de ingreso</label>
                             <div className="flex gap-2">
-                                <button type="button" onClick={() => setMonedaPrincipal('UF')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'UF' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>UF</button>
-                                <button type="button" onClick={() => setMonedaPrincipal('CLP')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'CLP' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>$ CLP</button>
+                                <button type="button" onClick={() => elegirMoneda('UF')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'UF' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>UF</button>
+                                <button type="button" onClick={() => elegirMoneda('CLP')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'CLP' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>$ CLP</button>
                             </div>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             {monedaPrincipal === 'UF' ? (<>
                                 <InputField label="Monto UF" type="number" step="0.01" required value={form.monto_uf} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleMontoChange('monto_uf', e.target.value)} />
                                 <InputField label="Equiv. CLP" type="number" disabled value={form.monto_clp} className="bg-gray-50" />
-                                <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, uf_dia: parseFloat(e.target.value) }); handleMontoChange('monto_uf', form.monto_uf) }} />
+                                <InputField label={buscandoUF ? "UF del día (buscando…)" : "UF del día"} type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarUFManual(e.target.value)} />
                             </>) : (<>
                                 <InputField label="Monto CLP" type="number" required value={form.monto_clp} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleMontoChange('monto_clp', e.target.value)} />
                                 <InputField label="Equiv. UF" type="number" step="0.01" disabled value={form.monto_uf} className="bg-gray-50" />
-                                <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, uf_dia: parseFloat(e.target.value) }); handleMontoChange('monto_clp', form.monto_clp) }} />
+                                <InputField label={buscandoUF ? "UF del día (buscando…)" : "UF del día"} type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarUFManual(e.target.value)} />
                             </>)}
                         </div>
                         <TextAreaField label="Descripción" value={form.descripcion || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm({ ...form, descripcion: e.target.value })} />
-                        {form.estado === 'Pagada' && (
+                        {(form.estado === 'Pagada' || form.estado === 'Cobrada') && (
                             <InputField label="Fecha Pago" type="date" value={form.fecha_pago || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, fecha_pago: e.target.value })} />
                         )}
                     </>)}
@@ -149,25 +196,25 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             <SelectField label="Categoría" required value={form.categoria} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, categoria: e.target.value })} options={['Honorarios', 'Servicios', 'Oficina', 'Marketing', 'Tecnología', 'Sueldos', 'Otros']} />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <InputField label="Fecha Emisión" type="date" required value={form.fecha_emision} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, fecha_emision: e.target.value })} />
+                            <InputField label="Fecha Emisión" type="date" required value={form.fecha_emision} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarFecha('fecha_emision', e.target.value)} />
                             <SelectField label="Estado" value={form.estado} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, estado: e.target.value })} options={['Pendiente', 'Pagada']} />
                         </div>
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                             <label className="block text-xs font-medium text-gray-700 mb-2">Moneda de ingreso</label>
                             <div className="flex gap-2">
-                                <button type="button" onClick={() => setMonedaPrincipal('UF')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'UF' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>UF</button>
-                                <button type="button" onClick={() => setMonedaPrincipal('CLP')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'CLP' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>$ CLP</button>
+                                <button type="button" onClick={() => elegirMoneda('UF')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'UF' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>UF</button>
+                                <button type="button" onClick={() => elegirMoneda('CLP')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'CLP' ? 'bg-verde text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>$ CLP</button>
                             </div>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             {monedaPrincipal === 'UF' ? (<>
                                 <InputField label="Monto UF" type="number" step="0.01" required value={form.monto_uf} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleMontoChange('monto_uf', e.target.value)} />
                                 <InputField label="Equiv. CLP" type="number" disabled value={form.monto_clp} className="bg-gray-50" />
-                                <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, uf_dia: parseFloat(e.target.value) }); handleMontoChange('monto_uf', form.monto_uf) }} />
+                                <InputField label={buscandoUF ? "UF del día (buscando…)" : "UF del día"} type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarUFManual(e.target.value)} />
                             </>) : (<>
                                 <InputField label="Monto CLP" type="number" required value={form.monto_clp} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleMontoChange('monto_clp', e.target.value)} />
                                 <InputField label="Equiv. UF" type="number" step="0.01" disabled value={form.monto_uf} className="bg-gray-50" />
-                                <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, uf_dia: parseFloat(e.target.value) }); handleMontoChange('monto_clp', form.monto_clp) }} />
+                                <InputField label={buscandoUF ? "UF del día (buscando…)" : "UF del día"} type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarUFManual(e.target.value)} />
                             </>)}
                         </div>
                         <TextAreaField label="Descripción" value={form.descripcion || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm({ ...form, descripcion: e.target.value })} />
@@ -181,7 +228,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Fecha</label>
-                                <input type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} className="w-full border rounded p-2" />
+                                <input type="date" value={form.fecha} onChange={(e) => cambiarFecha('fecha', e.target.value)} className="w-full border rounded p-2" />
                             </div>
                         </div>
                         <div>
@@ -190,8 +237,8 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                         </div>
                         <div className="flex items-center gap-4 p-3 bg-gray-50 rounded">
                             <span className="text-sm font-medium">Moneda principal:</span>
-                            <button type="button" onClick={() => setMonedaPrincipal('UF')} className={`px-3 py-1 rounded text-sm ${monedaPrincipal === 'UF' ? 'bg-verde text-white' : 'bg-gray-200'}`}>UF</button>
-                            <button type="button" onClick={() => setMonedaPrincipal('CLP')} className={`px-3 py-1 rounded text-sm ${monedaPrincipal === 'CLP' ? 'bg-verde text-white' : 'bg-gray-200'}`}>CLP</button>
+                            <button type="button" onClick={() => elegirMoneda('UF')} className={`px-3 py-1 rounded text-sm ${monedaPrincipal === 'UF' ? 'bg-verde text-white' : 'bg-gray-200'}`}>UF</button>
+                            <button type="button" onClick={() => elegirMoneda('CLP')} className={`px-3 py-1 rounded text-sm ${monedaPrincipal === 'CLP' ? 'bg-verde text-white' : 'bg-gray-200'}`}>CLP</button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
@@ -204,7 +251,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">UF del día</label>
-                                <input type="number" step="0.01" value={form.uf_dia} onChange={(e) => { const nuevoUF = parseFloat(e.target.value) || ufActual; setForm({ ...form, uf_dia: nuevoUF }) }} className="w-full border rounded p-2" />
+                                <input type="number" step="0.01" value={form.uf_dia} onChange={(e) => cambiarUFManual(e.target.value)} className="w-full border rounded p-2" />
                             </div>
                         </div>
                         <div>
@@ -215,7 +262,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
 
                     {type === 'caja' && (<>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <InputField label="Fecha" type="date" required value={form.fecha} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, fecha: e.target.value })} />
+                            <InputField label="Fecha" type="date" required value={form.fecha} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarFecha('fecha', e.target.value)} />
                             <InputField label="Monto CLP" type="number" required value={form.monto_clp} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, monto_clp: e.target.value })} />
                         </div>
                         <InputField label="Concepto" required value={form.concepto} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, concepto: e.target.value })} />
@@ -232,7 +279,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             <InputField label="Mes Servicio" required value={form.mes_servicio} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, mes_servicio: e.target.value })} placeholder="Enero 2026" />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <InputField label="Fecha" type="date" required value={form.fecha} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, fecha: e.target.value })} />
+                            <InputField label="Fecha" type="date" required value={form.fecha} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarFecha('fecha', e.target.value)} />
                             <InputField label="RUT (opcional)" value={form.rut || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, rut: e.target.value })} placeholder="12.345.678-9" />
                         </div>
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
@@ -240,19 +287,19 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                             <div className="bg-white dark:bg-gray-700 rounded-lg p-3">
                                 <label className="block text-xs font-medium text-blue-800 mb-2">Moneda de ingreso</label>
                                 <div className="flex gap-2">
-                                    <button type="button" onClick={() => setMonedaPrincipal('UF')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'UF' ? 'bg-blue-600 text-white' : 'bg-white border border-blue-300 text-blue-700 hover:bg-blue-50'}`}>UF</button>
-                                    <button type="button" onClick={() => setMonedaPrincipal('CLP')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'CLP' ? 'bg-blue-600 text-white' : 'bg-white border border-blue-300 text-blue-700 hover:bg-blue-50'}`}>$ CLP</button>
+                                    <button type="button" onClick={() => elegirMoneda('UF')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'UF' ? 'bg-blue-600 text-white' : 'bg-white border border-blue-300 text-blue-700 hover:bg-blue-50'}`}>UF</button>
+                                    <button type="button" onClick={() => elegirMoneda('CLP')} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${monedaPrincipal === 'CLP' ? 'bg-blue-600 text-white' : 'bg-white border border-blue-300 text-blue-700 hover:bg-blue-50'}`}>$ CLP</button>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 {monedaPrincipal === 'UF' ? (<>
                                     <InputField label="Monto Bruto UF" type="number" step="0.01" required value={form.monto_bruto_uf} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBoletaMontoChange('monto_bruto_uf', e.target.value)} />
                                     <InputField label="Equiv. CLP" type="number" disabled value={form.monto_bruto_clp} className="bg-gray-50" />
-                                    <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, uf_dia: parseFloat(e.target.value) })} />
+                                    <InputField label={buscandoUF ? "UF del día (buscando…)" : "UF del día"} type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarUFManual(e.target.value)} />
                                 </>) : (<>
                                     <InputField label="Monto Bruto CLP" type="number" required value={form.monto_bruto_clp} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBoletaMontoChange('monto_bruto_clp', e.target.value)} />
                                     <InputField label="Equiv. UF" type="number" step="0.01" disabled value={form.monto_bruto_uf} className="bg-gray-50" />
-                                    <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, uf_dia: parseFloat(e.target.value) })} />
+                                    <InputField label={buscandoUF ? "UF del día (buscando…)" : "UF del día"} type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarUFManual(e.target.value)} />
                                 </>)}
                             </div>
                             <div>
@@ -304,7 +351,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
                                 <InputField label="RUT (opcional)" value={form.rut_trabajador || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, rut_trabajador: e.target.value })} placeholder="12.345.678-9" />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <InputField label="Período (primer día del mes)" type="date" required value={form.periodo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, periodo: e.target.value })} />
+                                <InputField label="Período (primer día del mes)" type="date" required value={form.periodo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarFecha('periodo', e.target.value)} />
                                 <SelectField label="Estado" value={form.estado} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, estado: e.target.value })} options={['Pagada', 'Pendiente', 'Anulada']} />
                             </div>
 
@@ -353,7 +400,7 @@ export default function ContaModal({ type, item, ufActual, onSave, onClose }: Co
 
                             <div className="bg-gray-50 border rounded-lg p-4 space-y-2 text-sm">
                                 <div className="grid grid-cols-2 gap-3">
-                                    <InputField label="UF del día" type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, uf_dia: parseFloat(e.target.value) || ufActual })} />
+                                    <InputField label={buscandoUF ? "UF del día (buscando…)" : "UF del día"} type="number" value={form.uf_dia} onChange={(e: React.ChangeEvent<HTMLInputElement>) => cambiarUFManual(e.target.value)} />
                                     <InputField label="Equiv. UF (costo empleador)" type="number" step="0.01" disabled value={form.uf_dia ? (costoTotal / form.uf_dia).toFixed(2) : ''} className="bg-gray-100" />
                                 </div>
                                 <div className="flex justify-between font-bold text-base border-t pt-2">
