@@ -4,8 +4,9 @@ import { formatFileSize, normalizeSearch } from './utils/formatters'
 import {
     LayoutDashboard, Target, Ticket as TicketIcon, KeyRound, History, TrendingUp,
     ClipboardList, BarChart3, Landmark, Search, Sun, Moon, Plus, Download,
-    Menu, X, ChevronsLeft, ChevronsRight, LogOut, CalendarClock
+    Menu, X, ChevronsLeft, ChevronsRight, LogOut, CalendarClock, ShieldCheck, Lock
 } from 'lucide-react'
+import { cargarMiAcceso, esAdminCRM, type MiAcceso } from './utils/accesos'
 
 // Modales y utilidades — eager: son chicos y se renderizan condicionalmente.
 import LoginModal from './components/Modals/LoginModal'
@@ -34,6 +35,7 @@ const TicketsView = lazy(() => import('./components/Tickets/TicketsView'))
 const KeyAccountsView = lazy(() => import('./components/KeyAccounts/KeyAccountsView'))
 const OrgDetail = lazy(() => import('./components/OrgDetail/OrgDetail'))
 const CobranzaView = lazy(() => import('./components/Cobros/CobranzaView'))
+const AccesosView = lazy(() => import('./components/Accesos/AccesosView'))
 
 import useData from './hooks/useData'
 import useCRMActions from './hooks/useCRMActions'
@@ -173,7 +175,14 @@ const NAV_SECTIONS: NavSection[] = [
 const TAB_TITLES: Record<string, string> = {
     dashboard: 'Dashboard', pipeline: 'Pipeline', tickets: 'Tickets', keyaccounts: 'Key Accounts',
     cerrados: 'Historial', reportes: 'Reportes', 'finanzas-dashboard': 'Dashboard Financiero',
-    contabilidad: 'Estado de Resultados', conciliacion: 'Conciliación Bancaria', cobranza: 'Cobranza — plan de cobro por cliente'
+    contabilidad: 'Estado de Resultados', conciliacion: 'Conciliación Bancaria', cobranza: 'Cobranza — plan de cobro por cliente',
+    accesos: 'Accesos al CRM'
+}
+
+// Sección que sólo ven superadmin/admin (ver utils/accesos.ts y sql/accesos-crm.sql)
+const NAV_ADMIN: NavSection = {
+    label: 'Administración',
+    items: [{ id: 'accesos', nombre: 'Accesos', icon: ShieldCheck }]
 }
 
 function CRMApp() {
@@ -181,6 +190,17 @@ function CRMApp() {
     const [user, setUser] = useState<AppUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [showLoginModal, setShowLoginModal] = useState(false);
+    // Acceso al CRM según public.crm_members (rol + activo). 'desconocido' = no se pudo
+    // consultar (red o migración pendiente): en ese caso no se bloquea, como antes.
+    const [miAcceso, setMiAcceso] = useState<MiAcceso>({ estado: 'cargando', rol: null });
+    const userEmail = user?.email || '';
+    useEffect(() => {
+        if (!userEmail) { setMiAcceso({ estado: 'cargando', rol: null }); return; }
+        let cancelado = false;
+        cargarMiAcceso(userEmail).then(a => { if (!cancelado) setMiAcceso(a); });
+        return () => { cancelado = true; };
+    }, [userEmail]);
+    const esAdmin = miAcceso.estado === 'activo' && esAdminCRM(miAcceso.rol);
 
     useEffect(() => {
         // Única fuente de verdad de sesión: Supabase OAuth. Se eliminó el fallback
@@ -468,9 +488,35 @@ function CRMApp() {
         </div>
     );
 
+    // Sesión iniciada pero sin acceso al CRM (no está en crm_members o está desactivado)
+    if (user && (miAcceso.estado === 'cargando' || miAcceso.estado === 'sin_acceso' || miAcceso.estado === 'inactivo')) return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+            <img src="/logo-tho.png" alt="THO" className="h-14 mb-6 dark:brightness-0 dark:invert opacity-80" />
+            {miAcceso.estado === 'cargando' ? (
+                <div className="relative w-10 h-10">
+                    <div className="absolute inset-0 rounded-full border-2 border-gray-200 dark:border-gray-700"></div>
+                    <div className="absolute inset-0 rounded-full border-2 border-naranja border-t-transparent animate-spin"></div>
+                </div>
+            ) : (
+                <div className="max-w-sm text-center bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-6">
+                    <Lock className="mx-auto text-naranja mb-3" size={26} />
+                    <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                        {miAcceso.estado === 'inactivo' ? 'Tu acceso al CRM está desactivado' : 'Tu cuenta no tiene acceso al CRM'}
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                        Entraste como <strong>{user.email}</strong>. Si necesitas acceso, pídeselo a un administrador de THO.
+                    </p>
+                    <button onClick={async () => { await supabase.auth.signOut(); setUser(null); }} className="px-4 py-2 rounded-lg color-naranja text-white text-sm font-medium">
+                        Cerrar sesión
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+
     const sidebarNav = (collapsed: boolean) => (
         <nav className="flex-1 overflow-y-auto px-2 pb-2">
-            {NAV_SECTIONS.map((section, si) => (
+            {(esAdmin ? [...NAV_SECTIONS, NAV_ADMIN] : NAV_SECTIONS).map((section, si) => (
                 <div key={si}>
                     {section.label && !collapsed && <div className="sidebar-section">{section.label}</div>}
                     {section.label && collapsed && <div className="border-t border-gray-200 dark:border-gray-700 my-2 mx-1"></div>}
@@ -644,6 +690,7 @@ function CRMApp() {
                     {activeTab === 'dashboard' && <Dashboard metrics={metrics} prospectos={prospectos} cerrados={cerrados} tickets={activeTickets} keyAccounts={activeKeyAccounts} user={user} ufActual={ufActual} monedaPreferida={monedaPreferida} setMonedaPreferida={(m: string) => setMonedaPreferida(m as 'UF' | 'CLP')} actividadReciente={actividadReciente} />}
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {activeTab === 'pipeline' && <KanbanBoard onDetail={(p) => openDetail('prospecto', p)} onConvert={openConvert} onHistory={openHistory} estados={estadosKanban} prospectosPorEstado={prospectosPorEstadoFiltrado} onEdit={(p) => { if (requireAuth()) { setEditingItem(p as unknown as Record<string, unknown>); setModalType('prospecto'); setShowModal(true); }}} onDelete={handleDeleteProspecto} onMove={handleMoveProspecto} onCerrar={handleCerrarProspecto} getEstadoFromKey={getEstadoFromKey} />}
+                    {activeTab === 'accesos' && esAdmin && miAcceso.rol && <AccesosView miEmail={user?.email || ''} miRol={miAcceso.rol} />}
                     {activeTab === 'cobranza' && <CobranzaView tickets={activeTickets} keyAccounts={activeKeyAccounts} ufActual={ufActual} userEmail={user?.email} />}
                     {activeTab === 'reportes' && <ReportesView prospectos={prospectos} cerrados={filteredCerrados} tickets={filteredTickets} keyAccounts={filteredKeyAccounts} ufActual={ufActual} dateRange={dateRange} />}
                     {['finanzas-dashboard', 'contabilidad', 'conciliacion'].includes(activeTab) && (
